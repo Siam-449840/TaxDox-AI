@@ -27,7 +27,21 @@ import {
   Star,
   Zap,
   Hash,
+  Clock,
+  FileText,
+  Sparkles,
+  Gift,
 } from 'lucide-react'
+import {
+  pbcRequestEmail,
+  deadlineReminderEmail,
+  documentReceivedEmail,
+  extractionCompleteEmail,
+  welcomeEmail,
+  EMAIL_TEMPLATE_LABELS,
+  type EmailContent,
+  type EmailTemplate,
+} from '@/lib/email-templates'
 import { StatCard } from '@/components/shared/stat-card'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -319,6 +333,9 @@ export function SettingsView() {
             <TabsTrigger value="templates" className="gap-1.5">
               <FileSpreadsheet className="h-3.5 w-3.5" /> Templates
             </TabsTrigger>
+            <TabsTrigger value="emails" className="gap-1.5">
+              <Mail className="h-3.5 w-3.5" /> Emails
+            </TabsTrigger>
             <TabsTrigger value="integrations" className="gap-1.5">
               <Plug className="h-3.5 w-3.5" /> Integrations
             </TabsTrigger>
@@ -349,6 +366,11 @@ export function SettingsView() {
         {/* TEMPLATES */}
         <TabsContent value="templates" className="mt-6">
           <TemplatesSection templates={templates} onCreate={() => setShowCreateTemplate(true)} />
+        </TabsContent>
+
+        {/* EMAILS */}
+        <TabsContent value="emails" className="mt-6">
+          <EmailTemplatesSection />
         </TabsContent>
 
         {/* INTEGRATIONS */}
@@ -834,6 +856,281 @@ function TemplatesSection({
         </div>
       )}
     </div>
+  )
+}
+
+// ─── Email Templates Section ───────────────────────────────────
+
+interface EmailTemplateMeta {
+  key: EmailTemplate
+  label: string
+  description: string
+  icon: typeof Mail
+  accent: 'blue' | 'amber' | 'teal' | 'violet' | 'emerald'
+  generator: () => EmailContent
+}
+
+const EMAIL_TEMPLATE_META: EmailTemplateMeta[] = [
+  {
+    key: 'pbc_request',
+    label: 'PBC Document Request',
+    description: 'Sent when a PBC list is dispatched to the client.',
+    icon: Mail,
+    accent: 'blue',
+    generator: () => pbcRequestEmail('John Smith', '1040', 2025, 'April 15, 2026'),
+  },
+  {
+    key: 'deadline_reminder',
+    label: 'Deadline Reminder',
+    description: 'Sent when an engagement deadline is approaching.',
+    icon: Clock,
+    accent: 'amber',
+    generator: () => deadlineReminderEmail('John Smith', '1040', 2025, 7, 'April 15, 2026'),
+  },
+  {
+    key: 'document_received',
+    label: 'Document Received',
+    description: 'Sent when the client uploads a new document.',
+    icon: FileText,
+    accent: 'teal',
+    generator: () => documentReceivedEmail('John Smith', 'W-2', 'W2_2025.pdf'),
+  },
+  {
+    key: 'extraction_complete',
+    label: 'Extraction Complete',
+    description: 'Sent when AI extraction finishes on a document.',
+    icon: Sparkles,
+    accent: 'violet',
+    generator: () => extractionCompleteEmail('John Smith', 'W-2', 10, 97),
+  },
+  {
+    key: 'welcome',
+    label: 'Welcome Email',
+    description: 'Sent to a newly created client.',
+    icon: Gift,
+    accent: 'emerald',
+    generator: () => welcomeEmail('John Smith', 'Meridian CPA Group'),
+  },
+]
+
+const EMAIL_ACCENT_CLASSES: Record<
+  EmailTemplateMeta['accent'],
+  { border: string; bg: string; text: string; badge: string }
+> = {
+  blue: {
+    border: 'border-l-blue-500',
+    bg: 'bg-blue-50 dark:bg-blue-950/40',
+    text: 'text-blue-600 dark:text-blue-400',
+    badge: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
+  },
+  amber: {
+    border: 'border-l-amber-500',
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    text: 'text-amber-600 dark:text-amber-400',
+    badge:
+      'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
+  },
+  teal: {
+    border: 'border-l-teal-500',
+    bg: 'bg-teal-50 dark:bg-teal-950/40',
+    text: 'text-teal-600 dark:text-teal-400',
+    badge: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900',
+  },
+  violet: {
+    border: 'border-l-violet-500',
+    bg: 'bg-violet-50 dark:bg-violet-950/40',
+    text: 'text-violet-600 dark:text-violet-400',
+    badge:
+      'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900',
+  },
+  emerald: {
+    border: 'border-l-emerald-500',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    text: 'text-emerald-600 dark:text-emerald-400',
+    badge:
+      'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+  },
+}
+
+function EmailTemplatesSection() {
+  const [previewKey, setPreviewKey] = useState<EmailTemplate | null>(null)
+  const previewMeta = EMAIL_TEMPLATE_META.find((t) => t.key === previewKey) || null
+  const previewContent = previewMeta?.generator() ?? null
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Email Templates</h2>
+          <p className="text-sm text-muted-foreground">
+            Preview the automated client communications sent by TaxDox AI.
+          </p>
+        </div>
+        <Badge variant="outline" className="gap-1.5 shrink-0">
+          <Mail className="h-3.5 w-3.5" />
+          {EMAIL_TEMPLATE_META.length} templates
+        </Badge>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {EMAIL_TEMPLATE_META.map((meta) => {
+          const content = meta.generator()
+          const accent = EMAIL_ACCENT_CLASSES[meta.accent]
+          const Icon = meta.icon
+          const bodyLines = content.body.split('\n').filter((l) => l.trim().length > 0)
+          const previewLines = bodyLines.slice(0, 2).join(' ')
+          return (
+            <Card
+              key={meta.key}
+              className={cn(
+                'group relative overflow-hidden rounded-xl border-l-4 transition-all hover:shadow-md hover:-translate-y-0.5',
+                accent.border
+              )}
+            >
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={cn(
+                        'flex h-9 w-9 items-center justify-center rounded-lg',
+                        accent.bg,
+                        accent.text
+                      )}
+                    >
+                      <Icon className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-tight">{meta.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{meta.description}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Badge variant="outline" className={cn('text-[10px] font-medium', accent.badge)}>
+                    {EMAIL_TEMPLATE_LABELS[meta.key]}
+                  </Badge>
+                </div>
+
+                <div className="space-y-1 rounded-lg bg-muted/40 p-2.5">
+                  <p className="truncate text-xs font-medium" title={content.subject}>
+                    <span className="text-muted-foreground">Subject:</span>{' '}
+                    <span className="text-foreground">{content.subject}</span>
+                  </p>
+                  <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                    {previewLines}
+                  </p>
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setPreviewKey(meta.key)}
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  Preview
+                </Button>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      <EmailPreviewDialog
+        open={previewKey !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewKey(null)
+        }}
+        meta={previewMeta}
+        content={previewContent}
+      />
+    </div>
+  )
+}
+
+function EmailPreviewDialog({
+  open,
+  onOpenChange,
+  meta,
+  content,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  meta: EmailTemplateMeta | null
+  content: EmailContent | null
+}) {
+  if (!meta || !content) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl" />
+      </Dialog>
+    )
+  }
+
+  const Icon = meta.icon
+  const accent = EMAIL_ACCENT_CLASSES[meta.accent]
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl gap-0 p-0">
+        <DialogHeader className="border-b p-5 pb-4">
+          <DialogTitle className="flex items-center gap-2.5 text-base">
+            <div
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-lg',
+                accent.bg,
+                accent.text
+              )}
+            >
+              <Icon className="h-4 w-4" />
+            </div>
+            {meta.label}
+            <Badge variant="outline" className={cn('ml-1 text-[10px]', accent.badge)}>
+              {EMAIL_TEMPLATE_LABELS[meta.key]}
+            </Badge>
+          </DialogTitle>
+          <DialogDescription>{meta.description}</DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[60vh] overflow-y-auto">
+          {/* Email client-style header */}
+          <div className="space-y-2 border-b bg-muted/30 p-5 text-sm">
+            <div className="flex items-start gap-2">
+              <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">From</span>
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">Meridian CPA Group</span>{' '}
+                <span className="text-muted-foreground">&lt;notifications@meridiancpa.com&gt;</span>
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">To</span>
+              <span className="min-w-0 flex-1">
+                John Smith <span className="text-muted-foreground">&lt;john.smith@example.com&gt;</span>
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">Subject</span>
+              <span className="min-w-0 flex-1 font-medium">{content.subject}</span>
+            </div>
+          </div>
+
+          {/* Email body */}
+          <div className="p-5">
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+              {content.body}
+            </pre>
+          </div>
+        </div>
+
+        <DialogFooter className="border-t p-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <X className="h-4 w-4" />
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

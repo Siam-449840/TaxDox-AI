@@ -18,6 +18,10 @@ import {
   BarChart3,
   Sparkles,
   Flame,
+  Upload,
+  UserPlus,
+  Send,
+  CalendarDays,
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { StatCard } from '@/components/shared/stat-card'
@@ -368,6 +372,41 @@ export function DashboardView() {
           </div>
         </Card>
       </div>
+
+      {/* Quick Actions */}
+      <Card className="overflow-hidden">
+        <div className="flex items-center gap-2.5 border-b bg-gradient-to-r from-primary/5 to-transparent p-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Zap className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold">Quick Actions</h2>
+            <p className="text-xs text-muted-foreground">Jump straight to common tasks</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-6">
+          {([
+            { label: 'New Engagement', icon: Plus, view: 'engagements' as const },
+            { label: 'Upload Document', icon: Upload, view: 'documents' as const },
+            { label: 'Add Client', icon: UserPlus, view: 'clients' as const },
+            { label: 'Send PBC Reminders', icon: Send, view: 'engagements' as const },
+            { label: 'View Calendar', icon: CalendarDays, view: 'calendar' as const },
+            { label: 'View Reports', icon: BarChart3, view: 'reports' as const },
+          ]).map(({ label, icon: Icon, view }) => (
+            <button
+              key={label}
+              onClick={() => navigate(view)}
+              title={label}
+              className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-border/60 bg-card p-4 text-center transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-50 text-teal-600 transition-colors group-hover:bg-teal-100 dark:bg-teal-950/40 dark:text-teal-400 dark:group-hover:bg-teal-900/60">
+                <Icon className="h-4.5 w-4.5" />
+              </span>
+              <span className="text-sm font-medium leading-tight">{label}</span>
+            </button>
+          ))}
+        </div>
+      </Card>
 
       {/* Main grid */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">

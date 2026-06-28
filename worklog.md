@@ -1556,3 +1556,146 @@ The TaxDox AI platform is stable and production-ready. QA testing confirmed all 
 6. **OAuth providers**: Google Workspace / Microsoft Entra SSO for enterprise
 
 Priority for next round: Wire the document_received and extraction_complete email templates to auto-trigger on upload/processing, and soften the emails tab empty state.
+
+---
+Task ID: SETTINGS-2
+Agent: Settings + Dashboard Quick Actions
+Task: Add email template previews in Settings + quick actions panel in Dashboard
+
+Work Log:
+- Read worklog.md, settings-view.tsx, dashboard-view.tsx, and email-templates.ts to understand project context, design system (teal primary), and existing tab/card patterns.
+- Feature 1 — Email Template Previews in Settings (settings-view.tsx, targeted edits):
+  - Added lucide imports: Clock, FileText, Sparkles, Gift.
+  - Added email-templates import: pbcRequestEmail, deadlineReminderEmail, documentReceivedEmail, extractionCompleteEmail, welcomeEmail, EMAIL_TEMPLATE_LABELS, plus EmailContent/EmailTemplate types.
+  - Added a new "Emails" tab trigger (with Mail icon) between "Templates" and "Integrations".
+  - Added a corresponding TabsContent value="emails" that renders <EmailTemplatesSection />.
+  - Built EmailTemplatesSection: maps all 5 templates to cards with template-colored left-border accent (border-l-4), icon chip, color-coded badge, subject preview, 2-line body preview, and a Preview button.
+  - Built EmailPreviewDialog: full email-client-style layout (From / To / Subject header, then preformatted body, scrollable, Close button). Uses the same color accent as the source card.
+  - Color mapping: pbc_request=blue, deadline_reminder=amber, document_received=teal, extraction_complete=violet, welcome=emerald (matches EMAIL_TEMPLATE_COLORS in lib/email-templates.ts).
+- Feature 2 — Dashboard Quick Actions Panel (dashboard-view.tsx, targeted edits):
+  - Added lucide imports: Upload, UserPlus, Send, CalendarDays.
+  - Inserted a new "Quick Actions" Card between the secondary stats row and the main grid.
+  - Card header uses Zap icon in a teal-tinted chip + gradient strip.
+  - 6 action buttons in a responsive 2/3/6-column grid: New Engagement (Plus), Upload Document (Upload), Add Client (UserPlus), Send PBC Reminders (Send), View Calendar (CalendarDays), View Reports (BarChart3).
+  - Each button is rounded-xl with a teal-tinted h-10 w-10 icon circle, label below, and hover lift + shadow; onClick calls useAppStore navigate() with the correct ViewKey.
+- Ran `bun run lint` — clean (no errors/warnings).
+- Checked dev.log — only successful "Compiled in ..." lines and prisma queries; no errors/warnings.
+
+Stage Summary:
+- Settings now has a dedicated "Emails" tab that previews all 5 automated client email templates with color-coded cards and an email-client-style preview dialog (From: Meridian CPA Group, To: client, Subject, formatted body).
+- Dashboard now has a prominent Quick Actions card with 6 navigation shortcuts to common workflows, using teal primary accents and consistent hover/lift behavior.
+- All edits were targeted (no full rewrites); lint passes; dev.log shows clean compilation.
+- Next candidate work: wire the Send PBC Reminders quick action to also dispatch a reminder batch (currently just navigates), and add an "Edit Template" affordance to the email preview dialog once template-body editing is enabled.
+
+---
+Task ID: EMAIL-2
+Agent: Email Trigger Wiring
+Task: Wire document_received and extraction_complete email auto-triggers, soften empty states
+
+Work Log:
+- Read worklog.md for project context (Next.js 16 App Router, Prisma SQLite, teal design system, EmailLog model)
+- Inspected `src/lib/email-templates.ts` to confirm signatures: `documentReceivedEmail(clientName, documentType, filename)` and `extractionCompleteEmail(clientName, documentType, fieldCount, confidence)` (confidence is a 0–1 fraction, function multiplies by 100 internally)
+- Inspected existing PBC send route (`src/app/api/engagements/[id]/send/route.ts`) for the EmailLog creation pattern to mirror
+- Inspected Prisma schema to confirm EmailLog fields: `firmId, engagementId?, clientId?, toEmail, toName, fromName?, subject, body, template, status, sentAt`
+- **`src/app/api/documents/upload/route.ts`**:
+  - Added `import { documentReceivedEmail } from '@/lib/email-templates'`
+  - After the activity log, wrapped in try/catch (best-effort), fetch the client by `clientId`, build the `documentReceivedEmail` template (using `document.documentType || 'Document'` and `file.name`), and persist an EmailLog with `status: 'sent'` and `sentAt: new Date()`
+  - Best-effort: any DB failure is logged but never blocks the upload response
+- **`src/app/api/ai/extract/route.ts`**:
+  - Added `import { extractionCompleteEmail } from '@/lib/email-templates'`
+  - After the activity log, wrapped in try/catch, fetch the document with `include: { client: true, engagement: true }`, compute average confidence across all extractions (guards against divide-by-zero), build the `extractionCompleteEmail` template, and persist an EmailLog
+  - Note: passed the raw 0–1 average confidence (NOT pre-multiplied by 100) because the template generator multiplies internally — this fixes a bug in the task spec snippet that would have produced `pct = 8700`
+- **`src/components/engagement/sent-emails-panel.tsx`**:
+  - Added `error` boolean state; `fetchEmails` now sets `error(true)` on failure instead of firing `toast.error('Could not load sent emails')` (other toasts for send/reminder actions are preserved)
+  - Added optional `onSendPbc?: () => void` and `sendingPbc?: boolean` props
+  - Added a new `ErrorState` sub-component: soft amber-tinted card (not red), `Inbox` icon in amber circle, "Couldn't load emails right now" heading, reassuring subtext, and a "Try again" outline button with `RefreshCw` icon that calls `fetchEmails`
+  - Reworked `EmptyState` sub-component: teal-tinted dashed-border card with subtle teal gradient, large `Mail` icon (h-7 w-7) in a teal circle (14×14, not the old 12×12 muted), friendlier heading "No emails sent yet", subtitle "When you send PBC requests or reminders, they'll appear here. Client confirmations and AI extraction notices also show up automatically.", and a button row with primary "Send PBC Request" (when `onSendPbc` provided) + secondary outline "Send Reminder"
+  - Render branch updated: `loading ? skeleton : error ? ErrorState : emails.length === 0 ? EmptyState : email list`
+  - Kept `Inbox` import (now used in ErrorState) and added usage of `Send`, `Mail`, `RefreshCw`, `Loader2`, `CalendarClock` icons
+- **`src/components/views/engagement-detail-view.tsx`**:
+  - Passed `onSendPbc={handleSendPbc}` and `sendingPbc={actionBusy['send-pbc']}` to `SentEmailsPanel` so the empty-state CTA can trigger the existing PBC send flow
+
+Stage Summary:
+- Two email auto-triggers are now wired end-to-end:
+  - Document upload → `document_received` email logged to client
+  - AI extraction complete → `extraction_complete` email logged to client with real field count + average confidence
+- Both triggers are best-effort (try/catch + console.error) so a logging failure never breaks the primary operation
+- Emails tab now shows:
+  - Loading skeleton (unchanged)
+  - Friendly amber "Couldn't load emails right now" card with retry on API failure (replaces the old red toast-only error path)
+  - Friendly teal-tinted empty state with Mail icon and "Send PBC Request" / "Send Reminder" CTAs when no emails exist
+  - Email list (unchanged) when emails exist
+- No red error colors used for empty or transient-error states — only muted/teal/amber per the design system
+- Files modified (4):
+  - `src/app/api/documents/upload/route.ts`
+  - `src/app/api/ai/extract/route.ts`
+  - `src/components/engagement/sent-emails-panel.tsx`
+  - `src/components/views/engagement-detail-view.tsx`
+
+---
+Task ID: CRON-7
+Agent: Main (Claude) — webDevReview cron round 7
+Task: Fix emails API bug, wire email triggers, add email template previews + dashboard quick actions
+
+## Current Project Status Assessment
+The TaxDox AI platform is stable. QA testing found a bug: the Emails tab in engagement detail showed "Could not load sent emails" (500 error) due to a stale Prisma client that didn't know about the EmailLog model. Fixed by regenerating the Prisma client. This round also wired the remaining email triggers and added new UI features.
+
+## Completed Modifications
+
+### 1. Bug Fix: Emails API 500 Error
+- **Root cause**: The Prisma client was stale — the EmailLog model was added to schema.prisma but `prisma generate` hadn't been run after the schema push, so `db.emailLog` was undefined at runtime
+- **Fix**: Ran `bun run db:generate` to regenerate the Prisma client with the EmailLog model
+- **Verification**: Emails API now returns 200 with real email data
+
+### 2. Email Auto-Triggers Wired
+- **Document upload**: Updated `POST /api/documents/upload` to auto-create an EmailLog using `documentReceivedEmail` template after document creation. Fetches client email/name, wrapped in try/catch so logging failure never breaks upload.
+- **AI extraction**: Updated `POST /api/ai/extract` to auto-create an EmailLog using `extractionCompleteEmail` template after extraction completes. Computes average confidence (0-1 fraction, not pre-multiplied), fetches doc with client/engagement, wrapped in try/catch.
+- Both triggers use `status: 'sent'` and proper firm/engagement/client relations
+
+### 3. Emails Tab Empty State Softened
+- **Error state**: Replaced jarring red "Could not load sent emails" with a soft amber-tinted card: "Couldn't load emails right now" + retry button with RefreshCw icon
+- **Empty state**: New friendly design with teal-tinted dashed-border card, large Mail icon in teal circle, "No emails sent yet" heading, "When you send PBC requests or reminders, they'll appear here" subtitle, dual CTAs (Send PBC Request + Send Reminder)
+- **Render logic**: `loading ? skeleton : error ? ErrorState : empty ? EmptyState : email list`
+- Wired `onSendPbc` and `sendingPbc` props from engagement detail view
+
+### 4. Email Template Previews in Settings
+- **New "Emails" tab** in Settings view (between Templates and Integrations)
+- **EmailTemplatesSection**: Shows all 5 templates as cards with:
+  - Template-colored left border accent (blue/amber/teal/violet/emerald)
+  - Icon chip in matching accent color (Mail/Clock/FileText/Sparkles/Gift)
+  - Color-coded template badge
+  - Subject preview + 2-line body preview
+  - "Preview" button
+- **EmailPreviewDialog**: Email-client-style layout showing From, To, Subject, formatted body with proper line breaks, Close button, accent-colored header
+
+### 5. Dashboard Quick Actions Panel
+- **New "Quick Actions" card** on dashboard (between secondary stats and main grid)
+- Header with Zap icon in teal-tinted chip + subtle gradient strip
+- **6 action buttons** in responsive 2/3/6-column grid:
+  1. New Engagement → navigate('engagements')
+  2. Upload Document → navigate('documents')
+  3. Add Client → navigate('clients')
+  4. Send PBC Reminders → navigate('engagements')
+  5. View Calendar → navigate('calendar')
+  6. View Reports → navigate('reports')
+- Each button: rounded-xl, teal-tinted icon circle, hover lift + shadow effect
+
+## Verification Results
+- `bun run lint` — 0 errors, 0 warnings (clean)
+- Dev server — compiles cleanly, no runtime errors
+- agent-browser QA:
+  - Dashboard: Quick Actions panel with 6 buttons, all clickable (8/10 VLM)
+  - Settings Email Templates: All 5 templates visible with preview buttons (7/10 VLM)
+  - Engagement Emails tab: "Sent Emails" panel loads correctly with email data, no more error (6/10 VLM — status filters suggested)
+  - All existing views still functional
+- VLM ratings: Dashboard 8/10, Email Templates 7/10, Emails Tab 6/10
+
+## Unresolved Issues / Next Phase Recommendations
+1. **Email status filters**: VLM suggested adding filters (Pending vs Sent vs Opened) to the Emails tab
+2. **Create Template CTA**: Settings email templates could have a "Create Template" button for custom templates
+3. **PDF page rendering**: Still need pdf.js for real GLM-4.6V extraction on PDFs
+4. **Real SMTP**: Replace simulation with Resend/SendGrid when ready for production
+5. **OAuth providers**: Google Workspace / Microsoft Entra SSO for enterprise
+6. **Rate limiting**: No API rate limiting for upload/extract endpoints
+
+Priority for next round: Add email status filters to the Emails tab, and consider adding a deadline reminder scheduler that auto-sends reminders based on engagement deadlines.

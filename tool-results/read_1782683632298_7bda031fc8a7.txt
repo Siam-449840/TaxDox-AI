@@ -1,0 +1,790 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useState } from 'react'
+     4→import {
+     5→  LayoutDashboard,
+     6→  Clock,
+     7→  CheckCircle2,
+     8→  AlertTriangle,
+     9→  Users,
+    10→  FileText,
+    11→  DollarSign,
+    12→  ArrowRight,
+    13→  Activity as ActivityIcon,
+    14→  CalendarClock,
+    15→  Zap,
+    16→  Target,
+    17→  Plus,
+    18→  BarChart3,
+    19→  Sparkles,
+    20→  Flame,
+    21→} from 'lucide-react'
+    22→import { useAppStore } from '@/lib/store'
+    23→import { StatCard } from '@/components/shared/stat-card'
+    24→import { StatusBadge } from '@/components/shared/status-badge'
+    25→import { PriorityBadge } from '@/components/shared/priority-badge'
+    26→import { ProgressRing } from '@/components/shared/progress-ring'
+    27→import { Card } from '@/components/ui/card'
+    28→import { Button } from '@/components/ui/button'
+    29→import { Badge } from '@/components/ui/badge'
+    30→import { ScrollArea } from '@/components/ui/scroll-area'
+    31→import {
+    32→  AreaChart,
+    33→  Area,
+    34→  XAxis,
+    35→  YAxis,
+    36→  CartesianGrid,
+    37→  Tooltip,
+    38→  ResponsiveContainer,
+    39→  PieChart,
+    40→  Pie,
+    41→  Cell,
+    42→  Legend,
+    43→} from 'recharts'
+    44→import { cn } from '@/lib/utils'
+    45→import { formatDistanceToNow, format } from 'date-fns'
+    46→
+    47→interface DashboardData {
+    48→  stats: {
+    49→    active: number
+    50→    pending: number
+    51→    done: number
+    52→    alerts: number
+    53→    totalClients: number
+    54→    totalDocuments: number
+    55→    totalPbcItems: number
+    56→    totalRevenue: number
+    57→    collectedRevenue: number
+    58→    avgConfidence: number
+    59→    verifiedExtractions: number
+    60→    totalExtractions: number
+    61→  }
+    62→  statusCounts: Record<string, number>
+    63→  typeCounts: Record<string, number>
+    64→  docsByStatus: Record<string, number>
+    65→  teamWorkload: Array<{
+    66→    id: string
+    67→    name: string
+    68→    role: string
+    69→    capacity: number
+    70→    currentLoad: number
+    71→    utilization: number
+    72→    color: string
+    73→    avatar?: string
+    74→  }>
+    75→  recentEngagements: Array<{
+    76→    id: string
+    77→    clientName: string
+    78→    clientType: string
+    79→    engagementType: string
+    80→    taxYear: number
+    81→    status: string
+    82→    progress: number
+    83→    priority: string
+    84→    deadline: string
+    85→    assignedTo?: string
+    86→  }>
+    87→  recentActivities: Array<{
+    88→    id: string
+    89→    type: string
+    90→    description: string
+    91→    actor: string
+    92→    createdAt: string
+    93→    clientName?: string
+    94→  }>
+    95→  upcomingDeadlines: Array<{
+    96→    id: string
+    97→    clientName: string
+    98→    engagementType: string
+    99→    deadline: string
+   100→    priority: string
+   101→    progress: number
+   102→    daysLeft: number
+   103→  }>
+   104→}
+   105→
+   106→const STATUS_COLORS: Record<string, string> = {
+   107→  created: '#94a3b8',
+   108→  pbc_sent: '#3b82f6',
+   109→  collecting: '#f59e0b',
+   110→  processing: '#8b5cf6',
+   111→  review: '#6366f1',
+   112→  filing: '#06b6d4',
+   113→  done: '#10b981',
+   114→}
+   115→
+   116→const TYPE_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+   117→
+   118→const ACTIVITY_STYLES: Record<
+   119→  string,
+   120→  { icon: typeof ActivityIcon; bg: string; text: string }
+   121→> = {
+   122→  upload: {
+   123→    icon: FileText,
+   124→    bg: 'bg-blue-50 dark:bg-blue-950/40',
+   125→    text: 'text-blue-600 dark:text-blue-400',
+   126→  },
+   127→  classify: {
+   128→    icon: Zap,
+   129→    bg: 'bg-violet-50 dark:bg-violet-950/40',
+   130→    text: 'text-violet-600 dark:text-violet-400',
+   131→  },
+   132→  extract: {
+   133→    icon: Target,
+   134→    bg: 'bg-teal-50 dark:bg-teal-950/40',
+   135→    text: 'text-teal-600 dark:text-teal-400',
+   136→  },
+   137→  verify: {
+   138→    icon: CheckCircle2,
+   139→    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+   140→    text: 'text-emerald-600 dark:text-emerald-400',
+   141→  },
+   142→  send: {
+   143→    icon: FileText,
+   144→    bg: 'bg-amber-50 dark:bg-amber-950/40',
+   145→    text: 'text-amber-600 dark:text-amber-400',
+   146→  },
+   147→  message: {
+   148→    icon: Users,
+   149→    bg: 'bg-sky-50 dark:bg-sky-950/40',
+   150→    text: 'text-sky-600 dark:text-sky-400',
+   151→  },
+   152→  status_change: {
+   153→    icon: ActivityIcon,
+   154→    bg: 'bg-slate-100 dark:bg-slate-800/60',
+   155→    text: 'text-slate-600 dark:text-slate-300',
+   156→  },
+   157→}
+   158→
+   159→function teamColorHex(color: string): string {
+   160→  switch (color) {
+   161→    case 'emerald':
+   162→      return '#10b981'
+   163→    case 'blue':
+   164→      return '#3b82f6'
+   165→    case 'amber':
+   166→      return '#f59e0b'
+   167→    case 'violet':
+   168→      return '#8b5cf6'
+   169→    case 'cyan':
+   170→      return '#06b6d4'
+   171→    default:
+   172→      return '#f43f5e'
+   173→  }
+   174→}
+   175→
+   176→function daysUntil(dateStr: string): number {
+   177→  const ms = new Date(dateStr).getTime() - Date.now()
+   178→  return Math.ceil(ms / (1000 * 60 * 60 * 24))
+   179→}
+   180→
+   181→export function DashboardView() {
+   182→  const [data, setData] = useState<DashboardData | null>(null)
+   183→  const [loading, setLoading] = useState(true)
+   184→  const openEngagement = useAppStore((s) => s.openEngagement)
+   185→  const navigate = useAppStore((s) => s.navigate)
+   186→
+   187→  useEffect(() => {
+   188→    fetch('/api/dashboard')
+   189→      .then((r) => r.json())
+   190→      .then((d) => {
+   191→        setData(d)
+   192→        setLoading(false)
+   193→      })
+   194→      .catch(() => setLoading(false))
+   195→  }, [])
+   196→
+   197→  if (loading || !data) {
+   198→    return (
+   199→      <div className="space-y-6 p-6">
+   200→        <div className="h-28 w-full animate-pulse rounded-xl bg-muted" />
+   201→        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+   202→          {Array.from({ length: 4 }).map((_, i) => (
+   203→            <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
+   204→          ))}
+   205→        </div>
+   206→        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+   207→          {Array.from({ length: 3 }).map((_, i) => (
+   208→            <div key={i} className="h-64 animate-pulse rounded-xl bg-muted" />
+   209→          ))}
+   210→        </div>
+   211→      </div>
+   212→    )
+   213→  }
+   214→
+   215→  const statusData = Object.entries(data.statusCounts).map(([name, value]) => ({
+   216→    name,
+   217→    value,
+   218→    color: STATUS_COLORS[name] || '#94a3b8',
+   219→  }))
+   220→
+   221→  const typeData = Object.entries(data.typeCounts).map(([name, value], i) => ({
+   222→    name,
+   223→    value,
+   224→    color: TYPE_COLORS[i % TYPE_COLORS.length],
+   225→  }))
+   226→
+   227→  return (
+   228→    <div className="space-y-6 p-4 lg:p-6">
+   229→      {/* Hero header */}
+   230→      <div className="relative overflow-hidden rounded-xl border border-primary/10 bg-gradient-primary p-5 text-white shadow-lg shadow-primary/20 sm:p-6">
+   231→        {/* Decorative pattern */}
+   232→        <div className="pointer-events-none absolute inset-0 opacity-30" aria-hidden>
+   233→          <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/20 blur-3xl" />
+   234→          <div className="absolute -bottom-24 right-32 h-48 w-48 rounded-full bg-cyan-300/30 blur-3xl" />
+   235→        </div>
+   236→        {/* Subtle top highlight */}
+   237→        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" aria-hidden />
+   238→        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   239→          <div className="min-w-0">
+   240→            <div className="flex items-center gap-2">
+   241→              <Sparkles className="h-3.5 w-3.5 text-white/80" />
+   242→              <p className="text-xs font-medium uppercase tracking-wider text-white/80">
+   243→                {format(new Date(), 'EEEE, MMMM d')}
+   244→              </p>
+   245→            </div>
+   246→            <h1 className="mt-1.5 text-2xl font-bold tracking-tight sm:text-3xl">
+   247→              Welcome back, Sarah
+   248→            </h1>
+   249→            <p className="mt-1.5 text-sm text-white/85">
+   250→              {data.stats.alerts > 0 ? (
+   251→                <>
+   252→                  <span className="font-semibold text-white">
+   253→                    {data.stats.alerts} engagement{data.stats.alerts === 1 ? '' : 's'}
+   254→                  </span>{' '}
+   255→                  need attention today ·{' '}
+   256→                  <span className="font-semibold text-white">{data.stats.active}</span> active ·{' '}
+   257→                  <span className="font-semibold text-white">{data.stats.pending}</span> pending collection
+   258→                </>
+   259→              ) : (
+   260→                <>
+   261→                  <span className="font-semibold text-white">{data.stats.active}</span> active engagements ·{' '}
+   262→                  <span className="font-semibold text-white">{data.stats.pending}</span> pending collection · all caught up
+   263→                </>
+   264→              )}
+   265→            </p>
+   266→          </div>
+   267→          <div className="flex shrink-0 items-center gap-2">
+   268→            <Button
+   269→              variant="secondary"
+   270→              size="sm"
+   271→              onClick={() => navigate('reports')}
+   272→              className="border-0 bg-white/15 text-white backdrop-blur-sm hover:bg-white/25 hover:text-white"
+   273→            >
+   274→              <BarChart3 className="mr-1.5 h-4 w-4" />
+   275→              View Reports
+   276→            </Button>
+   277→            <Button
+   278→              size="sm"
+   279→              onClick={() => navigate('engagements')}
+   280→              className="border-0 bg-white text-primary shadow-sm hover:bg-white/90 hover:text-primary"
+   281→            >
+   282→              <Plus className="mr-1.5 h-4 w-4" />
+   283→              New Engagement
+   284→            </Button>
+   285→          </div>
+   286→        </div>
+   287→      </div>
+   288→
+   289→      {/* Stat cards */}
+   290→      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
+   291→        <StatCard
+   292→          label="Active Engagements"
+   293→          value={data.stats.active}
+   294→          icon={LayoutDashboard}
+   295→          trend={{ value: 12, label: 'vs last month' }}
+   296→          accent="primary"
+   297→          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
+   298→        />
+   299→        <StatCard
+   300→          label="Pending Collection"
+   301→          value={data.stats.pending}
+   302→          icon={Clock}
+   303→          accent="warning"
+   304→          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
+   305→        />
+   306→        <StatCard
+   307→          label="Completed"
+   308→          value={data.stats.done}
+   309→          icon={CheckCircle2}
+   310→          trend={{ value: 8, label: 'vs last month' }}
+   311→          accent="success"
+   312→          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
+   313→        />
+   314→        <StatCard
+   315→          label="Needs Attention"
+   316→          value={data.stats.alerts}
+   317→          icon={AlertTriangle}
+   318→          accent="danger"
+   319→          className={cn(
+   320→            'transition-all hover:-translate-y-0.5 hover:shadow-md',
+   321→            data.stats.alerts > 0 && 'ring-2 ring-red-400/60 ring-offset-2 ring-offset-background'
+   322→          )}
+   323→        />
+   324→      </div>
+   325→
+   326→      {/* Secondary stats */}
+   327→      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
+   328→        <Card className="group relative flex items-center gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+   329→          <span className="absolute left-0 top-0 h-full w-1 bg-blue-500" aria-hidden />
+   330→          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+   331→            <Users className="h-5 w-5" />
+   332→          </div>
+   333→          <div>
+   334→            <p className="text-lg font-bold tabular-nums">{data.stats.totalClients}</p>
+   335→            <p className="text-xs text-muted-foreground">Total Clients</p>
+   336→          </div>
+   337→        </Card>
+   338→        <Card className="group relative flex items-center gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+   339→          <span className="absolute left-0 top-0 h-full w-1 bg-violet-500" aria-hidden />
+   340→          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400">
+   341→            <FileText className="h-5 w-5" />
+   342→          </div>
+   343→          <div>
+   344→            <p className="text-lg font-bold tabular-nums">{data.stats.totalDocuments}</p>
+   345→            <p className="text-xs text-muted-foreground">Documents</p>
+   346→          </div>
+   347→        </Card>
+   348→        <Card className="group relative flex items-center gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+   349→          <span className="absolute left-0 top-0 h-full w-1 bg-emerald-500" aria-hidden />
+   350→          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+   351→            <Target className="h-5 w-5" />
+   352→          </div>
+   353→          <div>
+   354→            <p className="text-lg font-bold tabular-nums">{data.stats.avgConfidence}%</p>
+   355→            <p className="text-xs text-muted-foreground">AI Accuracy</p>
+   356→          </div>
+   357→        </Card>
+   358→        <Card className="group relative flex items-center gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+   359→          <span className="absolute left-0 top-0 h-full w-1 bg-amber-500" aria-hidden />
+   360→          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+   361→            <DollarSign className="h-5 w-5" />
+   362→          </div>
+   363→          <div>
+   364→            <p className="text-lg font-bold tabular-nums">
+   365→              ${(data.stats.totalRevenue / 1000).toFixed(1)}k
+   366→            </p>
+   367→            <p className="text-xs text-muted-foreground">Engagement Value</p>
+   368→          </div>
+   369→        </Card>
+   370→      </div>
+   371→
+   372→      {/* Main grid */}
+   373→      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+   374→        {/* Recent Engagements */}
+   375→        <Card className="lg:col-span-2">
+   376→          <div className="flex items-center justify-between border-b p-4">
+   377→            <div>
+   378→              <h2 className="text-base font-semibold">Recent Engagements</h2>
+   379→              <p className="text-xs text-muted-foreground">Latest tax preparation activity</p>
+   380→            </div>
+   381→            <Button variant="ghost" size="sm" onClick={() => navigate('engagements')} className="transition-colors">
+   382→              View all
+   383→              <ArrowRight className="ml-1 h-3.5 w-3.5" />
+   384→            </Button>
+   385→          </div>
+   386→          <div className="divide-y">
+   387→            {data.recentEngagements.map((e) => {
+   388→              const d = daysUntil(e.deadline)
+   389→              const hasDeadline = !Number.isNaN(d)
+   390→              return (
+   391→                <button
+   392→                  key={e.id}
+   393→                  onClick={() => openEngagement(e.id)}
+   394→                  title={`${e.clientName} — ${e.engagementType} ${e.taxYear} · ${e.progress}% complete`}
+   395→                  className={cn(
+   396→                    'group flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/60',
+   397→                    e.priority === 'high'
+   398→                      ? 'border-l-2 border-l-red-400 dark:border-l-red-500'
+   399→                      : e.priority === 'medium'
+   400→                        ? 'border-l-2 border-l-amber-400 dark:border-l-amber-500'
+   401→                        : 'border-l-2 border-l-transparent'
+   402→                  )}
+   403→                >
+   404→                  <ProgressRing value={e.progress} size={52} strokeWidth={5} />
+   405→                  <div className="min-w-0 flex-1">
+   406→                    <div className="flex items-center gap-2">
+   407→                      <p className="truncate text-sm font-semibold">{e.clientName}</p>
+   408→                      <Badge variant="outline" className="shrink-0 text-[10px]">
+   409→                        {e.engagementType} · {e.taxYear}
+   410→                      </Badge>
+   411→                    </div>
+   412→                    <div className="mt-1 flex items-center gap-2">
+   413→                      <StatusBadge status={e.status} />
+   414→                      <PriorityBadge priority={e.priority as 'high' | 'medium' | 'low'} />
+   415→                      {e.assignedTo && (
+   416→                        <span className="text-xs text-muted-foreground">· {e.assignedTo}</span>
+   417→                      )}
+   418→                    </div>
+   419→                  </div>
+   420→                  {hasDeadline && (
+   421→                    <Badge
+   422→                      variant="outline"
+   423→                      className={cn(
+   424→                        'shrink-0 border-0 text-[10px] font-semibold tabular-nums',
+   425→                        d < 0
+   426→                          ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
+   427→                          : d <= 3
+   428→                            ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
+   429→                            : d <= 7
+   430→                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+   431→                              : 'bg-muted text-muted-foreground'
+   432→                      )}
+   433→                      title={`Due ${format(new Date(e.deadline), 'MMM d, yyyy')}`}
+   434→                    >
+   435→                      {d < 0 ? `${Math.abs(d)}d overdue` : `${d}d left`}
+   436→                    </Badge>
+   437→                  )}
+   438→                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+   439→                </button>
+   440→              )
+   441→            })}
+   442→          </div>
+   443→        </Card>
+   444→
+   445→        {/* Upcoming Deadlines */}
+   446→        <Card>
+   447→          <div className="border-b p-4">
+   448→            <h2 className="text-base font-semibold">Upcoming Deadlines</h2>
+   449→            <p className="text-xs text-muted-foreground">Closest filing dates</p>
+   450→          </div>
+   451→          <div className="divide-y">
+   452→            {data.upcomingDeadlines.length === 0 && (
+   453→              <div className="p-6 text-center text-sm text-muted-foreground">
+   454→                No upcoming deadlines
+   455→              </div>
+   456→            )}
+   457→            {data.upcomingDeadlines.map((d) => (
+   458→              <button
+   459→                key={d.id}
+   460→                onClick={() => openEngagement(d.id)}
+   461→                title={`${d.clientName} — ${d.engagementType} · ${d.progress}% complete · ${d.daysLeft}d left`}
+   462→                className={cn(
+   463→                  'group flex w-full items-center gap-3 p-4 text-left transition-all hover:bg-muted/50',
+   464→                  d.daysLeft <= 3
+   465→                    ? 'border-l-2 border-l-red-400 dark:border-l-red-500'
+   466→                    : d.daysLeft <= 7
+   467→                      ? 'border-l-2 border-l-amber-400 dark:border-l-amber-500'
+   468→                      : 'border-l-2 border-l-transparent'
+   469→                )}
+   470→              >
+   471→                <div
+   472→                  className={cn(
+   473→                    'flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg transition-transform group-hover:scale-105',
+   474→                    d.daysLeft <= 3
+   475→                      ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400'
+   476→                      : d.daysLeft <= 7
+   477→                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'
+   478→                        : 'bg-muted text-muted-foreground'
+   479→                  )}
+   480→                >
+   481→                  <CalendarClock className="h-4 w-4" />
+   482→                  <span className="text-[10px] font-bold">{d.daysLeft}d</span>
+   483→                </div>
+   484→                <div className="min-w-0 flex-1">
+   485→                  <p className="truncate text-sm font-semibold">{d.clientName}</p>
+   486→                  <div className="mt-0.5 flex items-center gap-1.5">
+   487→                    <Badge variant="outline" className="text-[10px]">{d.engagementType}</Badge>
+   488→                    <span className="text-xs text-muted-foreground">{d.progress}% done</span>
+   489→                  </div>
+   490→                </div>
+   491→                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+   492→              </button>
+   493→            ))}
+   494→          </div>
+   495→        </Card>
+   496→      </div>
+   497→
+   498→      {/* Charts row */}
+   499→      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+   500→        {/* Status Distribution */}
+   501→        <Card className="p-5">
+   502→          <h2 className="text-sm font-semibold">Engagement Status</h2>
+   503→          <p className="mb-3 text-xs text-muted-foreground">Current pipeline distribution</p>
+   504→          <div className="relative">
+   505→            <ResponsiveContainer width="100%" height={220}>
+   506→              <PieChart>
+   507→                <Pie
+   508→                  data={statusData}
+   509→                  cx="50%"
+   510→                  cy="50%"
+   511→                  innerRadius={52}
+   512→                  outerRadius={84}
+   513→                  paddingAngle={2}
+   514→                  dataKey="value"
+   515→                  stroke="var(--card)"
+   516→                  strokeWidth={2}
+   517→                >
+   518→                  {statusData.map((entry, i) => (
+   519→                    <Cell key={i} fill={entry.color} />
+   520→                  ))}
+   521→                </Pie>
+   522→                <Tooltip
+   523→                  contentStyle={{
+   524→                    borderRadius: 8,
+   525→                    border: '1px solid var(--border)',
+   526→                    fontSize: 12,
+   527→                  }}
+   528→                />
+   529→              </PieChart>
+   530→            </ResponsiveContainer>
+   531→            <div
+   532→              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
+   533→              aria-hidden
+   534→            >
+   535→              <span className="text-2xl font-bold tabular-nums">
+   536→                {statusData.reduce((sum, s) => sum + s.value, 0)}
+   537→              </span>
+   538→              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+   539→                Total
+   540→              </span>
+   541→            </div>
+   542→          </div>
+   543→          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5">
+   544→            {statusData.map((s) => (
+   545→              <div
+   546→                key={s.name}
+   547→                className="flex items-center gap-1.5 text-xs transition-colors hover:bg-muted/40 rounded px-1 py-0.5"
+   548→              >
+   549→                <span
+   550→                  className="h-2 w-2 shrink-0 rounded-full"
+   551→                  style={{ backgroundColor: s.color }}
+   552→                />
+   553→                <span className="capitalize text-muted-foreground">{s.name.replace('_', ' ')}</span>
+   554→                <span className="ml-auto font-semibold tabular-nums">{s.value}</span>
+   555→              </div>
+   556→            ))}
+   557→          </div>
+   558→        </Card>
+   559→
+   560→        {/* Return Type Distribution */}
+   561→        <Card className="p-5">
+   562→          <h2 className="text-sm font-semibold">Return Types</h2>
+   563→          <p className="mb-3 text-xs text-muted-foreground">Engagement mix by form</p>
+   564→          <ResponsiveContainer width="100%" height={200}>
+   565→            <PieChart>
+   566→              <Pie
+   567→                data={typeData}
+   568→                cx="50%"
+   569→                cy="50%"
+   570→                outerRadius={72}
+   571→                dataKey="value"
+   572→                label={({ percent }) =>
+   573→                  `${((percent as number) * 100).toFixed(0)}%`
+   574→                }
+   575→                labelLine={false}
+   576→                fontSize={11}
+   577→                stroke="var(--card)"
+   578→                strokeWidth={2}
+   579→              >
+   580→                {typeData.map((entry, i) => (
+   581→                  <Cell key={i} fill={entry.color} />
+   582→                ))}
+   583→              </Pie>
+   584→              <Tooltip
+   585→                contentStyle={{
+   586→                  borderRadius: 8,
+   587→                  border: '1px solid var(--border)',
+   588→                  fontSize: 12,
+   589→                }}
+   590→              />
+   591→            </PieChart>
+   592→          </ResponsiveContainer>
+   593→          <div className="mt-3 space-y-1.5">
+   594→            {typeData.map((t) => {
+   595→              const total = typeData.reduce((sum, x) => sum + x.value, 0)
+   596→              const pct = total > 0 ? Math.round((t.value / total) * 100) : 0
+   597→              return (
+   598→                <div
+   599→                  key={t.name}
+   600→                  className="flex items-center gap-2 rounded px-1 py-0.5 text-xs transition-colors hover:bg-muted/40"
+   601→                >
+   602→                  <span
+   603→                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+   604→                    style={{ backgroundColor: t.color }}
+   605→                  />
+   606→                  <span className="font-medium">{t.name}</span>
+   607→                  <span className="ml-auto tabular-nums text-muted-foreground">
+   608→                    {t.value} · {pct}%
+   609→                  </span>
+   610→                </div>
+   611→              )
+   612→            })}
+   613→          </div>
+   614→        </Card>
+   615→
+   616→        {/* AI Extraction Stats */}
+   617→        <Card className="p-5">
+   618→          <h2 className="text-sm font-semibold">AI Extraction Quality</h2>
+   619→          <p className="mb-3 text-xs text-muted-foreground">Confidence & verification</p>
+   620→          <div className="relative flex flex-col items-center justify-center py-3">
+   621→            <div className="relative flex items-center justify-center">
+   622→              <div
+   623→                className="absolute h-32 w-32 rounded-full bg-emerald-500/15 blur-3xl"
+   624→                aria-hidden
+   625→              />
+   626→              <ProgressRing
+   627→                value={data.stats.avgConfidence}
+   628→                size={140}
+   629→                strokeWidth={12}
+   630→                color="#10b981"
+   631→                className="relative"
+   632→              />
+   633→            </div>
+   634→            <p className="mt-3 text-xs text-muted-foreground">Average confidence</p>
+   635→          </div>
+   636→          <div className="grid grid-cols-2 gap-2 border-t pt-3">
+   637→            <div className="text-center">
+   638→              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+   639→                {data.stats.verifiedExtractions}
+   640→              </p>
+   641→              <p className="text-[10px] text-muted-foreground">Verified</p>
+   642→            </div>
+   643→            <div className="text-center">
+   644→              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+   645→                {data.stats.totalExtractions - data.stats.verifiedExtractions}
+   646→              </p>
+   647→              <p className="text-[10px] text-muted-foreground">Needs Review</p>
+   648→            </div>
+   649→          </div>
+   650→        </Card>
+   651→      </div>
+   652→
+   653→      {/* Team Workload + Activity */}
+   654→      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+   655→        {/* Team Workload */}
+   656→        <Card className="p-5">
+   657→          <div className="mb-3 flex items-center justify-between">
+   658→            <div>
+   659→              <h2 className="text-sm font-semibold">Team Workload</h2>
+   660→              <p className="text-xs text-muted-foreground">Current capacity utilization</p>
+   661→            </div>
+   662→            <Button variant="ghost" size="sm" onClick={() => navigate('settings')} className="transition-colors">
+   663→              Manage
+   664→            </Button>
+   665→          </div>
+   666→          <div className="space-y-2">
+   667→            {data.teamWorkload.map((t) => (
+   668→              <div
+   669→                key={t.id}
+   670→                title={`${t.name} — ${t.role}: ${t.currentLoad} of ${t.capacity} engagements (${t.utilization}% utilized)`}
+   671→                className="group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50"
+   672→              >
+   673→                <div
+   674→                  className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm"
+   675→                  style={{ backgroundColor: teamColorHex(t.color) }}
+   676→                >
+   677→                  {t.name.split(' ').map((n) => n[0]).join('')}
+   678→                  {t.utilization >= 90 && (
+   679→                    <span
+   680→                      className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white ring-2 ring-card"
+   681→                      title="At or near capacity"
+   682→                    >
+   683→                      <Flame className="h-2.5 w-2.5" />
+   684→                    </span>
+   685→                  )}
+   686→                </div>
+   687→                <div className="min-w-0 flex-1">
+   688→                  <div className="flex items-center justify-between gap-2">
+   689→                    <div className="min-w-0">
+   690→                      <p className="truncate text-sm font-medium">{t.name}</p>
+   691→                      <p className="truncate text-[11px] text-muted-foreground">{t.role}</p>
+   692→                    </div>
+   693→                    <div className="flex shrink-0 items-center gap-1.5">
+   694→                      {t.utilization >= 90 && <Flame className="h-3.5 w-3.5 text-red-500" />}
+   695→                      <span
+   696→                        className={cn(
+   697→                          'text-xs font-medium tabular-nums',
+   698→                          t.utilization >= 90
+   699→                            ? 'text-red-600 dark:text-red-400'
+   700→                            : t.utilization >= 75
+   701→                              ? 'text-amber-600 dark:text-amber-400'
+   702→                              : 'text-muted-foreground'
+   703→                        )}
+   704→                      >
+   705→                        {t.currentLoad}/{t.capacity}
+   706→                      </span>
+   707→                    </div>
+   708→                  </div>
+   709→                  <div
+   710→                    className="relative mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+   711→                    role="progressbar"
+   712→                    aria-valuenow={t.utilization}
+   713→                    aria-valuemin={0}
+   714→                    aria-valuemax={100}
+   715→                  >
+   716→                    <div
+   717→                      className={cn(
+   718→                        'h-full rounded-full transition-all duration-500',
+   719→                        t.utilization >= 90
+   720→                          ? 'bg-gradient-to-r from-red-500 to-rose-500'
+   721→                          : t.utilization >= 75
+   722→                            ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+   723→                            : 'bg-gradient-to-r from-emerald-500 to-teal-500'
+   724→                      )}
+   725→                      style={{
+   726→                        width: `${Math.min(100, Math.max(0, t.utilization))}%`,
+   727→                      }}
+   728→                    />
+   729→                  </div>
+   730→                </div>
+   731→              </div>
+   732→            ))}
+   733→          </div>
+   734→        </Card>
+   735→
+   736→        {/* Recent Activity */}
+   737→        <Card className="p-5">
+   738→          <h2 className="text-sm font-semibold">Recent Activity</h2>
+   739→          <p className="mb-3 text-xs text-muted-foreground">Latest events across all engagements</p>
+   740→          <ScrollArea className="h-[300px] pr-3">
+   741→            <div className="relative space-y-4 pl-0.5">
+   742→              {/* Vertical timeline line */}
+   743→              {data.recentActivities.length > 1 && (
+   744→                <div
+   745→                  className="absolute left-[18px] top-4 bottom-4 w-px bg-border"
+   746→                  aria-hidden
+   747→                />
+   748→              )}
+   749→              {data.recentActivities.map((a) => {
+   750→                const style = ACTIVITY_STYLES[a.type] || {
+   751→                  icon: ActivityIcon,
+   752→                  bg: 'bg-muted',
+   753→                  text: 'text-muted-foreground',
+   754→                }
+   755→                const Icon = style.icon
+   756→                return (
+   757→                  <div key={a.id} className="relative flex gap-3">
+   758→                    <div
+   759→                      className={cn(
+   760→                        'relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1 ring-border',
+   761→                        style.bg
+   762→                      )}
+   763→                    >
+   764→                      <Icon className={cn('h-4 w-4', style.text)} />
+   765→                    </div>
+   766→                    <div className="min-w-0 flex-1 pt-0.5">
+   767→                      <p className="text-sm leading-snug">{a.description}</p>
+   768→                      <p className="mt-1 text-xs text-muted-foreground">
+   769→                        <span className="font-medium text-foreground/70">{a.actor}</span>
+   770→                        <span className="mx-1">·</span>
+   771→                        <span>{formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}</span>
+   772→                        {a.clientName && (
+   773→                          <>
+   774→                            <span className="mx-1">·</span>
+   775→                            <span>{a.clientName}</span>
+   776→                          </>
+   777→                        )}
+   778→                      </p>
+   779→                    </div>
+   780→                  </div>
+   781→                )
+   782→              })}
+   783→            </div>
+   784→          </ScrollArea>
+   785→        </Card>
+   786→      </div>
+   787→    </div>
+   788→  )
+   789→}
+   790→

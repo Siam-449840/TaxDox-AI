@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { nanoid } from 'nanoid'
+import { documentReceivedEmail } from '@/lib/email-templates'
 
 const UPLOAD_DIR = path.join(process.cwd(), 'download', 'uploads')
 
@@ -107,6 +108,38 @@ export async function POST(req: NextRequest) {
         actor: uploadedBy === 'client' ? 'Client' : 'You',
       },
     })
+
+    // ── Send "document received" email to the client ─────────────────
+    // Fires automatically on every successful upload so the client has a
+    // confirmation that their document landed in the portal. We fetch the
+    // client to resolve the recipient email/name + firmId.
+    try {
+      const client = await db.client.findUnique({ where: { id: clientId } })
+      if (client) {
+        const emailTpl = documentReceivedEmail(
+          client.name,
+          document.documentType || 'Document',
+          file.name
+        )
+        await db.emailLog.create({
+          data: {
+            firmId: client.firmId,
+            engagementId: engagementId || null,
+            clientId: client.id,
+            toEmail: client.email,
+            toName: client.name,
+            subject: emailTpl.subject,
+            body: emailTpl.body,
+            template: emailTpl.template,
+            status: 'sent',
+            sentAt: new Date(),
+          },
+        })
+      }
+    } catch (emailError) {
+      // Email logging is best-effort; never fail the upload because of it.
+      console.error('document_received email log failed:', emailError)
+    }
 
     return NextResponse.json({
       document,

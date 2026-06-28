@@ -1,0 +1,1712 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useEffect, useMemo, useState } from 'react'
+     4→     4→import {
+     5→     5→  Settings as SettingsIcon,
+     6→     6→  Building2,
+     7→     7→  Users,
+     8→     8→  FileSpreadsheet,
+     9→     9→  Plug,
+    10→    10→  CreditCard,
+    11→    11→  ScrollText,
+    12→    12→  Plus,
+    13→    13→  RefreshCw,
+    14→    14→  Loader2,
+    15→    15→  Mail,
+    16→    16→  Check,
+    17→    17→  X,
+    18→    18→  Globe,
+    19→    19→  HardDrive,
+    20→    20→  Cloud,
+    21→    21→  Shield,
+    22→    22→  Crown,
+    23→    23→  Activity as ActivityIcon,
+    24→    24→  History,
+    25→    25→  ChevronRight,
+    26→    26→  Pencil,
+    27→    27→  Star,
+    28→    28→  Zap,
+    29→    29→  Hash,
+    30→    30→} from 'lucide-react'
+    31→    31→import { StatCard } from '@/components/shared/stat-card'
+    32→    32→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+    33→    33→import { Button } from '@/components/ui/button'
+    34→    34→import { Badge } from '@/components/ui/badge'
+    35→    35→import { Input } from '@/components/ui/input'
+    36→    36→import { Label } from '@/components/ui/label'
+    37→    37→import { Progress } from '@/components/ui/progress'
+    38→    38→import {
+    39→    39→  Table,
+    40→    40→  TableBody,
+    41→    41→  TableCell,
+    42→    42→  TableHead,
+    43→    43→  TableHeader,
+    44→    44→  TableRow,
+    45→    45→} from '@/components/ui/table'
+    46→    46→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    47→    47→import {
+    48→    48→  Dialog,
+    49→    49→  DialogContent,
+    50→    50→  DialogHeader,
+    51→    51→  DialogTitle,
+    52→    52→  DialogFooter,
+    53→    53→  DialogDescription,
+    54→    54→} from '@/components/ui/dialog'
+    55→    55→import {
+    56→    56→  Select,
+    57→    57→  SelectContent,
+    58→    58→  SelectItem,
+    59→    59→  SelectTrigger,
+    60→    60→  SelectValue,
+    61→    61→} from '@/components/ui/select'
+    62→    62→import { ScrollArea } from '@/components/ui/scroll-area'
+    63→    63→import { TAX_SOFTWARE, COUNTRIES, PRICING_TIERS, CLIENT_TYPES, ENGAGEMENT_TYPES } from '@/lib/constants'
+    64→    64→import { toast } from 'sonner'
+    65→    65→import { format } from 'date-fns'
+    66→    66→import { cn } from '@/lib/utils'
+    67→    67→
+    68→    68→// ─── Types ──────────────────────────────────────────────────────
+    69→    69→
+    70→    70→interface TeamMemberRow {
+    71→    71→  id: string
+    72→    72→  firmId: string
+    73→    73→  name: string
+    74→    74→  role: string
+    75→    75→  email: string
+    76→    76→  capacity: number
+    77→    77→  currentLoad: number
+    78→    78→  color: string
+    79→    79→  avatar?: string | null
+    80→    80→}
+    81→    81→
+    82→    82→interface PbcTemplateItem {
+    83→    83→  documentType: string
+    84→    84→  description: string
+    85→    85→  category: string
+    86→    86→  required: boolean
+    87→    87→  priority: string
+    88→    88→}
+    89→    89→
+    90→    90→interface PbcTemplateRow {
+    91→    91→  id: string
+    92→    92→  firmId: string
+    93→    93→  name: string
+    94→    94→  description?: string | null
+    95→    95→  clientType: string
+    96→    96→  engagementType: string
+    97→    97→  items: PbcTemplateItem[]
+    98→    98→  isDefault: boolean
+    99→    99→  createdAt: string
+   100→   100→}
+   101→   101→
+   102→   102→interface AuditLogRow {
+   103→   103→  id: string
+   104→   104→  firmId: string
+   105→   105→  userId?: string | null
+   106→   106→  action: string
+   107→   107→  resourceType?: string | null
+   108→   108→  resourceId?: string | null
+   109→   109→  details: Record<string, unknown> | string
+   110→   110→  ipAddress?: string | null
+   111→   111→  createdAt: string
+   112→   112→}
+   113→   113→
+   114→   114→// ─── Color helpers ─────────────────────────────────────────────
+   115→   115→
+   116→   116→const TEAM_COLOR_HEX: Record<string, string> = {
+   117→   117→  emerald: '#10b981',
+   118→   118→  blue: '#3b82f6',
+   119→   119→  amber: '#f59e0b',
+   120→   120→  violet: '#8b5cf6',
+   121→   121→  cyan: '#06b6d4',
+   122→   122→  rose: '#f43f5e',
+   123→   123→  teal: '#14b8a6',
+   124→   124→  indigo: '#6366f1',
+   125→   125→  pink: '#ec4899',
+   126→   126→  green: '#22c55e',
+   127→   127→}
+   128→   128→
+   129→   129→const TEAM_COLOR_CLASSES: Record<string, string> = {
+   130→   130→  emerald: 'bg-emerald-500',
+   131→   131→  blue: 'bg-blue-500',
+   132→   132→  amber: 'bg-amber-500',
+   133→   133→  violet: 'bg-violet-500',
+   134→   134→  cyan: 'bg-cyan-500',
+   135→   135→  rose: 'bg-rose-500',
+   136→   136→  teal: 'bg-teal-500',
+   137→   137→  indigo: 'bg-indigo-500',
+   138→   138→  pink: 'bg-pink-500',
+   139→   139→  green: 'bg-green-500',
+   140→   140→}
+   141→   141→
+   142→   142→const ROLE_BADGE: Record<string, { label: string; classes: string }> = {
+   143→   143→  partner: { label: 'Partner', classes: 'bg-primary/10 text-primary border-primary/20' },
+   144→   144→  manager: { label: 'Manager', classes: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900' },
+   145→   145→  preparer: { label: 'Preparer', classes: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900' },
+   146→   146→  admin: { label: 'Admin', classes: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900' },
+   147→   147→  'read-only': { label: 'Read-only', classes: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300' },
+   148→   148→}
+   149→   149→
+   150→   150→function initials(name: string) {
+   151→   151→  return name
+   152→   152→    .split(' ')
+   153→   153→    .map((p) => p[0])
+   154→   154→    .filter(Boolean)
+   155→   155→    .slice(0, 2)
+   156→   156→    .join('')
+   157→   157→    .toUpperCase()
+   158→   158→}
+   159→   159→
+   160→   160→function getRoleKey(role: string): keyof typeof ROLE_BADGE | 'read-only' {
+   161→   161→  const r = role.toLowerCase()
+   162→   162→  if (r.includes('partner')) return 'partner'
+   163→   163→  if (r.includes('manager')) return 'manager'
+   164→   164→  if (r.includes('preparer')) return 'preparer'
+   165→   165→  if (r.includes('admin')) return 'admin'
+   166→   166→  return 'read-only'
+   167→   167→}
+   168→   168→
+   169→   169→function getCountryFlag(code: string) {
+   170→   170→  const found = COUNTRIES.find((c) => c.code === code)
+   171→   171→  return found?.flag || '🌐'
+   172→   172→}
+   173→   173→
+   174→   174→function getCountryLabel(code: string) {
+   175→   175→  const found = COUNTRIES.find((c) => c.code === code)
+   176→   176→  return found?.label || code
+   177→   177→}
+   178→   178→
+   179→   179→// ─── Settings View ─────────────────────────────────────────────
+   180→   180→
+   181→   181→export function SettingsView() {
+   182→   182→  const [activeTab, setActiveTab] = useState('general')
+   183→   183→  const [loading, setLoading] = useState(true)
+   184→   184→  const [refreshing, setRefreshing] = useState(false)
+   185→   185→
+   186→   186→  const [team, setTeam] = useState<TeamMemberRow[]>([])
+   187→   187→  const [templates, setTemplates] = useState<PbcTemplateRow[]>([])
+   188→   188→  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([])
+   189→   189→
+   190→   190→  // Firm info (derived from API responses; fall back to seeded defaults if needed)
+   191→   191→  const [firm, setFirm] = useState({
+   192→   192→    id: '',
+   193→   193→    name: 'Meridian CPA Group',
+   194→   194→    subscriptionTier: 'business',
+   195→   195→    country: 'US',
+   196→   196→    settings: { taxSoftware: ['ultratax', 'cch'], multiCountry: true } as Record<string, unknown>,
+   197→   197→  })
+   198→   198→
+   199→   199→  const [showAddMember, setShowAddMember] = useState(false)
+   200→   200→  const [showCreateTemplate, setShowCreateTemplate] = useState(false)
+   201→   201→
+   202→   202→  const loadData = async (silent = false) => {
+   203→   203→    if (!silent) setLoading(true)
+   204→   204→    try {
+   205→   205→      const [teamRes, templatesRes, auditRes] = await Promise.all([
+   206→   206→        fetch('/api/settings/team'),
+   207→   207→        fetch('/api/settings/templates'),
+   208→   208→        fetch('/api/audit-logs'),
+   209→   209→      ])
+   210→   210→
+   211→   211→      if (teamRes.ok) {
+   212→   212→        const teamData = await teamRes.json()
+   213→   213→        const teamList: TeamMemberRow[] = teamData.team || []
+   214→   214→        setTeam(teamList)
+   215→   215→        if (teamList[0]?.firmId) {
+   216→   216→          setFirm((f) => ({ ...f, id: teamList[0].firmId }))
+   217→   217→        }
+   218→   218→      }
+   219→   219→      if (templatesRes.ok) {
+   220→   220→        const tplData = await templatesRes.json()
+   221→   221→        setTemplates(tplData.templates || [])
+   222→   222→      }
+   223→   223→      if (auditRes.ok) {
+   224→   224→        const auditData = await auditRes.json()
+   225→   225→        setAuditLogs(auditData.logs || [])
+   226→   226→      }
+   227→   227→    } catch (err) {
+   228→   228→      console.error('Failed to load settings data:', err)
+   229→   229→      toast.error('Failed to load settings data')
+   230→   230→    } finally {
+   231→   231→      setLoading(false)
+   232→   232→      setRefreshing(false)
+   233→   233→    }
+   234→   234→  }
+   235→   235→
+   236→   236→  useEffect(() => {
+   237→   237→    loadData()
+   238→   238→  }, [])
+   239→   239→
+   240→   240→  const handleRefresh = () => {
+   241→   241→    setRefreshing(true)
+   242→   242→    loadData(true).then(() => toast.success('Settings refreshed'))
+   243→   243→  }
+   244→   244→
+   245→   245→  // Derived stats
+   246→   246→  const usageStats = useMemo(
+   247→   247→    () => ({
+   248→   248→      teamMembers: team.length,
+   249→   249→      templates: templates.length,
+   250→   250→      connectedSoftware: TAX_SOFTWARE.filter((s) => s.connected).length,
+   251→   251→      auditEvents: auditLogs.length,
+   252→   252→    }),
+   253→   253→    [team, templates, auditLogs]
+   254→   254→  )
+   255→   255→
+   256→   256→  if (loading) {
+   257→   257→    return <SettingsSkeleton />
+   258→   258→  }
+   259→   259→
+   260→   260→  return (
+   261→   261→    <div className="space-y-6 p-4 md:p-6">
+   262→   262→      {/* Header */}
+   263→   263→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   264→   264→        <div className="flex items-start gap-3">
+   265→   265→          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+   266→   266→            <SettingsIcon className="h-5 w-5" />
+   267→   267→          </div>
+   268→   268→          <div>
+   269→   269→            <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+   270→   270→            <p className="text-sm text-muted-foreground">
+   271→   271→              Manage your firm, team, templates, integrations, billing, and audit trail.
+   272→   272→            </p>
+   273→   273→          </div>
+   274→   274→        </div>
+   275→   275→        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+   276→   276→          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+   277→   277→          Refresh
+   278→   278→        </Button>
+   279→   279→      </div>
+   280→   280→
+   281→   281→      {/* Quick stats */}
+   282→   282→      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+   283→   283→        <StatCard
+   284→   284→          label="Team Members"
+   285→   285→          value={usageStats.teamMembers}
+   286→   286→          icon={Users}
+   287→   287→          accent="primary"
+   288→   288→        />
+   289→   289→        <StatCard
+   290→   290→          label="PBC Templates"
+   291→   291→          value={usageStats.templates}
+   292→   292→          icon={FileSpreadsheet}
+   293→   293→          accent="info"
+   294→   294→        />
+   295→   295→        <StatCard
+   296→   296→          label="Connected Tax Software"
+   297→   297→          value={usageStats.connectedSoftware}
+   298→   298→          icon={Plug}
+   299→   299→          accent="success"
+   300→   300→        />
+   301→   301→        <StatCard
+   302→   302→          label="Audit Events (30d)"
+   303→   303→          value={usageStats.auditEvents}
+   304→   304→          icon={ScrollText}
+   305→   305→          accent="warning"
+   306→   306→        />
+   307→   307→      </div>
+   308→   308→
+   309→   309→      {/* Tabs */}
+   310→   310→      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+   311→   311→        <div className="overflow-x-auto">
+   312→   312→          <TabsList className="h-auto w-fit">
+   313→   313→            <TabsTrigger value="general" className="gap-1.5">
+   314→   314→              <Building2 className="h-3.5 w-3.5" /> General
+   315→   315→            </TabsTrigger>
+   316→   316→            <TabsTrigger value="team" className="gap-1.5">
+   317→   317→              <Users className="h-3.5 w-3.5" /> Team
+   318→   318→            </TabsTrigger>
+   319→   319→            <TabsTrigger value="templates" className="gap-1.5">
+   320→   320→              <FileSpreadsheet className="h-3.5 w-3.5" /> Templates
+   321→   321→            </TabsTrigger>
+   322→   322→            <TabsTrigger value="integrations" className="gap-1.5">
+   323→   323→              <Plug className="h-3.5 w-3.5" /> Integrations
+   324→   324→            </TabsTrigger>
+   325→   325→            <TabsTrigger value="billing" className="gap-1.5">
+   326→   326→              <CreditCard className="h-3.5 w-3.5" /> Billing
+   327→   327→            </TabsTrigger>
+   328→   328→            <TabsTrigger value="audit" className="gap-1.5">
+   329→   329→              <ScrollText className="h-3.5 w-3.5" /> Audit Log
+   330→   330→            </TabsTrigger>
+   331→   331→          </TabsList>
+   332→   332→        </div>
+   333→   333→
+   334→   334→        {/* GENERAL */}
+   335→   335→        <TabsContent value="general" className="mt-6">
+   336→   336→          <GeneralSection firm={firm} setFirm={setFirm} />
+   337→   337→        </TabsContent>
+   338→   338→
+   339→   339→        {/* TEAM */}
+   340→   340→        <TabsContent value="team" className="mt-6">
+   341→   341→          <TeamSection
+   342→   342→            team={team}
+   343→   343→            onAdd={() => setShowAddMember(true)}
+   344→   344→            firmId={firm.id}
+   345→   345→            onMemberAdded={(m) => setTeam((prev) => [...prev, m].sort((a, b) => a.name.localeCompare(b.name)))}
+   346→   346→          />
+   347→   347→        </TabsContent>
+   348→   348→
+   349→   349→        {/* TEMPLATES */}
+   350→   350→        <TabsContent value="templates" className="mt-6">
+   351→   351→          <TemplatesSection templates={templates} onCreate={() => setShowCreateTemplate(true)} />
+   352→   352→        </TabsContent>
+   353→   353→
+   354→   354→        {/* INTEGRATIONS */}
+   355→   355→        <TabsContent value="integrations" className="mt-6">
+   356→   356→          <IntegrationsSection firm={firm} />
+   357→   357→        </TabsContent>
+   358→   358→
+   359→   359→        {/* BILLING */}
+   360→   360→        <TabsContent value="billing" className="mt-6">
+   361→   361→          <BillingSection firm={firm} usageStats={usageStats} />
+   362→   362→        </TabsContent>
+   363→   363→
+   364→   364→        {/* AUDIT LOG */}
+   365→   365→        <TabsContent value="audit" className="mt-6">
+   366→   366→          <AuditLogSection logs={auditLogs} />
+   367→   367→        </TabsContent>
+   368→   368→      </Tabs>
+   369→   369→
+   370→   370→      {/* Add Team Member dialog */}
+   371→   371→      <AddTeamMemberDialog
+   372→   372→        open={showAddMember}
+   373→   373→        onOpenChange={setShowAddMember}
+   374→   374→        firmId={firm.id}
+   375→   375→        onCreated={(m) => {
+   376→   376→          setTeam((prev) => [...prev, m].sort((a, b) => a.name.localeCompare(b.name)))
+   377→   377→        }}
+   378→   378→      />
+   379→   379→
+   380→   380→      {/* Create Template dialog */}
+   381→   381→      <CreateTemplateDialog
+   382→   382→        open={showCreateTemplate}
+   383→   383→        onOpenChange={setShowCreateTemplate}
+   384→   384→        firmId={firm.id}
+   385→   385→        onCreated={(t) => setTemplates((prev) => [...prev, t])}
+   386→   386→      />
+   387→   387→    </div>
+   388→   388→  )
+   389→   389→}
+   390→   390→
+   391→   391→// ─── General Section ───────────────────────────────────────────
+   392→   392→
+   393→   393→function GeneralSection({
+   394→   394→  firm,
+   395→   395→  setFirm,
+   396→   396→}: {
+   397→   397→  firm: {
+   398→   398→    id: string
+   399→   399→    name: string
+   400→   400→    subscriptionTier: string
+   401→   401→    country: string
+   402→   402→    settings: Record<string, unknown>
+   403→   403→  }
+   404→   404→  setFirm: React.Dispatch<
+   405→   405→    React.SetStateAction<{
+   406→   406→      id: string
+   407→   407→      name: string
+   408→   408→      subscriptionTier: string
+   409→   409→      country: string
+   410→   410→      settings: Record<string, unknown>
+   411→   411→    }>
+   412→   412→  >
+   413→   413→}) {
+   414→   414→  const [editing, setEditing] = useState(false)
+   415→   415→  const [form, setForm] = useState({
+   416→   416→    name: firm.name,
+   417→   417→    subscriptionTier: firm.subscriptionTier,
+   418→   418→    country: firm.country,
+   419→   419→  })
+   420→   420→
+   421→   421→  const tierLabel = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)?.name || firm.subscriptionTier
+   422→   422→  const tierInfo = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)
+   423→   423→
+   424→   424→  const handleSave = () => {
+   425→   425→    setFirm((f) => ({ ...f, ...form }))
+   426→   426→    setEditing(false)
+   427→   427→    toast.success('Firm settings updated (cosmetic)')
+   428→   428→  }
+   429→   429→
+   430→   430→  return (
+   431→   431→    <div className="space-y-6">
+   432→   432→      <Card>
+   433→   433→        <CardHeader className="border-b">
+   434→   434→          <div className="flex items-start justify-between">
+   435→   435→            <div>
+   436→   436→              <CardTitle className="text-base">Firm Information</CardTitle>
+   437→   437→              <CardDescription>Manage your firm profile and primary settings.</CardDescription>
+   438→   438→            </div>
+   439→   439→            {!editing ? (
+   440→   440→              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+   441→   441→                <Pencil className="h-3.5 w-3.5" /> Edit
+   442→   442→              </Button>
+   443→   443→            ) : (
+   444→   444→              <div className="flex gap-2">
+   445→   445→                <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+   446→   446→                  Cancel
+   447→   447→                </Button>
+   448→   448→                <Button size="sm" onClick={handleSave}>
+   449→   449→                  <Check className="h-3.5 w-3.5" /> Save
+   450→   450→                </Button>
+   451→   451→              </div>
+   452→   452→            )}
+   453→   453→          </div>
+   454→   454→        </CardHeader>
+   455→   455→        <CardContent className="grid gap-5 pt-6 md:grid-cols-2">
+   456→   456→          {/* Firm identity preview */}
+   457→   457→          <div className="md:col-span-2 flex items-center gap-4 rounded-xl bg-gradient-primary p-5 text-white shadow-lg shadow-primary/20">
+   458→   458→            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
+   459→   459→              <Building2 className="h-7 w-7" />
+   460→   460→            </div>
+   461→   461→            <div className="min-w-0 flex-1">
+   462→   462→              <p className="text-xs font-medium uppercase tracking-wider text-white/70">Firm</p>
+   463→   463→              <p className="truncate text-xl font-bold">{form.name}</p>
+   464→   464→              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/80">
+   465→   465→                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5">
+   466→   466→                  <Crown className="h-3 w-3" /> {tierLabel} plan
+   467→   467→                </span>
+   468→   468→                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5">
+   469→   469→                  <span>{getCountryFlag(form.country)}</span> {getCountryLabel(form.country)}
+   470→   470→                </span>
+   471→   471→                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5">
+   472→   472→                  <Shield className="h-3 w-3" /> SOC 2
+   473→   473→                </span>
+   474→   474→              </div>
+   475→   475→            </div>
+   476→   476→          </div>
+   477→   477→
+   478→   478→          {/* Editable fields */}
+   479→   479→          <div className="space-y-2">
+   480→   480→            <Label htmlFor="firm-name">Firm Name</Label>
+   481→   481→            <Input
+   482→   482→              id="firm-name"
+   483→   483→              value={form.name}
+   484→   484→              disabled={!editing}
+   485→   485→              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+   486→   486→            />
+   487→   487→          </div>
+   488→   488→
+   489→   489→          <div className="space-y-2">
+   490→   490→            <Label htmlFor="firm-tier">Subscription Tier</Label>
+   491→   491→            <Select
+   492→   492→              value={form.subscriptionTier}
+   493→   493→              disabled={!editing}
+   494→   494→              onValueChange={(v) => setForm((f) => ({ ...f, subscriptionTier: v }))}
+   495→   495→            >
+   496→   496→              <SelectTrigger id="firm-tier">
+   497→   497→                <SelectValue />
+   498→   498→              </SelectTrigger>
+   499→   499→              <SelectContent>
+   500→   500→                {PRICING_TIERS.map((t) => (
+   501→   501→                  <SelectItem key={t.id} value={t.id}>
+   502→   502→                    {t.name}
+   503→   503→                    {t.id === firm.subscriptionTier ? ' (current)' : ''}
+   504→   504→                  </SelectItem>
+   505→   505→                ))}
+   506→   506→              </SelectContent>
+   507→   507→            </Select>
+   508→   508→          </div>
+   509→   509→
+   510→   510→          <div className="space-y-2">
+   511→   511→            <Label htmlFor="firm-country">Country</Label>
+   512→   512→            <Select
+   513→   513→              value={form.country}
+   514→   514→              disabled={!editing}
+   515→   515→              onValueChange={(v) => setForm((f) => ({ ...f, country: v }))}
+   516→   516→            >
+   517→   517→              <SelectTrigger id="firm-country">
+   518→   518→                <SelectValue />
+   519→   519→              </SelectTrigger>
+   520→   520→              <SelectContent>
+   521→   521→                {COUNTRIES.map((c) => (
+   522→   522→                  <SelectItem key={c.code} value={c.code}>
+   523→   523→                    {c.flag} {c.label}
+   524→   524→                  </SelectItem>
+   525→   525→                ))}
+   526→   526→              </SelectContent>
+   527→   527→            </Select>
+   528→   528→          </div>
+   529→   529→
+   530→   530→          <div className="space-y-2">
+   531→   531→            <Label htmlFor="firm-firmid">Firm ID</Label>
+   532→   532→            <Input id="firm-firmid" value={firm.id} disabled className="font-mono text-xs" />
+   533→   533→          </div>
+   534→   534→        </CardContent>
+   535→   535→      </Card>
+   536→   536→
+   537→   537→      {/* Plan + Preferences summary */}
+   538→   538→      <div className="grid gap-6 md:grid-cols-2">
+   539→   539→        <Card>
+   540→   540→          <CardHeader className="border-b">
+   541→   541→            <CardTitle className="text-base">Plan Summary</CardTitle>
+   542→   542→            <CardDescription>Your current subscription details.</CardDescription>
+   543→   543→          </CardHeader>
+   544→   544→          <CardContent className="space-y-4 pt-6">
+   545→   545→            <div className="flex items-center justify-between">
+   546→   546→              <span className="text-sm text-muted-foreground">Current Plan</span>
+   547→   547→              <Badge className="bg-primary/10 text-primary border-primary/20">{tierLabel}</Badge>
+   548→   548→            </div>
+   549→   549→            <div className="flex items-center justify-between">
+   550→   550→              <span className="text-sm text-muted-foreground">Price</span>
+   551→   551→              <span className="text-sm font-semibold">
+   552→   552→                {tierInfo?.price ? `$${tierInfo.price}/${tierInfo.period}` : 'Custom'}
+   553→   553→              </span>
+   554→   554→            </div>
+   555→   555→            <div className="flex items-center justify-between">
+   556→   556→              <span className="text-sm text-muted-foreground">Doc Limit / Month</span>
+   557→   557→              <span className="text-sm font-semibold">
+   558→   558→                {tierInfo?.docsPerMonth === -1 ? 'Unlimited' : tierInfo?.docsPerMonth ?? '—'}
+   559→   559→              </span>
+   560→   560→            </div>
+   561→   561→            <div className="flex items-center justify-between">
+   562→   562→              <span className="text-sm text-muted-foreground">Multi-country</span>
+   563→   563→              <Badge variant="outline" className="gap-1">
+   564→   564→                <Globe className="h-3 w-3" /> {firm.settings.multiCountry ? 'Enabled' : 'Disabled'}
+   565→   565→              </Badge>
+   566→   566→            </div>
+   567→   567→          </CardContent>
+   568→   568→        </Card>
+   569→   569→
+   570→   570→        <Card>
+   571→   571→          <CardHeader className="border-b">
+   572→   572→            <CardTitle className="text-base">Preferences</CardTitle>
+   573→   573→            <CardDescription>Workspace-wide preferences (cosmetic).</CardDescription>
+   574→   574→          </CardHeader>
+   575→   575→          <CardContent className="space-y-4 pt-6">
+   576→   576→            <PreferenceRow label="Auto-classify documents on upload" value="On" />
+   577→   577→            <PreferenceRow label="Send PBC reminders every" value="3 days" />
+   578→   578→            <PreferenceRow label="Default PBC template" value="Standard 1040 Individual" />
+   579→   579→            <PreferenceRow label="Confidence review threshold" value="90%" />
+   580→   580→            <PreferenceRow label="Daily AI usage report" value="Email · 8:00 AM" />
+   581→   581→          </CardContent>
+   582→   582→        </Card>
+   583→   583→      </div>
+   584→   584→    </div>
+   585→   585→  )
+   586→   586→}
+   587→   587→
+   588→   588→function PreferenceRow({ label, value }: { label: string; value: string }) {
+   589→   589→  return (
+   590→   590→    <div className="flex items-center justify-between border-b border-border/60 pb-3 last:border-0 last:pb-0">
+   591→   591→      <span className="text-sm text-muted-foreground">{label}</span>
+   592→   592→      <span className="text-sm font-medium">{value}</span>
+   593→   593→    </div>
+   594→   594→  )
+   595→   595→}
+   596→   596→
+   597→   597→// ─── Team Section ──────────────────────────────────────────────
+   598→   598→
+   599→   599→function TeamSection({
+   600→   600→  team,
+   601→   601→  onAdd,
+   602→   602→}: {
+   603→   603→  team: TeamMemberRow[]
+   604→   604→  onAdd: () => void
+   605→   605→  firmId: string
+   606→   606→  onMemberAdded: (m: TeamMemberRow) => void
+   607→   607→}) {
+   608→   608→  return (
+   609→   609→    <Card>
+   610→   610→      <CardHeader className="border-b">
+   611→   611→        <div className="flex items-center justify-between">
+   612→   612→          <div>
+   613→   613→            <CardTitle className="text-base">Team Members</CardTitle>
+   614→   614→            <CardDescription>
+   615→   615→              {team.length} member{team.length === 1 ? '' : 's'} · manage roles, capacity, and workload.
+   616→   616→            </CardDescription>
+   617→   617→          </div>
+   618→   618→          <Button size="sm" onClick={onAdd}>
+   619→   619→            <Plus className="h-4 w-4" /> Add Team Member
+   620→   620→          </Button>
+   621→   621→        </div>
+   622→   622→      </CardHeader>
+   623→   623→      <CardContent className="pt-0">
+   624→   624→        {team.length === 0 ? (
+   625→   625→          <div className="flex flex-col items-center justify-center py-12 text-center">
+   626→   626→            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+   627→   627→              <Users className="h-6 w-6 text-muted-foreground" />
+   628→   628→            </div>
+   629→   629→            <p className="mt-3 text-sm font-medium">No team members yet</p>
+   630→   630→            <p className="text-xs text-muted-foreground">Add your first team member to get started.</p>
+   631→   631→          </div>
+   632→   632→        ) : (
+   633→   633→          <div className="-mx-6 overflow-x-auto">
+   634→   634→            <Table>
+   635→   635→              <TableHeader>
+   636→   636→                <TableRow className="hover:bg-transparent">
+   637→   637→                  <TableHead>Member</TableHead>
+   638→   638→                  <TableHead>Role</TableHead>
+   639→   639→                  <TableHead className="hidden md:table-cell">Email</TableHead>
+   640→   640→                  <TableHead className="text-center">Capacity</TableHead>
+   641→   641→                  <TableHead className="hidden sm:table-cell">Current Load</TableHead>
+   642→   642→                  <TableHead className="min-w-[160px]">Utilization</TableHead>
+   643→   643→                </TableRow>
+   644→   644→              </TableHeader>
+   645→   645→              <TableBody>
+   646→   646→                {team.map((m) => {
+   647→   647→                  const util = m.capacity > 0 ? Math.round((m.currentLoad / m.capacity) * 100) : 0
+   648→   648→                  const utilColor =
+   649→   649→                    util >= 90
+   650→   650→                      ? 'text-red-600'
+   651→   651→                      : util >= 75
+   652→   652→                      ? 'text-amber-600'
+   653→   653→                      : util >= 50
+   654→   654→                      ? 'text-primary'
+   655→   655→                      : 'text-emerald-600'
+   656→   656→                  const barColor =
+   657→   657→                    util >= 90
+   658→   658→                      ? 'bg-red-500'
+   659→   659→                      : util >= 75
+   660→   660→                      ? 'bg-amber-500'
+   661→   661→                      : util >= 50
+   662→   662→                      ? 'bg-primary'
+   663→   663→                      : 'bg-emerald-500'
+   664→   664→                  const roleKey = getRoleKey(m.role)
+   665→   665→                  const roleCfg = ROLE_BADGE[roleKey]
+   666→   666→                  return (
+   667→   667→                    <TableRow key={m.id} className="group">
+   668→   668→                      <TableCell>
+   669→   669→                        <div className="flex items-center gap-3">
+   670→   670→                          <div
+   671→   671→                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+   672→   672→                            style={{ backgroundColor: TEAM_COLOR_HEX[m.color] || '#64748b' }}
+   673→   673→                          >
+   674→   674→                            {initials(m.name)}
+   675→   675→                          </div>
+   676→   676→                          <div className="min-w-0">
+   677→   677→                            <p className="truncate text-sm font-semibold">{m.name}</p>
+   678→   678→                            <p className="truncate text-xs text-muted-foreground md:hidden">{m.email}</p>
+   679→   679→                          </div>
+   680→   680→                        </div>
+   681→   681→                      </TableCell>
+   682→   682→                      <TableCell>
+   683→   683→                        <Badge variant="outline" className={cn('font-medium', roleCfg.classes)}>
+   684→   684→                          {roleCfg.label}
+   685→   685→                        </Badge>
+   686→   686→                      </TableCell>
+   687→   687→                      <TableCell className="hidden md:table-cell">
+   688→   688→                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+   689→   689→                          <Mail className="h-3.5 w-3.5 shrink-0" />
+   690→   690→                          <span className="truncate">{m.email}</span>
+   691→   691→                        </div>
+   692→   692→                      </TableCell>
+   693→   693→                      <TableCell className="text-center">
+   694→   694→                        <span className="text-sm font-medium tabular-nums">{m.capacity}</span>
+   695→   695→                      </TableCell>
+   696→   696→                      <TableCell className="hidden sm:table-cell">
+   697→   697→                        <span className="text-sm tabular-nums text-muted-foreground">
+   698→   698→                          {m.currentLoad} / {m.capacity}
+   699→   699→                        </span>
+   700→   700→                      </TableCell>
+   701→   701→                      <TableCell>
+   702→   702→                        <div className="flex items-center gap-2">
+   703→   703→                          <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
+   704→   704→                            <div
+   705→   705→                              className={cn('h-full rounded-full transition-all', barColor)}
+   706→   706→                              style={{ width: `${Math.min(100, util)}%` }}
+   707→   707→                            />
+   708→   708→                          </div>
+   709→   709→                          <span className={cn('w-9 text-right text-xs font-semibold tabular-nums', utilColor)}>
+   710→   710→                            {util}%
+   711→   711→                          </span>
+   712→   712→                        </div>
+   713→   713→                      </TableCell>
+   714→   714→                    </TableRow>
+   715→   715→                  )
+   716→   716→                })}
+   717→   717→              </TableBody>
+   718→   718→            </Table>
+   719→   719→          </div>
+   720→   720→        )}
+   721→   721→      </CardContent>
+   722→   722→    </Card>
+   723→   723→  )
+   724→   724→}
+   725→   725→
+   726→   726→// ─── Templates Section ─────────────────────────────────────────
+   727→   727→
+   728→   728→function TemplatesSection({
+   729→   729→  templates,
+   730→   730→  onCreate,
+   731→   731→}: {
+   732→   732→  templates: PbcTemplateRow[]
+   733→   733→  onCreate: () => void
+   734→   734→}) {
+   735→   735→  return (
+   736→   736→    <div className="space-y-4">
+   737→   737→      <div className="flex items-center justify-between">
+   738→   738→        <div>
+   739→   739→          <h2 className="text-lg font-semibold">PBC Templates</h2>
+   740→   740→          <p className="text-sm text-muted-foreground">
+   741→   741→            Reusable document request lists for different engagement types.
+   742→   742→          </p>
+   743→   743→        </div>
+   744→   744→        <Button size="sm" onClick={onCreate}>
+   745→   745→          <Plus className="h-4 w-4" /> Create Template
+   746→   746→        </Button>
+   747→   747→      </div>
+   748→   748→
+   749→   749→      {templates.length === 0 ? (
+   750→   750→        <Card>
+   751→   751→          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+   752→   752→            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+   753→   753→              <FileSpreadsheet className="h-6 w-6 text-muted-foreground" />
+   754→   754→            </div>
+   755→   755→            <p className="mt-3 text-sm font-medium">No templates yet</p>
+   756→   756→            <p className="text-xs text-muted-foreground">Create a template to standardize your PBC lists.</p>
+   757→   757→          </CardContent>
+   758→   758→        </Card>
+   759→   759→      ) : (
+   760→   760→        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   761→   761→          {templates.map((t) => {
+   762→   762→            const requiredCount = t.items.filter((i) => i.required).length
+   763→   763→            const clientTypeLabel =
+   764→   764→              CLIENT_TYPES.find((c) => c.value === t.clientType)?.label || t.clientType
+   765→   765→            const clientTypeIcon =
+   766→   766→              CLIENT_TYPES.find((c) => c.value === t.clientType)?.icon || '📄'
+   767→   767→            const engLabel =
+   768→   768→              ENGAGEMENT_TYPES.find((e) => e.value === t.engagementType)?.label || t.engagementType
+   769→   769→            return (
+   770→   770→              <Card
+   771→   771→                key={t.id}
+   772→   772→                className="group relative overflow-hidden transition-all hover:shadow-md hover:border-primary/30"
+   773→   773→              >
+   774→   774→                <div className="absolute right-0 top-0 h-20 w-20 -translate-y-6 translate-x-6 rounded-full bg-primary/5" />
+   775→   775→                <CardHeader className="border-b pb-4">
+   776→   776→                  <div className="flex items-start justify-between gap-2">
+   777→   777→                    <div className="flex items-start gap-2.5">
+   778→   778→                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   779→   779→                        <FileSpreadsheet className="h-4.5 w-4.5" />
+   780→   780→                      </div>
+   781→   781→                      <div className="min-w-0">
+   782→   782→                        <CardTitle className="text-sm leading-tight">{t.name}</CardTitle>
+   783→   783→                        {t.isDefault && (
+   784→   784→                          <Badge className="mt-1 gap-1 bg-primary/10 text-primary border-primary/20" variant="outline">
+   785→   785→                            <Star className="h-3 w-3" /> Default
+   786→   786→                          </Badge>
+   787→   787→                        )}
+   788→   788→                      </div>
+   789→   789→                    </div>
+   790→   790→                  </div>
+   791→   791→                  {t.description && (
+   792→   792→                    <CardDescription className="mt-2 line-clamp-2">{t.description}</CardDescription>
+   793→   793→                  )}
+   794→   794→                </CardHeader>
+   795→   795→                <CardContent className="space-y-3 pt-4">
+   796→   796→                  <div className="flex flex-wrap items-center gap-1.5">
+   797→   797→                    <Badge variant="outline" className="gap-1 text-xs">
+   798→   798→                      <span>{clientTypeIcon}</span> {clientTypeLabel}
+   799→   799→                    </Badge>
+   800→   800→                    <Badge variant="outline" className="text-xs">
+   801→   801→                      {engLabel}
+   802→   802→                    </Badge>
+   803→   803→                  </div>
+   804→   804→
+   805→   805→                  <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-3 text-center">
+   806→   806→                    <div>
+   807→   807→                      <p className="text-lg font-bold tabular-nums">{t.items.length}</p>
+   808→   808→                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Items</p>
+   809→   809→                    </div>
+   810→   810→                    <div className="border-x border-border">
+   811→   811→                      <p className="text-lg font-bold tabular-nums text-primary">{requiredCount}</p>
+   812→   812→                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Required</p>
+   813→   813→                    </div>
+   814→   814→                    <div>
+   815→   815→                      <p className="text-lg font-bold tabular-nums text-muted-foreground">
+   816→   816→                        {t.items.length - requiredCount}
+   817→   817→                      </p>
+   818→   818→                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Optional</p>
+   819→   819→                    </div>
+   820→   820→                  </div>
+   821→   821→
+   822→   822→                  <div className="flex gap-2 pt-1">
+   823→   823→                    <Button size="sm" className="flex-1">
+   824→   824→                      Use Template
+   825→   825→                    </Button>
+   826→   826→                    <Button size="sm" variant="outline">
+   827→   827→                      <Pencil className="h-3.5 w-3.5" />
+   828→   828→                    </Button>
+   829→   829→                  </div>
+   830→   830→                </CardContent>
+   831→   831→              </Card>
+   832→   832→            )
+   833→   833→          })}
+   834→   834→        </div>
+   835→   835→      )}
+   836→   836→    </div>
+   837→   837→  )
+   838→   838→}
+   839→   839→
+   840→   840→// ─── Integrations Section ──────────────────────────────────────
+   841→   841→
+   842→   842→function IntegrationsSection({
+   843→   843→  firm,
+   844→   844→}: {
+   845→   845→  firm: { settings: Record<string, unknown> }
+   846→   846→}) {
+   847→   847→  const storageProviders = [
+   848→   848→    { id: 'box', name: 'Box', vendor: 'Box, Inc.', connected: false, icon: Cloud, color: 'text-blue-500' },
+   849→   849→    { id: 'gdrive', name: 'Google Drive', vendor: 'Google', connected: true, icon: HardDrive, color: 'text-emerald-500' },
+   850→   850→    { id: 'onedrive', name: 'OneDrive', vendor: 'Microsoft', connected: false, icon: Cloud, color: 'text-cyan-500' },
+   851→   851→  ]
+   852→   852→
+   853→   853→  return (
+   854→   854→    <div className="space-y-6">
+   855→   855→      {/* Tax Software */}
+   856→   856→      <Card>
+   857→   857→        <CardHeader className="border-b">
+   858→   858→          <div className="flex items-center gap-2">
+   859→   859→            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   860→   860→              <Zap className="h-4 w-4" />
+   861→   861→            </div>
+   862→   862→            <div>
+   863→   863→              <CardTitle className="text-base">Tax Software Integrations</CardTitle>
+   864→   864→              <CardDescription>Connect your tax preparation software for one-click import.</CardDescription>
+   865→   865→            </div>
+   866→   866→          </div>
+   867→   867→        </CardHeader>
+   868→   868→        <CardContent className="pt-6">
+   869→   869→          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+   870→   870→            {TAX_SOFTWARE.map((sw) => {
+   871→   871→              const initials_ = sw.name
+   872→   872→                .split(' ')
+   873→   873→                .map((p) => p[0])
+   874→   874→                .slice(0, 2)
+   875→   875→                .join('')
+   876→   876→                .toUpperCase()
+   877→   877→              return (
+   878→   878→                <div
+   879→   879→                  key={sw.id}
+   880→   880→                  className={cn(
+   881→   881→                    'flex flex-col gap-3 rounded-xl border p-4 transition-all',
+   882→   882→                    sw.connected
+   883→   883→                      ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+   884→   884→                      : 'border-border bg-card hover:border-primary/30'
+   885→   885→                  )}
+   886→   886→                >
+   887→   887→                  <div className="flex items-start justify-between">
+   888→   888→                    <div className="flex items-center gap-3">
+   889→   889→                      <div
+   890→   890→                        className={cn(
+   891→   891→                          'flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold',
+   892→   892→                          sw.connected
+   893→   893→                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+   894→   894→                            : 'bg-primary/10 text-primary'
+   895→   895→                        )}
+   896→   896→                      >
+   897→   897→                        {initials_}
+   898→   898→                      </div>
+   899→   899→                      <div>
+   900→   900→                        <p className="text-sm font-semibold leading-tight">{sw.name}</p>
+   901→   901→                        <p className="text-xs text-muted-foreground">{sw.vendor}</p>
+   902→   902→                      </div>
+   903→   903→                    </div>
+   904→   904→                    {sw.connected ? (
+   905→   905→                      <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900">
+   906→   906→                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Connected
+   907→   907→                      </Badge>
+   908→   908→                    ) : (
+   909→   909→                      <Badge variant="outline" className="gap-1 text-muted-foreground">
+   910→   910→                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" /> Disconnected
+   911→   911→                      </Badge>
+   912→   912→                    )}
+   913→   913→                  </div>
+   914→   914→                  <Button
+   915→   915→                    size="sm"
+   916→   916→                    variant={sw.connected ? 'outline' : 'default'}
+   917→   917→                    className="mt-auto w-full"
+   918→   918→                    onClick={() =>
+   919→   919→                      toast.info(
+   920→   920→                        sw.connected ? `Configure ${sw.name} integration` : `Connect ${sw.name}`,
+   921→   921→                        { description: 'Integration setup is coming soon.' }
+   922→   922→                      )
+   923→   923→                    }
+   924→   924→                  >
+   925→   925→                    {sw.connected ? (
+   926→   926→                      <>
+   927→   927→                        <SettingsIcon className="h-3.5 w-3.5" /> Configure
+   928→   928→                      </>
+   929→   929→                    ) : (
+   930→   930→                      <>
+   931→   931→                        <Plug className="h-3.5 w-3.5" /> Connect
+   932→   932→                      </>
+   933→   933→                    )}
+   934→   934→                  </Button>
+   935→   935→                </div>
+   936→   936→              )
+   937→   937→            })}
+   938→   938→          </div>
+   939→   939→        </CardContent>
+   940→   940→      </Card>
+   941→   941→
+   942→   942→      {/* Storage */}
+   943→   943→      <Card>
+   944→   944→        <CardHeader className="border-b">
+   945→   945→          <div className="flex items-center gap-2">
+   946→   946→            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   947→   947→              <HardDrive className="h-4 w-4" />
+   948→   948→            </div>
+   949→   949→            <div>
+   950→   950→              <CardTitle className="text-base">Document Storage</CardTitle>
+   951→   951→              <CardDescription>Connect cloud storage providers for document import.</CardDescription>
+   952→   952→            </div>
+   953→   953→          </div>
+   954→   954→        </CardHeader>
+   955→   955→        <CardContent className="pt-6">
+   956→   956→          <div className="grid gap-3 sm:grid-cols-3">
+   957→   957→            {storageProviders.map((sp) => {
+   958→   958→              const Icon = sp.icon
+   959→   959→              return (
+   960→   960→                <div
+   961→   961→                  key={sp.id}
+   962→   962→                  className={cn(
+   963→   963→                    'flex items-center justify-between rounded-xl border p-4',
+   964→   964→                    sp.connected
+   965→   965→                      ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+   966→   966→                      : 'border-border'
+   967→   967→                  )}
+   968→   968→                >
+   969→   969→                  <div className="flex items-center gap-3">
+   970→   970→                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+   971→   971→                      <Icon className={cn('h-4.5 w-4.5', sp.color)} />
+   972→   972→                    </div>
+   973→   973→                    <div>
+   974→   974→                      <p className="text-sm font-semibold leading-tight">{sp.name}</p>
+   975→   975→                      <p className="text-xs text-muted-foreground">{sp.vendor}</p>
+   976→   976→                    </div>
+   977→   977→                  </div>
+   978→   978→                  {sp.connected ? (
+   979→   979→                    <Check className="h-4 w-4 text-emerald-500" />
+   980→   980→                  ) : (
+   981→   981→                    <Button
+   982→   982→                      size="sm"
+   983→   983→                      variant="ghost"
+   984→   984→                      onClick={() => toast.info(`Connect ${sp.name}`, { description: 'Coming soon.' })}
+   985→   985→                    >
+   986→   986→                      Connect
+   987→   987→                    </Button>
+   988→   988→                  )}
+   989→   989→                </div>
+   990→   990→              )
+   991→   991→            })}
+   992→   992→          </div>
+   993→   993→        </CardContent>
+   994→   994→      </Card>
+   995→   995→
+   996→   996→      {/* Multi-country */}
+   997→   997→      <Card>
+   998→   998→        <CardHeader className="border-b">
+   999→   999→          <div className="flex items-center gap-2">
+  1000→  1000→            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1001→  1001→              <Globe className="h-4 w-4" />
+  1002→  1002→            </div>
+  1003→  1003→            <div>
+  1004→  1004→              <CardTitle className="text-base">Multi-Country Support</CardTitle>
+  1005→  1005→              <CardDescription>
+  1006→  1006→                TaxDox AI supports tax jurisdictions in the following countries.
+  1007→  1007→              </CardDescription>
+  1008→  1008→            </div>
+  1009→  1009→          </div>
+  1010→  1010→        </CardHeader>
+  1011→  1011→        <CardContent className="pt-6">
+  1012→  1012→          <div className="flex flex-wrap gap-3">
+  1013→  1013→            {COUNTRIES.map((c) => (
+  1014→  1014→              <div
+  1015→  1015→                key={c.code}
+  1016→  1016→                className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-2.5"
+  1017→  1017→              >
+  1018→  1018→                <span className="text-2xl leading-none">{c.flag}</span>
+  1019→  1019→                <div>
+  1020→  1020→                  <p className="text-sm font-semibold leading-tight">{c.label}</p>
+  1021→  1021→                  <p className="text-xs text-muted-foreground">{c.code}</p>
+  1022→  1022→                </div>
+  1023→  1023→                <Badge variant="outline" className="ml-1 gap-1 text-emerald-600 border-emerald-200 dark:border-emerald-900">
+  1024→  1024→                  <Check className="h-3 w-3" /> Active
+  1025→  1025→                </Badge>
+  1026→  1026→              </div>
+  1027→  1027→            ))}
+  1028→  1028→          </div>
+  1029→  1029→        </CardContent>
+  1030→  1030→      </Card>
+  1031→  1031→    </div>
+  1032→  1032→  )
+  1033→  1033→}
+  1034→  1034→
+  1035→  1035→// ─── Billing Section ───────────────────────────────────────────
+  1036→  1036→
+  1037→  1037→function BillingSection({
+  1038→  1038→  firm,
+  1039→  1039→  usageStats,
+  1040→  1040→}: {
+  1041→  1041→  firm: { subscriptionTier: string }
+  1042→  1042→  usageStats: { teamMembers: number; templates: number; connectedSoftware: number; auditEvents: number }
+  1043→  1043→}) {
+  1044→  1044→  const currentTier = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)
+  1045→  1045→  // Mocked usage numbers (real data would come from a usage endpoint)
+  1046→  1046→  const usage = {
+  1047→  1047→    documentsThisMonth: 312,
+  1048→  1048→    documentsLimit: currentTier?.docsPerMonth === -1 ? null : currentTier?.docsPerMonth ?? 0,
+  1049→  1049→    clients: 12,
+  1050→  1050→    clientsLimit: 100,
+  1051→  1051→    teamMembers: usageStats.teamMembers,
+  1052→  1052→    teamLimit: 50,
+  1053→  1053→  }
+  1054→  1054→
+  1055→  1055→  const docUtil = usage.documentsLimit ? Math.round((usage.documentsThisMonth / usage.documentsLimit) * 100) : 0
+  1056→  1056→
+  1057→  1057→  return (
+  1058→  1058→    <div className="space-y-6">
+  1059→  1059→      {/* Current plan banner */}
+  1060→  1060→      <Card className="overflow-hidden border-primary/30">
+  1061→  1061→        <div className="relative bg-gradient-primary p-6 text-white">
+  1062→  1062→          <div className="absolute right-0 top-0 h-32 w-32 -translate-y-8 translate-x-8 rounded-full bg-white/10" />
+  1063→  1063→          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+  1064→  1064→            <div>
+  1065→  1065→              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-white/70">
+  1066→  1066→                <Crown className="h-3.5 w-3.5" /> Current Plan
+  1067→  1067→              </div>
+  1068→  1068→              <h3 className="mt-1 text-2xl font-bold">{currentTier?.name} Plan</h3>
+  1069→  1069→              <p className="mt-0.5 text-sm text-white/80">{currentTier?.description}</p>
+  1070→  1070→              <div className="mt-2 text-sm">
+  1071→  1071→                <span className="text-2xl font-bold">
+  1072→  1072→                  {currentTier?.price ? `$${currentTier.price}` : 'Custom'}
+  1073→  1073→                </span>
+  1074→  1074→                {currentTier?.price && <span className="text-white/70">/{currentTier.period}</span>}
+  1075→  1075→              </div>
+  1076→  1076→            </div>
+  1077→  1077→            <div className="flex flex-wrap gap-2">
+  1078→  1078→              <Button
+  1079→  1079→                variant="secondary"
+  1080→  1080→                size="sm"
+  1081→  1081→                className="bg-white/15 text-white hover:bg-white/25"
+  1082→  1082→                onClick={() => toast.info('Manage plan', { description: 'Billing portal coming soon.' })}
+  1083→  1083→              >
+  1084→  1084→                Manage Plan
+  1085→  1085→              </Button>
+  1086→  1086→              <Button
+  1087→  1087→                size="sm"
+  1088→  1088→                className="bg-white text-primary hover:bg-white/90"
+  1089→  1089→                onClick={() => toast.info('Contact sales', { description: 'We will reach out shortly.' })}
+  1090→  1090→              >
+  1091→  1091→                Upgrade
+  1092→  1092→              </Button>
+  1093→  1093→            </div>
+  1094→  1094→          </div>
+  1095→  1095→        </div>
+  1096→  1096→        <CardContent className="grid gap-6 pt-6 sm:grid-cols-3">
+  1097→  1097→          <UsageStat
+  1098→  1098→            label="Documents This Month"
+  1099→  1099→            value={usage.documentsThisMonth}
+  1100→  1100→            limit={usage.documentsLimit}
+  1101→  1101→            util={docUtil}
+  1102→  1102→            icon={FileSpreadsheet}
+  1103→  1103→            accent="primary"
+  1104→  1104→          />
+  1105→  1105→          <UsageStat
+  1106→  1106→            label="Clients"
+  1107→  1107→            value={usage.clients}
+  1108→  1108→            limit={usage.clientsLimit}
+  1109→  1109→            util={Math.round((usage.clients / usage.clientsLimit) * 100)}
+  1110→  1110→            icon={Users}
+  1111→  1111→            accent="info"
+  1112→  1112→          />
+  1113→  1113→          <UsageStat
+  1114→  1114→            label="Team Members"
+  1115→  1115→            value={usage.teamMembers}
+  1116→  1116→            limit={usage.teamLimit}
+  1117→  1117→            util={Math.round((usage.teamMembers / usage.teamLimit) * 100)}
+  1118→  1118→            icon={Users}
+  1119→  1119→            accent="success"
+  1120→  1120→          />
+  1121→  1121→        </CardContent>
+  1122→  1122→      </Card>
+  1123→  1123→
+  1124→  1124→      {/* Pricing tiers */}
+  1125→  1125→      <div>
+  1126→  1126→        <h3 className="text-lg font-semibold">Available Plans</h3>
+  1127→  1127→        <p className="text-sm text-muted-foreground">Compare and choose the right plan for your firm.</p>
+  1128→  1128→      </div>
+  1129→  1129→      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+  1130→  1130→        {PRICING_TIERS.map((tier) => {
+  1131→  1131→          const isCurrent = tier.id === firm.subscriptionTier
+  1132→  1132→          const isHighlight = tier.highlight
+  1133→  1133→          return (
+  1134→  1134→            <Card
+  1135→  1135→              key={tier.id}
+  1136→  1136→              className={cn(
+  1137→  1137→                'relative flex flex-col overflow-hidden transition-all',
+  1138→  1138→                isCurrent
+  1139→  1139→                  ? 'border-primary ring-2 ring-primary/30'
+  1140→  1140→                  : isHighlight
+  1141→  1141→                  ? 'border-primary/40 ring-1 ring-primary/20'
+  1142→  1142→                  : 'hover:border-primary/30'
+  1143→  1143→              )}
+  1144→  1144→            >
+  1145→  1145→              {isHighlight && (
+  1146→  1146→                <div className="bg-gradient-primary px-4 py-1 text-center text-xs font-semibold uppercase tracking-wide text-white">
+  1147→  1147→                  Most Popular
+  1148→  1148→                </div>
+  1149→  1149→              )}
+  1150→  1150→              {isCurrent && !isHighlight && (
+  1151→  1151→                <div className="bg-primary px-4 py-1 text-center text-xs font-semibold uppercase tracking-wide text-primary-foreground">
+  1152→  1152→                  Current Plan
+  1153→  1153→                </div>
+  1154→  1154→              )}
+  1155→  1155→              <CardHeader className="pb-3">
+  1156→  1156→                <CardTitle className="text-base">{tier.name}</CardTitle>
+  1157→  1157→                <CardDescription className="line-clamp-2">{tier.description}</CardDescription>
+  1158→  1158→              </CardHeader>
+  1159→  1159→              <CardContent className="flex flex-1 flex-col gap-4 pt-0">
+  1160→  1160→                <div className="flex items-baseline gap-1">
+  1161→  1161→                  {tier.price !== null ? (
+  1162→  1162→                    <>
+  1163→  1163→                      <span className="text-3xl font-bold tracking-tight">${tier.price}</span>
+  1164→  1164→                      <span className="text-sm text-muted-foreground">/{tier.period}</span>
+  1165→  1165→                    </>
+  1166→  1166→                  ) : (
+  1167→  1167→                    <span className="text-2xl font-bold tracking-tight">Custom</span>
+  1168→  1168→                  )}
+  1169→  1169→                </div>
+  1170→  1170→                <div className="rounded-lg bg-muted/50 px-3 py-2 text-center">
+  1171→  1171→                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Doc limit / month</p>
+  1172→  1172→                  <p className="text-sm font-semibold">
+  1173→  1173→                    {tier.docsPerMonth === -1 ? 'Unlimited' : tier.docsPerMonth.toLocaleString()}
+  1174→  1174→                  </p>
+  1175→  1175→                </div>
+  1176→  1176→                <ul className="flex-1 space-y-2">
+  1177→  1177→                  {tier.features.map((f) => (
+  1178→  1178→                    <li key={f} className="flex items-start gap-2 text-sm">
+  1179→  1179→                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+  1180→  1180→                      <span className="text-foreground/80">{f}</span>
+  1181→  1181→                    </li>
+  1182→  1182→                  ))}
+  1183→  1183→                </ul>
+  1184→  1184→                <Button
+  1185→  1185→                  className="w-full"
+  1186→  1186→                  variant={isCurrent ? 'outline' : isHighlight ? 'default' : 'outline'}
+  1187→  1187→                  disabled={isCurrent}
+  1188→  1188→                  onClick={() =>
+  1189→  1189→                    toast.info(
+  1190→  1190→                      isCurrent
+  1191→  1191→                        ? 'You are on this plan'
+  1192→  1192→                        : tier.price === null
+  1193→  1193→                        ? 'Contact sales'
+  1194→  1194→                        : `Upgrade to ${tier.name}`,
+  1195→  1195→                      { description: isCurrent ? undefined : 'Billing portal coming soon.' }
+  1196→  1196→                    )
+  1197→  1197→                  }
+  1198→  1198→                >
+  1199→  1199→                  {isCurrent ? (
+  1200→  1200→                    <>
+  1201→  1201→                      <Check className="h-4 w-4" /> Current
+  1202→  1202→                    </>
+  1203→  1203→                  ) : tier.price === null ? (
+  1204→  1204→                    'Contact Sales'
+  1205→  1205→                  ) : (
+  1206→  1206→                    `Upgrade to ${tier.name}`
+  1207→  1207→                  )}
+  1208→  1208→                </Button>
+  1209→  1209→              </CardContent>
+  1210→  1210→            </Card>
+  1211→  1211→          )
+  1212→  1212→        })}
+  1213→  1213→      </div>
+  1214→  1214→    </div>
+  1215→  1215→  )
+  1216→  1216→}
+  1217→  1217→
+  1218→  1218→function UsageStat({
+  1219→  1219→  label,
+  1220→  1220→  value,
+  1221→  1221→  limit,
+  1222→  1222→  util,
+  1223→  1223→  icon: Icon,
+  1224→  1224→  accent,
+  1225→  1225→}: {
+  1226→  1226→  label: string
+  1227→  1227→  value: number
+  1228→  1228→  limit: number | null
+  1229→  1229→  util: number
+  1230→  1230→  icon: typeof FileSpreadsheet
+  1231→  1231→  accent: 'primary' | 'success' | 'info'
+  1232→  1232→}) {
+  1233→  1233→  const accentClass =
+  1234→  1234→    accent === 'primary'
+  1235→  1235→      ? 'bg-primary/10 text-primary'
+  1236→  1236→      : accent === 'success'
+  1237→  1237→      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+  1238→  1238→      : 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400'
+  1239→  1239→  return (
+  1240→  1240→    <div className="space-y-2">
+  1241→  1241→      <div className="flex items-center justify-between">
+  1242→  1242→        <span className="text-sm font-medium text-muted-foreground">{label}</span>
+  1243→  1243→        <div className={cn('flex h-7 w-7 items-center justify-center rounded-md', accentClass)}>
+  1244→  1244→          <Icon className="h-3.5 w-3.5" />
+  1245→  1245→        </div>
+  1246→  1246→      </div>
+  1247→  1247→      <div className="flex items-baseline gap-1">
+  1248→  1248→        <span className="text-2xl font-bold tabular-nums">{value.toLocaleString()}</span>
+  1249→  1249→        <span className="text-sm text-muted-foreground">
+  1250→  1250→          / {limit === null ? '∞' : limit.toLocaleString()}
+  1251→  1251→        </span>
+  1252→  1252→      </div>
+  1253→  1253→      <Progress value={Math.min(100, util)} className="h-1.5" />
+  1254→  1254→      <p className="text-xs text-muted-foreground">{util}% used</p>
+  1255→  1255→    </div>
+  1256→  1256→  )
+  1257→  1257→}
+  1258→  1258→
+  1259→  1259→// ─── Audit Log Section ─────────────────────────────────────────
+  1260→  1260→
+  1261→  1261→function AuditLogSection({ logs }: { logs: AuditLogRow[] }) {
+  1262→  1262→  const actionColor = (action: string) => {
+  1263→  1263→    if (action.includes('login') || action.includes('auth')) return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400'
+  1264→  1264→    if (action.includes('create')) return 'text-primary bg-primary/10'
+  1265→  1265→    if (action.includes('delete')) return 'text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400'
+  1266→  1266→    if (action.includes('update') || action.includes('patch')) return 'text-amber-600 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400'
+  1267→  1267→    return 'text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-300'
+  1268→  1268→  }
+  1269→  1269→
+  1270→  1270→  const formatDetails = (details: Record<string, unknown> | string) => {
+  1271→  1271→    if (typeof details === 'string') {
+  1272→  1272→      try {
+  1273→  1273→        return JSON.stringify(JSON.parse(details), null, 0)
+  1274→  1274→      } catch {
+  1275→  1275→        return details
+  1276→  1276→      }
+  1277→  1277→    }
+  1278→  1278→    return JSON.stringify(details)
+  1279→  1279→  }
+  1280→  1280→
+  1281→  1281→  return (
+  1282→  1282→    <Card>
+  1283→  1283→      <CardHeader className="border-b">
+  1284→  1284→        <div className="flex items-center justify-between">
+  1285→  1285→          <div className="flex items-center gap-2">
+  1286→  1286→            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1287→  1287→              <History className="h-4 w-4" />
+  1288→  1288→            </div>
+  1289→  1289→            <div>
+  1290→  1290→              <CardTitle className="text-base">Audit Log</CardTitle>
+  1291→  1291→              <CardDescription>
+  1292→  1292→                Last {logs.length} event{logs.length === 1 ? '' : 's'} across your firm.
+  1293→  1293→              </CardDescription>
+  1294→  1294→            </div>
+  1295→  1295→          </div>
+  1296→  1296→          <Badge variant="outline" className="gap-1">
+  1297→  1297→            <ActivityIcon className="h-3 w-3" /> {logs.length} events
+  1298→  1298→          </Badge>
+  1299→  1299→        </div>
+  1300→  1300→      </CardHeader>
+  1301→  1301→      <CardContent className="pt-0">
+  1302→  1302→        {logs.length === 0 ? (
+  1303→  1303→          <div className="flex flex-col items-center justify-center py-12 text-center">
+  1304→  1304→            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+  1305→  1305→              <ScrollText className="h-6 w-6 text-muted-foreground" />
+  1306→  1306→            </div>
+  1307→  1307→            <p className="mt-3 text-sm font-medium">No audit events yet</p>
+  1308→  1308→            <p className="text-xs text-muted-foreground">Actions taken in TaxDox will appear here.</p>
+  1309→  1309→          </div>
+  1310→  1310→        ) : (
+  1311→  1311→          <ScrollArea className="h-[calc(100vh-22rem)] min-h-[320px]">
+  1312→  1312→            <Table>
+  1313→  1313→              <TableHeader className="sticky top-0 z-10 bg-card">
+  1314→  1314→                <TableRow className="hover:bg-transparent">
+  1315→  1315→                  <TableHead className="w-[180px]">Timestamp</TableHead>
+  1316→  1316→                  <TableHead>Action</TableHead>
+  1317→  1317→                  <TableHead>Resource</TableHead>
+  1318→  1318→                  <TableHead className="hidden md:table-cell">IP Address</TableHead>
+  1319→  1319→                  <TableHead className="hidden lg:table-cell">Details</TableHead>
+  1320→  1320→                </TableRow>
+  1321→  1321→              </TableHeader>
+  1322→  1322→              <TableBody>
+  1323→  1323→                {logs.map((log) => (
+  1324→  1324→                  <TableRow key={log.id}>
+  1325→  1325→                    <TableCell>
+  1326→  1326→                      <div className="flex flex-col">
+  1327→  1327→                        <span className="text-sm font-medium tabular-nums">
+  1328→  1328→                          {format(new Date(log.createdAt), 'MMM d, yyyy')}
+  1329→  1329→                        </span>
+  1330→  1330→                        <span className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+  1331→  1331→                          <Clock12 /> {format(new Date(log.createdAt), 'HH:mm:ss')}
+  1332→  1332→                        </span>
+  1333→  1333→                      </div>
+  1334→  1334→                    </TableCell>
+  1335→  1335→                    <TableCell>
+  1336→  1336→                      <code
+  1337→  1337→                        className={cn(
+  1338→  1338→                          'inline-flex rounded-md px-2 py-0.5 text-xs font-medium',
+  1339→  1339→                          actionColor(log.action)
+  1340→  1340→                        )}
+  1341→  1341→                      >
+  1342→  1342→                        {log.action}
+  1343→  1343→                      </code>
+  1344→  1344→                    </TableCell>
+  1345→  1345→                    <TableCell>
+  1346→  1346→                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+  1347→  1347→                        <Hash className="h-3 w-3" />
+  1348→  1348→                        {log.resourceType || '—'}
+  1349→  1349→                      </div>
+  1350→  1350→                    </TableCell>
+  1351→  1351→                    <TableCell className="hidden md:table-cell">
+  1352→  1352→                      <code className="text-xs text-muted-foreground tabular-nums">
+  1353→  1353→                        {log.ipAddress || '—'}
+  1354→  1354→                      </code>
+  1355→  1355→                    </TableCell>
+  1356→  1356→                    <TableCell className="hidden lg:table-cell">
+  1357→  1357→                      <code className="line-clamp-1 max-w-md text-xs text-muted-foreground">
+  1358→  1358→                        {formatDetails(log.details)}
+  1359→  1359→                      </code>
+  1360→  1360→                    </TableCell>
+  1361→  1361→                  </TableRow>
+  1362→  1362→                ))}
+  1363→  1363→              </TableBody>
+  1364→  1364→            </Table>
+  1365→  1365→          </ScrollArea>
+  1366→  1366→        )}
+  1367→  1367→      </CardContent>
+  1368→  1368→    </Card>
+  1369→  1369→  )
+  1370→  1370→}
+  1371→  1371→
+  1372→  1372→// Small clock icon (since lucide Clock may conflict with naming)
+  1373→  1373→function Clock12(props: React.SVGProps<SVGSVGElement>) {
+  1374→  1374→  return (
+  1375→  1375→    <svg
+  1376→  1376→      xmlns="http://www.w3.org/2000/svg"
+  1377→  1377→      width="12"
+  1378→  1378→      height="12"
+  1379→  1379→      viewBox="0 0 24 24"
+  1380→  1380→      fill="none"
+  1381→  1381→      stroke="currentColor"
+  1382→  1382→      strokeWidth="2"
+  1383→  1383→      strokeLinecap="round"
+  1384→  1384→      strokeLinejoin="round"
+  1385→  1385→      {...props}
+  1386→  1386→    >
+  1387→  1387→      <circle cx="12" cy="12" r="10" />
+  1388→  1388→      <polyline points="12 6 12 12 16 14" />
+  1389→  1389→    </svg>
+  1390→  1390→  )
+  1391→  1391→}
+  1392→  1392→
+  1393→  1393→// ─── Add Team Member Dialog ────────────────────────────────────
+  1394→  1394→
+  1395→  1395→function AddTeamMemberDialog({
+  1396→  1396→  open,
+  1397→  1397→  onOpenChange,
+  1398→  1398→  firmId,
+  1399→  1399→  onCreated,
+  1400→  1400→}: {
+  1401→  1401→  open: boolean
+  1402→  1402→  onOpenChange: (v: boolean) => void
+  1403→  1403→  firmId: string
+  1404→  1404→  onCreated: (m: TeamMemberRow) => void
+  1405→  1405→}) {
+  1406→  1406→  const [form, setForm] = useState({
+  1407→  1407→    name: '',
+  1408→  1408→    role: 'preparer',
+  1409→  1409→    email: '',
+  1410→  1410→    capacity: 10,
+  1411→  1411→    color: 'emerald',
+  1412→  1412→  })
+  1413→  1413→  const [saving, setSaving] = useState(false)
+  1414→  1414→
+  1415→  1415→  const reset = () => {
+  1416→  1416→    setForm({ name: '', role: 'preparer', email: '', capacity: 10, color: 'emerald' })
+  1417→  1417→  }
+  1418→  1418→
+  1419→  1419→  const handleSubmit = async () => {
+  1420→  1420→    if (!form.name.trim()) {
+  1421→  1421→      toast.error('Name is required')
+  1422→  1422→      return
+  1423→  1423→    }
+  1424→  1424→    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+  1425→  1425→      toast.error('Valid email is required')
+  1426→  1426→      return
+  1427→  1427→    }
+  1428→  1428→    if (!firmId) {
+  1429→  1429→      toast.error('Firm not loaded yet — try again')
+  1430→  1430→      return
+  1431→  1431→    }
+  1432→  1432→    setSaving(true)
+  1433→  1433→    try {
+  1434→  1434→      const res = await fetch('/api/settings/team', {
+  1435→  1435→        method: 'POST',
+  1436→  1436→        headers: { 'Content-Type': 'application/json' },
+  1437→  1437→        body: JSON.stringify({ ...form, firmId }),
+  1438→  1438→      })
+  1439→  1439→      if (!res.ok) throw new Error('Failed to create team member')
+  1440→  1440→      const data = await res.json()
+  1441→  1441→      onCreated(data.member)
+  1442→  1442→      toast.success(`${form.name} added to the team`)
+  1443→  1443→      reset()
+  1444→  1444→      onOpenChange(false)
+  1445→  1445→    } catch (err) {
+  1446→  1446→      console.error(err)
+  1447→  1447→      toast.error('Failed to add team member')
+  1448→  1448→    } finally {
+  1449→  1449→      setSaving(false)
+  1450→  1450→    }
+  1451→  1451→  }
+  1452→  1452→
+  1453→  1453→  return (
+  1454→  1454→    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
+  1455→  1455→      <DialogContent className="sm:max-w-md">
+  1456→  1456→        <DialogHeader>
+  1457→  1457→          <DialogTitle>Add Team Member</DialogTitle>
+  1458→  1458→          <DialogDescription>
+  1459→  1459→            Create a new team member record. Role controls permissions and capacity sets max concurrent load.
+  1460→  1460→          </DialogDescription>
+  1461→  1461→        </DialogHeader>
+  1462→  1462→        <div className="grid gap-4 py-2">
+  1463→  1463→          <div className="space-y-2">
+  1464→  1464→            <Label htmlFor="tm-name">Name *</Label>
+  1465→  1465→            <Input
+  1466→  1466→              id="tm-name"
+  1467→  1467→              value={form.name}
+  1468→  1468→              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+  1469→  1469→              placeholder="e.g. Jordan Smith"
+  1470→  1470→              autoFocus
+  1471→  1471→            />
+  1472→  1472→          </div>
+  1473→  1473→          <div className="grid grid-cols-2 gap-3">
+  1474→  1474→            <div className="space-y-2">
+  1475→  1475→              <Label htmlFor="tm-role">Role</Label>
+  1476→  1476→              <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
+  1477→  1477→                <SelectTrigger id="tm-role">
+  1478→  1478→                  <SelectValue />
+  1479→  1479→                </SelectTrigger>
+  1480→  1480→                <SelectContent>
+  1481→  1481→                  <SelectItem value="partner">Partner</SelectItem>
+  1482→  1482→                  <SelectItem value="manager">Manager</SelectItem>
+  1483→  1483→                  <SelectItem value="preparer">Preparer</SelectItem>
+  1484→  1484→                  <SelectItem value="admin">Admin</SelectItem>
+  1485→  1485→                  <SelectItem value="read-only">Read-only</SelectItem>
+  1486→  1486→                </SelectContent>
+  1487→  1487→              </Select>
+  1488→  1488→            </div>
+  1489→  1489→            <div className="space-y-2">
+  1490→  1490→              <Label htmlFor="tm-capacity">Capacity</Label>
+  1491→  1491→              <Input
+  1492→  1492→                id="tm-capacity"
+  1493→  1493→                type="number"
+  1494→  1494→                min={1}
+  1495→  1495→                max={50}
+  1496→  1496→                value={form.capacity}
+  1497→  1497→                onChange={(e) => setForm((f) => ({ ...f, capacity: parseInt(e.target.value) || 0 }))}
+  1498→  1498→              />
+  1499→  1499→            </div>
+  1500→  1500→          </div>
+  1501→  1501→          <div className="space-y-2">
+  1502→  1502→            <Label htmlFor="tm-email">Email *</Label>
+  1503→  1503→            <Input
+  1504→  1504→              id="tm-email"
+  1505→  1505→              type="email"
+  1506→  1506→              value={form.email}
+  1507→  1507→              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+  1508→  1508→              placeholder="name@firm.com"
+  1509→  1509→            />
+  1510→  1510→          </div>
+  1511→  1511→          <div className="space-y-2">
+  1512→  1512→            <Label>Avatar Color</Label>
+  1513→  1513→            <div className="flex flex-wrap gap-2">
+  1514→  1514→              {Object.entries(TEAM_COLOR_HEX).map(([key, hex]) => (
+  1515→  1515→                <button
+  1516→  1516→                  key={key}
+  1517→  1517→                  type="button"
+  1518→  1518→                  onClick={() => setForm((f) => ({ ...f, color: key }))}
+  1519→  1519→                  className={cn(
+  1520→  1520→                    'flex h-8 w-8 items-center justify-center rounded-full text-white transition-all',
+  1521→  1521→                    form.color === key ? 'ring-2 ring-offset-2 ring-offset-background ring-primary scale-110' : 'opacity-80 hover:opacity-100'
+  1522→  1522→                  )}
+  1523→  1523→                  style={{ backgroundColor: hex }}
+  1524→  1524→                  aria-label={key}
+  1525→  1525→                >
+  1526→  1526→                  {form.color === key && <Check className="h-4 w-4" />}
+  1527→  1527→                </button>
+  1528→  1528→              ))}
+  1529→  1529→            </div>
+  1530→  1530→          </div>
+  1531→  1531→        </div>
+  1532→  1532→        <DialogFooter>
+  1533→  1533→          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+  1534→  1534→            Cancel
+  1535→  1535→          </Button>
+  1536→  1536→          <Button onClick={handleSubmit} disabled={saving}>
+  1537→  1537→            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+  1538→  1538→            Add Member
+  1539→  1539→          </Button>
+  1540→  1540→        </DialogFooter>
+  1541→  1541→      </DialogContent>
+  1542→  1542→    </Dialog>
+  1543→  1543→  )
+  1544→  1544→}
+  1545→  1545→
+  1546→  1546→// ─── Create Template Dialog ────────────────────────────────────
+  1547→  1547→
+  1548→  1548→function CreateTemplateDialog({
+  1549→  1549→  open,
+  1550→  1550→  onOpenChange,
+  1551→  1551→  firmId,
+  1552→  1552→  onCreated,
+  1553→  1553→}: {
+  1554→  1554→  open: boolean
+  1555→  1555→  onOpenChange: (v: boolean) => void
+  1556→  1556→  firmId: string
+  1557→  1557→  onCreated: (t: PbcTemplateRow) => void
+  1558→  1558→}) {
+  1559→  1559→  const [form, setForm] = useState({
+  1560→  1560→    name: '',
+  1561→  1561→    description: '',
+  1562→  1562→    clientType: 'individual',
+  1563→  1563→    engagementType: '1040',
+  1564→  1564→  })
+  1565→  1565→  const [saving, setSaving] = useState(false)
+  1566→  1566→
+  1567→  1567→  const reset = () => {
+  1568→  1568→    setForm({ name: '', description: '', clientType: 'individual', engagementType: '1040' })
+  1569→  1569→  }
+  1570→  1570→
+  1571→  1571→  const handleSubmit = async () => {
+  1572→  1572→    if (!form.name.trim()) {
+  1573→  1573→      toast.error('Template name is required')
+  1574→  1574→      return
+  1575→  1575→    }
+  1576→  1576→    if (!firmId) {
+  1577→  1577→      toast.error('Firm not loaded yet — try again')
+  1578→  1578→      return
+  1579→  1579→    }
+  1580→  1580→    setSaving(true)
+  1581→  1581→    try {
+  1582→  1582→      const res = await fetch('/api/settings/templates', {
+  1583→  1583→        method: 'POST',
+  1584→  1584→        headers: { 'Content-Type': 'application/json' },
+  1585→  1585→        body: JSON.stringify({ ...form, firmId, items: [] }),
+  1586→  1586→      })
+  1587→  1587→      if (!res.ok) throw new Error('Failed to create template')
+  1588→  1588→      const data = await res.json()
+  1589→  1589→      onCreated({ ...data.template, items: [] })
+  1590→  1590→      toast.success(`Template "${form.name}" created`)
+  1591→  1591→      reset()
+  1592→  1592→      onOpenChange(false)
+  1593→  1593→    } catch (err) {
+  1594→  1594→      console.error(err)
+  1595→  1595→      toast.error('Failed to create template')
+  1596→  1596→    } finally {
+  1597→  1597→      setSaving(false)
+  1598→  1598→    }
+  1599→  1599→  }
+  1600→  1600→
+  1601→  1601→  return (
+  1602→  1602→    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
+  1603→  1603→      <DialogContent className="sm:max-w-md">
+  1604→  1604→        <DialogHeader>
+  1605→  1605→          <DialogTitle>Create PBC Template</DialogTitle>
+  1606→  1606→          <DialogDescription>
+  1607→  1607→            Templates let you standardize document request lists across similar engagements.
+  1608→  1608→          </DialogDescription>
+  1609→  1609→        </DialogHeader>
+  1610→  1610→        <div className="grid gap-4 py-2">
+  1611→  1611→          <div className="space-y-2">
+  1612→  1612→            <Label htmlFor="tpl-name">Template Name *</Label>
+  1613→  1613→            <Input
+  1614→  1614→              id="tpl-name"
+  1615→  1615→              value={form.name}
+  1616→  1616→              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+  1617→  1617→              placeholder="e.g. Standard 1040 Individual"
+  1618→  1618→              autoFocus
+  1619→  1619→            />
+  1620→  1620→          </div>
+  1621→  1621→          <div className="space-y-2">
+  1622→  1622→            <Label htmlFor="tpl-desc">Description</Label>
+  1623→  1623→            <Input
+  1624→  1624→              id="tpl-desc"
+  1625→  1625→              value={form.description}
+  1626→  1626→              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+  1627→  1627→              placeholder="Short description of when to use this template"
+  1628→  1628→            />
+  1629→  1629→          </div>
+  1630→  1630→          <div className="grid grid-cols-2 gap-3">
+  1631→  1631→            <div className="space-y-2">
+  1632→  1632→              <Label htmlFor="tpl-client">Client Type</Label>
+  1633→  1633→              <Select value={form.clientType} onValueChange={(v) => setForm((f) => ({ ...f, clientType: v }))}>
+  1634→  1634→                <SelectTrigger id="tpl-client">
+  1635→  1635→                  <SelectValue />
+  1636→  1636→                </SelectTrigger>
+  1637→  1637→                <SelectContent>
+  1638→  1638→                  {CLIENT_TYPES.map((c) => (
+  1639→  1639→                    <SelectItem key={c.value} value={c.value}>
+  1640→  1640→                      {c.icon} {c.label}
+  1641→  1641→                    </SelectItem>
+  1642→  1642→                  ))}
+  1643→  1643→                </SelectContent>
+  1644→  1644→              </Select>
+  1645→  1645→            </div>
+  1646→  1646→            <div className="space-y-2">
+  1647→  1647→              <Label htmlFor="tpl-eng">Engagement Type</Label>
+  1648→  1648→              <Select value={form.engagementType} onValueChange={(v) => setForm((f) => ({ ...f, engagementType: v }))}>
+  1649→  1649→                <SelectTrigger id="tpl-eng">
+  1650→  1650→                  <SelectValue />
+  1651→  1651→                </SelectTrigger>
+  1652→  1652→                <SelectContent>
+  1653→  1653→                  {ENGAGEMENT_TYPES.map((e) => (
+  1654→  1654→                    <SelectItem key={e.value} value={e.value}>
+  1655→  1655→                      {e.label}
+  1656→  1656→                    </SelectItem>
+  1657→  1657→                  ))}
+  1658→  1658→                </SelectContent>
+  1659→  1659→              </Select>
+  1660→  1660→            </div>
+  1661→  1661→          </div>
+  1662→  1662→          <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+  1663→  1663→            <p className="flex items-center gap-1.5">
+  1664→  1664→              <ChevronRight className="h-3.5 w-3.5" />
+  1665→  1665→              You can add PBC items to this template from the engagement view after creation.
+  1666→  1666→            </p>
+  1667→  1667→          </div>
+  1668→  1668→        </div>
+  1669→  1669→        <DialogFooter>
+  1670→  1670→          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+  1671→  1671→            Cancel
+  1672→  1672→          </Button>
+  1673→  1673→          <Button onClick={handleSubmit} disabled={saving}>
+  1674→  1674→            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+  1675→  1675→            Create Template
+  1676→  1676→          </Button>
+  1677→  1677→        </DialogFooter>
+  1678→  1678→      </DialogContent>
+  1679→  1679→    </Dialog>
+  1680→  1680→  )
+  1681→  1681→}
+  1682→  1682→
+  1683→  1683→// ─── Skeleton ──────────────────────────────────────────────────
+  1684→  1684→
+  1685→  1685→function SettingsSkeleton() {
+  1686→  1686→  return (
+  1687→  1687→    <div className="space-y-6 p-4 md:p-6">
+  1688→  1688→      <div className="flex items-center justify-between">
+  1689→  1689→        <div className="flex items-center gap-3">
+  1690→  1690→          <div className="h-11 w-11 animate-pulse rounded-xl bg-muted" />
+  1691→  1691→          <div className="space-y-2">
+  1692→  1692→            <div className="h-6 w-32 animate-pulse rounded bg-muted" />
+  1693→  1693→            <div className="h-3 w-64 animate-pulse rounded bg-muted" />
+  1694→  1694→          </div>
+  1695→  1695→        </div>
+  1696→  1696→        <div className="h-8 w-20 animate-pulse rounded-md bg-muted" />
+  1697→  1697→      </div>
+  1698→  1698→      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+  1699→  1699→        {Array.from({ length: 4 }).map((_, i) => (
+  1700→  1700→          <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+  1701→  1701→        ))}
+  1702→  1702→      </div>
+  1703→  1703→      <div className="h-10 w-full animate-pulse rounded-lg bg-muted" />
+  1704→  1704→      <div className="grid gap-4 md:grid-cols-2">
+  1705→  1705→        {Array.from({ length: 2 }).map((_, i) => (
+  1706→  1706→          <div key={i} className="h-64 animate-pulse rounded-xl bg-muted" />
+  1707→  1707→        ))}
+  1708→  1708→      </div>
+  1709→  1709→    </div>
+  1710→  1710→  )
+  1711→  1711→}
+  1712→  1712→

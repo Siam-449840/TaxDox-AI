@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { DOCUMENT_TYPE_MAP } from '@/lib/constants'
 import { readFile } from 'fs/promises'
 import path from 'path'
+import { extractionCompleteEmail } from '@/lib/email-templates'
 
 /**
  * AI Field-Level Data Extraction Engine
@@ -233,6 +234,46 @@ If a field is not present in the document, set its value to "N/A" and confidence
       actor: 'TaxDox AI',
     },
   })
+
+  // ── Send "extraction complete" email to the client ──────────────────
+  // Auto-fires once AI extraction has finished so the client knows their
+  // uploaded document has been parsed. Best-effort: never fail the
+  // extraction response because the email log could not be written.
+  try {
+    const docWithClient = await db.document.findUnique({
+      where: { id: documentId },
+      include: { client: true, engagement: true },
+    })
+    if (docWithClient?.client) {
+      const avgConfidence =
+        extractions.length > 0
+          ? extractions.reduce((sum, e) => sum + e.confidence, 0) /
+            extractions.length
+          : 0
+      const emailTpl = extractionCompleteEmail(
+        docWithClient.client.name,
+        document.documentType || 'Document',
+        extractions.length,
+        avgConfidence
+      )
+      await db.emailLog.create({
+        data: {
+          firmId: docWithClient.client.firmId,
+          engagementId: docWithClient.engagementId || null,
+          clientId: docWithClient.client.id,
+          toEmail: docWithClient.client.email,
+          toName: docWithClient.client.name,
+          subject: emailTpl.subject,
+          body: emailTpl.body,
+          template: emailTpl.template,
+          status: 'sent',
+          sentAt: new Date(),
+        },
+      })
+    }
+  } catch (emailError) {
+    console.error('extraction_complete email log failed:', emailError)
+  }
 
   return NextResponse.json({
     extractions,

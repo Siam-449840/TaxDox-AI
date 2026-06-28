@@ -62,6 +62,10 @@ interface SentEmailsPanelProps {
     taxYear: number
     deadline?: string | null
   }
+  /** Optional handler for the "Send PBC Request" CTA shown in the empty state. */
+  onSendPbc?: () => void
+  /** When true, disables the Send PBC button (e.g. while the request is in flight). */
+  sendingPbc?: boolean
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -148,21 +152,28 @@ const STATUS_BADGE: Record<
  *  Main panel
  * ────────────────────────────────────────────────────────────────────────── */
 
-export function SentEmailsPanel({ engagementId, engagement }: SentEmailsPanelProps) {
+export function SentEmailsPanel({
+  engagementId,
+  engagement,
+  onSendPbc,
+  sendingPbc,
+}: SentEmailsPanelProps) {
   const [emails, setEmails] = useState<EmailLogRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [sendingReminder, setSendingReminder] = useState(false)
 
   const fetchEmails = useCallback(async () => {
     setLoading(true)
+    setError(false)
     try {
       const res = await fetch(`/api/emails?engagementId=${engagementId}`)
       if (!res.ok) throw new Error('Failed to load emails')
       const json = await res.json()
       setEmails((json.emails as EmailLogRow[]) ?? [])
     } catch {
-      toast.error('Could not load sent emails')
+      setError(true)
     } finally {
       setLoading(false)
     }
@@ -304,8 +315,15 @@ export function SentEmailsPanel({ engagementId, engagement }: SentEmailsPanelPro
       {/* List */}
       {loading ? (
         <SentEmailsSkeleton />
+      ) : error ? (
+        <ErrorState onRetry={fetchEmails} />
       ) : emails.length === 0 ? (
-        <EmptyState onSendReminder={handleSendReminder} sendingReminder={sendingReminder} />
+        <EmptyState
+          onSendReminder={handleSendReminder}
+          sendingReminder={sendingReminder}
+          onSendPbc={onSendPbc}
+          sendingPbc={sendingPbc}
+        />
       ) : (
         <div className="space-y-2.5">
           {emails.map((email) => (
@@ -502,34 +520,83 @@ function SentEmailsSkeleton() {
 function EmptyState({
   onSendReminder,
   sendingReminder,
+  onSendPbc,
+  sendingPbc,
 }: {
   onSendReminder: () => void
   sendingReminder: boolean
+  onSendPbc?: () => void
+  sendingPbc?: boolean
 }) {
   return (
-    <Card className="rounded-xl p-10 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Inbox className="h-6 w-6 text-muted-foreground" />
+    <Card className="rounded-xl border-dashed bg-gradient-to-b from-teal-50/60 to-transparent p-10 text-center dark:from-teal-950/20">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-300">
+        <Mail className="h-7 w-7" />
       </div>
-      <h3 className="mt-3 text-base font-semibold">No emails sent yet</h3>
-      <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-        Once a PBC list is sent or a reminder is dispatched, the simulated
-        emails will appear here. Click below to send a deadline reminder.
+      <h3 className="mt-4 text-base font-semibold">No emails sent yet</h3>
+      <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted-foreground">
+        When you send PBC requests or reminders, they&apos;ll appear here.
+        Client confirmations and AI extraction notices also show up
+        automatically.
       </p>
-      <div className="mt-4 flex justify-center">
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+        {onSendPbc && (
+          <Button
+            onClick={onSendPbc}
+            disabled={sendingPbc}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            {sendingPbc ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="mr-1.5 h-4 w-4" />
+            )}
+            Send PBC Request
+          </Button>
+        )}
         <Button
+          variant={onSendPbc ? 'outline' : 'default'}
           onClick={onSendReminder}
           disabled={sendingReminder}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          className={
+            onSendPbc
+              ? undefined
+              : 'bg-primary text-primary-foreground hover:bg-primary/90'
+          }
         >
           {sendingReminder ? (
             <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
           ) : (
-            <>
-              <CalendarClock className="mr-1.5 h-4 w-4" />
-              Send Deadline Reminder
-            </>
+            <CalendarClock className="mr-1.5 h-4 w-4" />
           )}
+          Send Reminder
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <Card className="rounded-xl border-amber-200 bg-amber-50/70 p-8 text-center dark:border-amber-900/50 dark:bg-amber-950/20">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300">
+        <Inbox className="h-6 w-6" />
+      </div>
+      <h3 className="mt-3 text-base font-semibold text-amber-900 dark:text-amber-200">
+        Couldn&apos;t load emails right now
+      </h3>
+      <p className="mx-auto mt-1 max-w-sm text-sm text-amber-700/80 dark:text-amber-300/80">
+        Your sent emails are still safe — we just couldn&apos;t reach the
+        server. Give it another try in a moment.
+      </p>
+      <div className="mt-4 flex justify-center">
+        <Button
+          variant="outline"
+          onClick={onRetry}
+          className="border-amber-300 bg-white text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-transparent dark:text-amber-200 dark:hover:bg-amber-950/40"
+        >
+          <RefreshCw className="mr-1.5 h-4 w-4" />
+          Try again
         </Button>
       </div>
     </Card>

@@ -663,6 +663,8 @@ export function EngagementDetailView() {
                 taxYear: data.taxYear,
                 deadline: data.deadline,
               }}
+              onSendPbc={handleSendPbc}
+              sendingPbc={actionBusy['send-pbc']}
             />
           </TabsContent>
         </Tabs>
