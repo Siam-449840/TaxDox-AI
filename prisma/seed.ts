@@ -326,7 +326,7 @@ async function main() {
             engagementId: engagement.id,
             pbcItemId: pbcItem.id,
             originalFilename: `${docType.replace(/[^a-z0-9]/gi, '_')}_${client.name.replace(/\s/g, '')}_${e.year}.pdf`,
-            storedFilename: `uploads/${nanoid()}.pdf`,
+            storedFilename: `${nanoid()}.pdf`,
             fileSize: Math.floor(50000 + Math.random() * 2000000),
             mimeType: 'application/pdf',
             documentType: docType,

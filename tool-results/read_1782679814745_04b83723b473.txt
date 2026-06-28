@@ -1,0 +1,971 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useMemo, useState } from 'react'
+     4→import {
+     5→  ArrowLeft,
+     6→  FileText,
+     7→  Loader2,
+     8→  Sparkles,
+     9→  CheckCircle2,
+    10→  Pencil,
+    11→  Save,
+    12→  X,
+    13→  Download,
+    14→  FileSpreadsheet,
+    15→  RefreshCw,
+    16→  CheckCheck,
+    17→  ZoomIn,
+    18→  ZoomOut,
+    19→  ChevronLeft,
+    20→  ChevronRight,
+    21→  Target,
+    22→  Zap,
+    23→  AlertTriangle,
+    24→  Activity as ActivityIcon,
+    25→  Users,
+    26→  ShieldCheck,
+    27→  Building2,
+    28→  Calendar,
+    29→  Upload as UploadIcon,
+    30→} from 'lucide-react'
+    31→import { useAppStore } from '@/lib/store'
+    32→import { StatusBadge } from '@/components/shared/status-badge'
+    33→import { ConfidenceMeter } from '@/components/shared/confidence-meter'
+    34→import { DOCUMENT_TYPE_MAP } from '@/lib/constants'
+    35→import { Card } from '@/components/ui/card'
+    36→import { Button } from '@/components/ui/button'
+    37→import { Badge } from '@/components/ui/badge'
+    38→import { Input } from '@/components/ui/input'
+    39→import { ScrollArea } from '@/components/ui/scroll-area'
+    40→import { Separator } from '@/components/ui/separator'
+    41→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    42→import { toast } from 'sonner'
+    43→import { formatDistanceToNow } from 'date-fns'
+    44→import type { TaxDocument, Extraction, Engagement, Client } from '@/lib/types'
+    45→import { cn } from '@/lib/utils'
+    46→
+    47→type ProcessingStage = 'idle' | 'classifying' | 'extracting' | 'done' | 'error'
+    48→
+    49→interface DocumentDetail extends TaxDocument {
+    50→  engagement?: Engagement & { client?: Client }
+    51→  client?: Client
+    52→  pbcItem?: { documentType?: string; description?: string }
+    53→  extractions?: Extraction[]
+    54→}
+    55→
+    56→interface ActivityEntry {
+    57→  id: string
+    58→  type: string
+    59→  description: string
+    60→  actor: string
+    61→  createdAt: string
+    62→}
+    63→
+    64→const GROUP_LABELS: Record<string, string> = {
+    65→  employer: 'Employer Information',
+    66→  employee: 'Employee Information',
+    67→  income: 'Income',
+    68→  tax: 'Tax Withholding',
+    69→  payer: 'Payer Information',
+    70→  recipient: 'Recipient Information',
+    71→  entity: 'Entity Information',
+    72→  partner: 'Partner / Shareholder',
+    73→  lender: 'Lender Information',
+    74→  borrower: 'Borrower Information',
+    75→  property: 'Property',
+    76→  deduction: 'Deduction',
+    77→  institution: 'Institution',
+    78→  student: 'Student',
+    79→  school: 'School',
+    80→  charity: 'Charity',
+    81→  donor: 'Donor',
+    82→  donation: 'Donation',
+    83→  business: 'Business',
+    84→  period: 'Period',
+    85→  assets: 'Assets',
+    86→  liabilities: 'Liabilities',
+    87→  equity: 'Equity',
+    88→  bank: 'Bank',
+    89→  account: 'Account',
+    90→  balance: 'Balance',
+    91→  transaction: 'Transaction',
+    92→  value: 'Value',
+    93→  identity: 'Identity',
+    94→  other: 'Other',
+    95→}
+    96→
+    97→const ACTIVITY_ICON_MAP: Record<string, typeof ActivityIcon> = {
+    98→  upload: UploadIcon,
+    99→  classify: Zap,
+   100→  extract: Target,
+   101→  verify: CheckCircle2,
+   102→}
+   103→
+   104→const ACTIVITY_STYLE_MAP: Record<string, string> = {
+   105→  upload: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400',
+   106→  classify:
+   107→    'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
+   108→  extract:
+   109→    'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+   110→  verify:
+   111→    'bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400',
+   112→}
+   113→
+   114→const PROCESSING_STEPS: {
+   115→  id: ProcessingStage
+   116→  label: string
+   117→  icon: typeof Zap
+   118→}[] = [
+   119→  { id: 'classifying', label: 'Classifying document...', icon: Zap },
+   120→  { id: 'extracting', label: 'Extracting fields...', icon: Target },
+   121→  { id: 'done', label: 'AI processing complete', icon: CheckCircle2 },
+   122→]
+   123→
+   124→export function DocumentDetailView() {
+   125→  const documentId = useAppStore((s) => s.selectedDocumentId)
+   126→  const navigate = useAppStore((s) => s.navigate)
+   127→
+   128→  const [doc, setDoc] = useState<DocumentDetail | null>(null)
+   129→  const [loading, setLoading] = useState(true)
+   130→  const [processing, setProcessing] = useState<ProcessingStage>('idle')
+   131→  const [editingId, setEditingId] = useState<string | null>(null)
+   132→  const [editValue, setEditValue] = useState('')
+   133→  const [verifyingAll, setVerifyingAll] = useState(false)
+   134→  const [zoom, setZoom] = useState(100)
+   135→  const [page, setPage] = useState(1)
+   136→  const totalPages = 3
+   137→
+   138→  const fetchDoc = () => {
+   139→    if (!documentId) return
+   140→    setLoading(true)
+   141→    fetch(`/api/documents/${documentId}`)
+   142→      .then((r) => r.json())
+   143→      .then((d) => {
+   144→        setDoc(d.document)
+   145→        setLoading(false)
+   146→      })
+   147→      .catch(() => setLoading(false))
+   148→  }
+   149→
+   150→  useEffect(() => {
+   151→    fetchDoc()
+   152→     
+   153→  }, [documentId])
+   154→
+   155→  const handleProcessWithAI = async () => {
+   156→    if (!documentId) return
+   157→    setProcessing('classifying')
+   158→    try {
+   159→      // Step 1: Classify
+   160→      const classifyRes = await fetch('/api/ai/classify', {
+   161→        method: 'POST',
+   162→        headers: { 'Content-Type': 'application/json' },
+   163→        body: JSON.stringify({ documentId }),
+   164→      })
+   165→      if (!classifyRes.ok) throw new Error('Classify failed')
+   166→      const classifyData = await classifyRes.json()
+   167→      await new Promise((r) => setTimeout(r, 700))
+   168→
+   169→      setProcessing('extracting')
+   170→      // Step 2: Extract
+   171→      const extractRes = await fetch('/api/ai/extract', {
+   172→        method: 'POST',
+   173→        headers: { 'Content-Type': 'application/json' },
+   174→        body: JSON.stringify({ documentId }),
+   175→      })
+   176→      if (!extractRes.ok) throw new Error('Extract failed')
+   177→      await new Promise((r) => setTimeout(r, 600))
+   178→
+   179→      setProcessing('done')
+   180→      toast.success('AI processing complete', {
+   181→        description: `Classified as ${classifyData.documentType || 'Unknown'} · ${classifyData.fields?.length || 0} fields extracted`,
+   182→      })
+   183→      fetchDoc()
+   184→      setTimeout(() => setProcessing('idle'), 1800)
+   185→    } catch {
+   186→      setProcessing('error')
+   187→      toast.error('AI processing failed', {
+   188→        description: 'Please try again or contact support.',
+   189→      })
+   190→      setTimeout(() => setProcessing('idle'), 1800)
+   191→    }
+   192→  }
+   193→
+   194→  const handleSaveEdit = async (extractionId: string) => {
+   195→    try {
+   196→      const res = await fetch(`/api/extractions/${extractionId}`, {
+   197→        method: 'PATCH',
+   198→        headers: { 'Content-Type': 'application/json' },
+   199→        body: JSON.stringify({ fieldValue: editValue, isVerified: true }),
+   200→      })
+   201→      if (!res.ok) throw new Error()
+   202→      const { extraction } = await res.json()
+   203→      setDoc((d) =>
+   204→        d
+   205→          ? {
+   206→              ...d,
+   207→              extractions: (d.extractions || []).map((e) =>
+   208→                e.id === extractionId ? extraction : e
+   209→              ),
+   210→            }
+   211→          : d
+   212→      )
+   213→      setEditingId(null)
+   214→      toast.success('Field updated & verified')
+   215→    } catch {
+   216→      toast.error('Failed to update field')
+   217→    }
+   218→  }
+   219→
+   220→  const handleVerifyAll = async () => {
+   221→    if (!doc?.extractions) return
+   222→    const unverified = doc.extractions.filter((e) => !e.isVerified)
+   223→    if (unverified.length === 0) {
+   224→      toast.info('All fields are already verified')
+   225→      return
+   226→    }
+   227→    setVerifyingAll(true)
+   228→    try {
+   229→      await Promise.all(
+   230→        unverified.map((e) =>
+   231→          fetch(`/api/extractions/${e.id}`, {
+   232→            method: 'PATCH',
+   233→            headers: { 'Content-Type': 'application/json' },
+   234→            body: JSON.stringify({
+   235→              fieldValue: e.fieldValue,
+   236→              isVerified: true,
+   237→            }),
+   238→          })
+   239→        )
+   240→      )
+   241→      toast.success(`Verified ${unverified.length} field${unverified.length === 1 ? '' : 's'}`)
+   242→      fetchDoc()
+   243→    } catch {
+   244→      toast.error('Failed to verify all fields')
+   245→    } finally {
+   246→      setVerifyingAll(false)
+   247→    }
+   248→  }
+   249→
+   250→  const handleExportCSV = () => {
+   251→    if (!doc?.extractions || doc.extractions.length === 0) return
+   252→    const rows: string[][] = [
+   253→      ['Field', 'Label', 'Group', 'Value', 'Confidence', 'Verified'],
+   254→    ]
+   255→    doc.extractions.forEach((e) => {
+   256→      rows.push([
+   257→        e.fieldName,
+   258→        e.fieldLabel,
+   259→        e.fieldGroup,
+   260→        e.fieldValue,
+   261→        `${Math.round(e.confidence * 100)}%`,
+   262→        e.isVerified ? 'Yes' : 'No',
+   263→      ])
+   264→    })
+   265→    const csv = rows
+   266→      .map((r) =>
+   267→        r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')
+   268→      )
+   269→      .join('\n')
+   270→    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+   271→    const url = URL.createObjectURL(blob)
+   272→    const a = document.createElement('a')
+   273→    a.href = url
+   274→    a.download = `${doc.originalFilename.replace(/\.[^.]+$/, '')}-extraction.csv`
+   275→    a.click()
+   276→    URL.revokeObjectURL(url)
+   277→    toast.success('CSV exported')
+   278→  }
+   279→
+   280→  const handleExportUltraTax = () => {
+   281→    if (!doc?.extractions || doc.extractions.length === 0) return
+   282→    toast.success('Exporting to UltraTax CS...', {
+   283→      description: `${doc.extractions.length} fields queued for import to ${doc.client?.name || 'client'}'s return.`,
+   284→    })
+   285→  }
+   286→
+   287→  const typeDef = doc?.documentType ? DOCUMENT_TYPE_MAP[doc.documentType] : null
+   288→  const extractions = doc?.extractions || []
+   289→
+   290→  const groupedExtractions = useMemo(() => {
+   291→    const groups: Record<string, Extraction[]> = {}
+   292→    extractions.forEach((e) => {
+   293→      if (!groups[e.fieldGroup]) groups[e.fieldGroup] = []
+   294→      groups[e.fieldGroup].push(e)
+   295→    })
+   296→    // Sort groups by predefined order
+   297→    const order = Object.keys(GROUP_LABELS)
+   298→    return Object.entries(groups).sort(([a], [b]) => {
+   299→      const ia = order.indexOf(a)
+   300→      const ib = order.indexOf(b)
+   301→      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+   302→    })
+   303→  }, [extractions])
+   304→
+   305→  const avgConfidence =
+   306→    extractions.length > 0
+   307→      ? extractions.reduce((sum, e) => sum + e.confidence, 0) /
+   308→        extractions.length
+   309→      : doc?.confidence || 0
+   310→  const verifiedCount = extractions.filter((e) => e.isVerified).length
+   311→  const lowConfidenceCount = extractions.filter(
+   312→    (e) => e.confidence < 0.9
+   313→  ).length
+   314→
+   315→  const activityLog = useMemo<ActivityEntry[]>(() => {
+   316→    if (!doc) return []
+   317→    const log: ActivityEntry[] = []
+   318→    log.push({
+   319→      id: 'upload',
+   320→      type: 'upload',
+   321→      description: `Document uploaded by ${
+   322→        doc.uploadedBy === 'client' ? 'client' : 'team member'
+   323→      }`,
+   324→      actor: doc.uploadedBy === 'client' ? 'Client Portal' : 'Team Member',
+   325→      createdAt: doc.uploadedAt,
+   326→    })
+   327→    if (doc.documentType && doc.processedAt) {
+   328→      log.push({
+   329→        id: 'classify',
+   330→        type: 'classify',
+   331→        description: `AI classified as ${doc.documentType} (${Math.round(
+   332→          (doc.confidence || 0) * 100
+   333→        )}% confidence)`,
+   334→        actor: 'TaxDox AI',
+   335→        createdAt: doc.processedAt,
+   336→      })
+   337→    }
+   338→    if (extractions.length > 0 && doc.processedAt) {
+   339→      log.push({
+   340→        id: 'extract',
+   341→        type: 'extract',
+   342→        description: `AI extracted ${extractions.length} fields from document`,
+   343→        actor: 'TaxDox AI',
+   344→        createdAt: doc.processedAt,
+   345→      })
+   346→    }
+   347→    if (verifiedCount > 0) {
+   348→      log.push({
+   349→        id: 'verify',
+   350→        type: 'verify',
+   351→        description: `${verifiedCount} field${
+   352→          verifiedCount === 1 ? '' : 's'
+   353→        } verified`,
+   354→        actor: 'Team Member',
+   355→        createdAt: doc.processedAt || doc.uploadedAt,
+   356→      })
+   357→    }
+   358→    return log.sort(
+   359→      (a, b) =>
+   360→        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+   361→    )
+   362→  }, [doc, extractions.length, verifiedCount])
+   363→
+   364→  if (loading || !doc) {
+   365→    return (
+   366→      <div className="space-y-4 p-6">
+   367→        <div className="h-8 w-64 animate-pulse rounded-lg bg-muted" />
+   368→        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+   369→          <div className="h-[500px] animate-pulse rounded-xl bg-muted" />
+   370→          <div className="h-[500px] animate-pulse rounded-xl bg-muted" />
+   371→        </div>
+   372→      </div>
+   373→    )
+   374→  }
+   375→
+   376→  const needsProcessing =
+   377→    doc.status === 'uploaded' ||
+   378→    (doc.status === 'processing' && !doc.documentType)
+   379→
+   380→  const isBusy = processing !== 'idle'
+   381→
+   382→  return (
+   383→    <div className="flex h-[calc(100vh-4rem)] flex-col">
+   384→      {/* Header */}
+   385→      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+   386→        <div className="space-y-3 p-4 lg:p-6">
+   387→          <div className="flex items-center gap-3">
+   388→            <Button
+   389→              variant="ghost"
+   390→              size="icon"
+   391→              onClick={() => navigate('documents')}
+   392→            >
+   393→              <ArrowLeft className="h-4 w-4" />
+   394→            </Button>
+   395→            <div className="min-w-0 flex-1">
+   396→              <div className="flex flex-wrap items-center gap-2">
+   397→                <h1
+   398→                  className="truncate text-xl font-bold tracking-tight"
+   399→                  title={doc.originalFilename}
+   400→                >
+   401→                  {doc.originalFilename}
+   402→                </h1>
+   403→                {typeDef && (
+   404→                  <Badge variant="secondary" className="shrink-0">
+   405→                    {doc.documentType}
+   406→                  </Badge>
+   407→                )}
+   408→                <StatusBadge status={doc.status} />
+   409→                {doc.confidence > 0 && (
+   410→                  <Badge
+   411→                    variant="outline"
+   412→                    className="shrink-0 text-muted-foreground"
+   413→                  >
+   414→                    <Target className="mr-1 h-3 w-3" />
+   415→                    {Math.round(doc.confidence * 100)}% confidence
+   416→                  </Badge>
+   417→                )}
+   418→              </div>
+   419→              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+   420→                {doc.client && (
+   421→                  <span className="flex items-center gap-1">
+   422→                    <Users className="h-3 w-3" /> {doc.client.name}
+   423→                  </span>
+   424→                )}
+   425→                {doc.engagement && (
+   426→                  <span className="flex items-center gap-1">
+   427→                    <Building2 className="h-3 w-3" />
+   428→                    {doc.engagement.engagementType} · {doc.engagement.taxYear}
+   429→                  </span>
+   430→                )}
+   431→                <span className="flex items-center gap-1">
+   432→                  <Calendar className="h-3 w-3" />
+   433→                  Uploaded {formatDistanceToNow(new Date(doc.uploadedAt), { addSuffix: true })}
+   434→                </span>
+   435→              </div>
+   436→            </div>
+   437→          </div>
+   438→
+   439→          {/* Action buttons */}
+   440→          <div className="flex flex-wrap items-center gap-2">
+   441→            {needsProcessing ? (
+   442→              <Button onClick={handleProcessWithAI} size="sm" disabled={isBusy}>
+   443→                {isBusy ? (
+   444→                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   445→                ) : (
+   446→                  <Sparkles className="mr-1.5 h-4 w-4" />
+   447→                )}
+   448→                {isBusy ? 'Processing...' : 'Process with AI'}
+   449→              </Button>
+   450→            ) : (
+   451→              <Button
+   452→                onClick={handleProcessWithAI}
+   453→                variant="outline"
+   454→                size="sm"
+   455→                disabled={isBusy}
+   456→              >
+   457→                {isBusy ? (
+   458→                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   459→                ) : (
+   460→                  <RefreshCw className="mr-1.5 h-4 w-4" />
+   461→                )}
+   462→                Re-process
+   463→              </Button>
+   464→            )}
+   465→            <Button
+   466→              variant="outline"
+   467→              size="sm"
+   468→              onClick={handleExportCSV}
+   469→              disabled={extractions.length === 0}
+   470→            >
+   471→              <Download className="mr-1.5 h-4 w-4" />
+   472→              Export CSV
+   473→            </Button>
+   474→            <Button
+   475→              variant="outline"
+   476→              size="sm"
+   477→              onClick={handleExportUltraTax}
+   478→              disabled={extractions.length === 0}
+   479→            >
+   480→              <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+   481→              Export to UltraTax
+   482→            </Button>
+   483→            <Button
+   484→              variant="outline"
+   485→              size="sm"
+   486→              onClick={handleVerifyAll}
+   487→              disabled={
+   488→                verifyingAll ||
+   489→                extractions.length === 0 ||
+   490→                verifiedCount === extractions.length
+   491→              }
+   492→            >
+   493→              {verifyingAll ? (
+   494→                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   495→              ) : (
+   496→                <CheckCheck className="mr-1.5 h-4 w-4" />
+   497→              )}
+   498→              Verify All
+   499→            </Button>
+   500→          </div>
+   501→
+   502→          {/* Processing animation */}
+   503→          {isBusy && (
+   504→            <Card className="border-primary/20 bg-primary/5 p-4">
+   505→              <div className="space-y-3">
+   506→                <div className="flex items-center gap-2">
+   507→                  <Sparkles className="h-4 w-4 text-primary" />
+   508→                  <span className="text-sm font-semibold">AI Processing</span>
+   509→                  <span className="ml-auto text-xs text-muted-foreground">
+   510→                    {processing === 'classifying' && 'Step 1 of 2'}
+   511→                    {processing === 'extracting' && 'Step 2 of 2'}
+   512→                    {processing === 'done' && 'Complete'}
+   513→                    {processing === 'error' && 'Failed'}
+   514→                  </span>
+   515→                </div>
+   516→                <div className="space-y-2.5">
+   517→                  {PROCESSING_STEPS.map((step) => {
+   518→                    const isCurrent = processing === step.id
+   519→                    const isDone =
+   520→                      (processing === 'extracting' &&
+   521→                        step.id === 'classifying') ||
+   522→                      (processing === 'done' &&
+   523→                        (step.id === 'classifying' ||
+   524→                          step.id === 'extracting'))
+   525→                    const StepIcon = step.icon
+   526→                    return (
+   527→                      <div key={step.id} className="flex items-center gap-2.5">
+   528→                        {isDone ? (
+   529→                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+   530→                            <CheckCircle2 className="h-3.5 w-3.5" />
+   531→                          </div>
+   532→                        ) : isCurrent ? (
+   533→                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary">
+   534→                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+   535→                          </div>
+   536→                        ) : (
+   537→                          <div className="flex h-5 w-5 items-center justify-center rounded-full border border-muted-foreground/30 text-muted-foreground/50">
+   538→                            <StepIcon className="h-3 w-3" />
+   539→                          </div>
+   540→                        )}
+   541→                        <span
+   542→                          className={cn(
+   543→                            'text-sm',
+   544→                            isCurrent
+   545→                              ? 'font-medium text-foreground'
+   546→                              : isDone
+   547→                                ? 'text-muted-foreground'
+   548→                                : 'text-muted-foreground/60'
+   549→                          )}
+   550→                        >
+   551→                          {step.label}
+   552→                        </span>
+   553→                      </div>
+   554→                    )
+   555→                  })}
+   556→                </div>
+   557→              </div>
+   558→            </Card>
+   559→          )}
+   560→        </div>
+   561→      </div>
+   562→
+   563→      {/* Body: split view */}
+   564→      <div className="flex-1 overflow-hidden">
+   565→        <div className="grid h-full grid-cols-1 lg:grid-cols-2">
+   566→          {/* LEFT: Preview */}
+   567→          <div className="flex flex-col border-r bg-muted/30">
+   568→            {/* Preview toolbar */}
+   569→            <div className="flex items-center justify-between border-b px-4 py-2">
+   570→              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   571→                <FileText className="h-3.5 w-3.5" />
+   572→                <span className="font-medium">
+   573→                  Page {page} of {totalPages}
+   574→                </span>
+   575→              </div>
+   576→              <div className="flex items-center gap-1">
+   577→                <Button
+   578→                  variant="ghost"
+   579→                  size="icon"
+   580→                  className="h-7 w-7"
+   581→                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+   582→                  disabled={page <= 1}
+   583→                >
+   584→                  <ChevronLeft className="h-3.5 w-3.5" />
+   585→                </Button>
+   586→                <Button
+   587→                  variant="ghost"
+   588→                  size="icon"
+   589→                  className="h-7 w-7"
+   590→                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+   591→                  disabled={page >= totalPages}
+   592→                >
+   593→                  <ChevronRight className="h-3.5 w-3.5" />
+   594→                </Button>
+   595→                <Separator orientation="vertical" className="mx-1 h-5" />
+   596→                <Button
+   597→                  variant="ghost"
+   598→                  size="icon"
+   599→                  className="h-7 w-7"
+   600→                  onClick={() => setZoom((z) => Math.max(50, z - 25))}
+   601→                  disabled={zoom <= 50}
+   602→                >
+   603→                  <ZoomOut className="h-3.5 w-3.5" />
+   604→                </Button>
+   605→                <span className="w-10 text-center text-xs tabular-nums text-muted-foreground">
+   606→                  {zoom}%
+   607→                </span>
+   608→                <Button
+   609→                  variant="ghost"
+   610→                  size="icon"
+   611→                  className="h-7 w-7"
+   612→                  onClick={() => setZoom((z) => Math.min(200, z + 25))}
+   613→                  disabled={zoom >= 200}
+   614→                >
+   615→                  <ZoomIn className="h-3.5 w-3.5" />
+   616→                </Button>
+   617→              </div>
+   618→            </div>
+   619→            {/* Preview area */}
+   620→            <div className="flex-1 overflow-auto p-6">
+   621→              <div
+   622→                className="mx-auto aspect-[8.5/11] max-w-md origin-top rounded-md border bg-white shadow-md transition-transform"
+   623→                style={{
+   624→                  transform: `scale(${zoom / 100})`,
+   625→                }}
+   626→              >
+   627→                <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+   628→                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted">
+   629→                    <FileText className="h-10 w-10 text-muted-foreground" />
+   630→                  </div>
+   631→                  <p className="text-sm font-medium text-muted-foreground">
+   632→                    {doc.originalFilename}
+   633→                  </p>
+   634→                  <p className="text-xs text-muted-foreground">
+   635→                    Page {page} of {totalPages} ·{' '}
+   636→                    {doc.mimeType || 'application/pdf'}
+   637→                  </p>
+   638→                  <Separator className="my-1 w-32" />
+   639→                  <p className="text-[11px] text-muted-foreground/70">
+   640→                    Preview not available —{' '}
+   641→                    <span className="font-medium text-primary">view source</span>
+   642→                  </p>
+   643→
+   644→                  {/* Simulated document content lines */}
+   645→                  <div className="mt-4 w-full space-y-2 px-6">
+   646→                    {Array.from({ length: 6 }).map((_, i) => (
+   647→                      <div
+   648→                        key={i}
+   649→                        className="h-2 rounded-full bg-muted/80"
+   650→                        style={{ width: `${75 - i * 8}%` }}
+   651→                      />
+   652→                    ))}
+   653→                  </div>
+   654→                </div>
+   655→              </div>
+   656→            </div>
+   657→          </div>
+   658→
+   659→          {/* RIGHT: Extracted data + activity */}
+   660→          <div className="flex flex-col overflow-hidden">
+   661→            <Tabs defaultValue="extraction" className="flex h-full flex-col">
+   662→              <div className="border-b px-4 pt-3">
+   663→                <TabsList>
+   664→                  <TabsTrigger value="extraction" className="gap-1.5">
+   665→                    <Target className="h-3.5 w-3.5" />
+   666→                    Extraction
+   667→                    {extractions.length > 0 && (
+   668→                      <Badge
+   669→                        variant="secondary"
+   670→                        className="ml-1 h-4 px-1 text-[10px]"
+   671→                      >
+   672→                        {extractions.length}
+   673→                      </Badge>
+   674→                    )}
+   675→                  </TabsTrigger>
+   676→                  <TabsTrigger value="activity" className="gap-1.5">
+   677→                    <ActivityIcon className="h-3.5 w-3.5" />
+   678→                    Activity
+   679→                  </TabsTrigger>
+   680→                </TabsList>
+   681→              </div>
+   682→
+   683→              <TabsContent
+   684→                value="extraction"
+   685→                className="mt-0 flex-1 overflow-hidden"
+   686→              >
+   687→                <ScrollArea className="h-full">
+   688→                  <div className="space-y-4 p-4">
+   689→                    {extractions.length > 0 ? (
+   690→                      <>
+   691→                        {/* Summary header */}
+   692→                        <div className="grid grid-cols-3 gap-2">
+   693→                          <Card className="p-3">
+   694→                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+   695→                              Fields
+   696→                            </p>
+   697→                            <p className="mt-0.5 text-lg font-bold tabular-nums">
+   698→                              {extractions.length}
+   699→                            </p>
+   700→                          </Card>
+   701→                          <Card className="p-3">
+   702→                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+   703→                              Avg Confidence
+   704→                            </p>
+   705→                            <p className="mt-0.5 text-lg font-bold tabular-nums text-primary">
+   706→                              {Math.round(avgConfidence * 100)}%
+   707→                            </p>
+   708→                          </Card>
+   709→                          <Card className="p-3">
+   710→                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+   711→                              Verified
+   712→                            </p>
+   713→                            <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-600">
+   714→                              {verifiedCount}/{extractions.length}
+   715→                            </p>
+   716→                          </Card>
+   717→                        </div>
+   718→
+   719→                        {lowConfidenceCount > 0 && (
+   720→                          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400">
+   721→                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+   722→                            <span>
+   723→                              {lowConfidenceCount} field
+   724→                              {lowConfidenceCount === 1 ? '' : 's'} below 90%
+   725→                              confidence — review recommended
+   726→                            </span>
+   727→                          </div>
+   728→                        )}
+   729→
+   730→                        {/* Grouped extractions */}
+   731→                        {groupedExtractions.map(([group, fields]) => (
+   732→                          <Card key={group} className="overflow-hidden p-0">
+   733→                            <div className="border-b bg-muted/40 px-4 py-2">
+   734→                              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+   735→                                {GROUP_LABELS[group] || group}
+   736→                              </p>
+   737→                            </div>
+   738→                            <div className="divide-y">
+   739→                              {fields.map((ext) => (
+   740→                                <ExtractionRow
+   741→                                  key={ext.id}
+   742→                                  ext={ext}
+   743→                                  isEditing={editingId === ext.id}
+   744→                                  editValue={editValue}
+   745→                                  onStartEdit={() => {
+   746→                                    setEditingId(ext.id)
+   747→                                    setEditValue(ext.fieldValue)
+   748→                                  }}
+   749→                                  onCancelEdit={() => setEditingId(null)}
+   750→                                  onChangeEdit={setEditValue}
+   751→                                  onSaveEdit={() => handleSaveEdit(ext.id)}
+   752→                                />
+   753→                              ))}
+   754→                            </div>
+   755→                          </Card>
+   756→                        ))}
+   757→                      </>
+   758→                    ) : needsProcessing ? (
+   759→                      <Card className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+   760→                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+   761→                          <Sparkles className="h-7 w-7" />
+   762→                        </div>
+   763→                        <div>
+   764→                          <p className="text-sm font-semibold">
+   765→                            Ready for AI extraction
+   766→                          </p>
+   767→                          <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+   768→                            Click &ldquo;Process with AI&rdquo; to classify this
+   769→                            document and extract structured data fields
+   770→                            automatically.
+   771→                          </p>
+   772→                        </div>
+   773→                        <Button
+   774→                          onClick={handleProcessWithAI}
+   775→                          size="sm"
+   776→                          className="mt-1"
+   777→                          disabled={isBusy}
+   778→                        >
+   779→                          {isBusy ? (
+   780→                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   781→                          ) : (
+   782→                            <Sparkles className="mr-1.5 h-4 w-4" />
+   783→                          )}
+   784→                          Process with AI
+   785→                        </Button>
+   786→                      </Card>
+   787→                    ) : (
+   788→                      <Card className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+   789→                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+   790→                          <Target className="h-7 w-7 text-muted-foreground" />
+   791→                        </div>
+   792→                        <div>
+   793→                          <p className="text-sm font-semibold">
+   794→                            No extractions yet
+   795→                          </p>
+   796→                          <p className="mt-1 text-xs text-muted-foreground">
+   797→                            No structured data has been extracted from this
+   798→                            document.
+   799→                          </p>
+   800→                        </div>
+   801→                      </Card>
+   802→                    )}
+   803→                  </div>
+   804→                </ScrollArea>
+   805→              </TabsContent>
+   806→
+   807→              <TabsContent
+   808→                value="activity"
+   809→                className="mt-0 flex-1 overflow-hidden"
+   810→              >
+   811→                <ScrollArea className="h-full">
+   812→                  <div className="space-y-1 p-4">
+   813→                    {activityLog.length === 0 ? (
+   814→                      <Card className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+   815→                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+   816→                          <ActivityIcon className="h-7 w-7 text-muted-foreground" />
+   817→                        </div>
+   818→                        <div>
+   819→                          <p className="text-sm font-medium">No activity yet</p>
+   820→                          <p className="mt-1 text-xs text-muted-foreground">
+   821→                            Events will appear here as the document is processed.
+   822→                          </p>
+   823→                        </div>
+   824→                      </Card>
+   825→                    ) : (
+   826→                      activityLog.map((entry, i) => (
+   827→                        <ActivityRow
+   828→                          key={entry.id}
+   829→                          entry={entry}
+   830→                          isLast={i === activityLog.length - 1}
+   831→                        />
+   832→                      ))
+   833→                    )}
+   834→                  </div>
+   835→                </ScrollArea>
+   836→              </TabsContent>
+   837→            </Tabs>
+   838→          </div>
+   839→        </div>
+   840→      </div>
+   841→    </div>
+   842→  )
+   843→}
+   844→
+   845→interface ExtractionRowProps {
+   846→  ext: Extraction
+   847→  isEditing: boolean
+   848→  editValue: string
+   849→  onStartEdit: () => void
+   850→  onCancelEdit: () => void
+   851→  onChangeEdit: (v: string) => void
+   852→  onSaveEdit: () => void
+   853→}
+   854→
+   855→function ExtractionRow({
+   856→  ext,
+   857→  isEditing,
+   858→  editValue,
+   859→  onStartEdit,
+   860→  onCancelEdit,
+   861→  onChangeEdit,
+   862→  onSaveEdit,
+   863→}: ExtractionRowProps) {
+   864→  const isLowConfidence = ext.confidence < 0.9
+   865→  return (
+   866→    <div
+   867→      className={cn(
+   868→        'p-3 transition-colors',
+   869→        isLowConfidence && 'bg-amber-50/40 dark:bg-amber-950/20'
+   870→      )}
+   871→    >
+   872→      <div className="flex items-start justify-between gap-3">
+   873→        <div className="min-w-0 flex-1">
+   874→          <div className="flex items-center gap-1.5">
+   875→            <p className="text-xs text-muted-foreground">{ext.fieldLabel}</p>
+   876→            {ext.isVerified && (
+   877→              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+   878→                <ShieldCheck className="h-2.5 w-2.5" />
+   879→                Verified
+   880→              </span>
+   881→            )}
+   882→          </div>
+   883→          {isEditing ? (
+   884→            <Input
+   885→              value={editValue}
+   886→              onChange={(e) => onChangeEdit(e.target.value)}
+   887→              className="mt-1 h-8 text-sm"
+   888→              autoFocus
+   889→              onKeyDown={(e) => {
+   890→                if (e.key === 'Enter') onSaveEdit()
+   891→                if (e.key === 'Escape') onCancelEdit()
+   892→              }}
+   893→            />
+   894→          ) : (
+   895→            <p className="mt-0.5 break-words text-sm font-medium">
+   896→              {ext.fieldValue || '—'}
+   897→            </p>
+   898→          )}
+   899→        </div>
+   900→        <div className="flex shrink-0 items-center gap-2">
+   901→          <ConfidenceMeter value={ext.confidence} />
+   902→          {isEditing ? (
+   903→            <div className="flex gap-0.5">
+   904→              <Button
+   905→                size="icon"
+   906→                variant="ghost"
+   907→                className="h-7 w-7 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40"
+   908→                onClick={onSaveEdit}
+   909→              >
+   910→                <Save className="h-3.5 w-3.5" />
+   911→              </Button>
+   912→              <Button
+   913→                size="icon"
+   914→                variant="ghost"
+   915→                className="h-7 w-7 text-muted-foreground"
+   916→                onClick={onCancelEdit}
+   917→              >
+   918→                <X className="h-3.5 w-3.5" />
+   919→              </Button>
+   920→            </div>
+   921→          ) : (
+   922→            <Button
+   923→              size="icon"
+   924→              variant="ghost"
+   925→              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+   926→              onClick={onStartEdit}
+   927→            >
+   928→              <Pencil className="h-3.5 w-3.5" />
+   929→            </Button>
+   930→          )}
+   931→        </div>
+   932→      </div>
+   933→    </div>
+   934→  )
+   935→}
+   936→
+   937→function ActivityRow({
+   938→  entry,
+   939→  isLast,
+   940→}: {
+   941→  entry: ActivityEntry
+   942→  isLast: boolean
+   943→}) {
+   944→  const Icon = ACTIVITY_ICON_MAP[entry.type] || ActivityIcon
+   945→  const style =
+   946→    ACTIVITY_STYLE_MAP[entry.type] ||
+   947→    'bg-muted text-muted-foreground'
+   948→  return (
+   949→    <div className="flex gap-3">
+   950→      <div className="flex flex-col items-center">
+   951→        <div
+   952→          className={cn(
+   953→            'flex h-8 w-8 items-center justify-center rounded-lg',
+   954→            style
+   955→          )}
+   956→        >
+   957→          <Icon className="h-4 w-4" />
+   958→        </div>
+   959→        {!isLast && <div className="mt-1 w-px flex-1 bg-border" />}
+   960→      </div>
+   961→      <div className="min-w-0 flex-1 pb-4">
+   962→        <p className="text-sm leading-snug">{entry.description}</p>
+   963→        <p className="mt-0.5 text-xs text-muted-foreground">
+   964→          {entry.actor} ·{' '}
+   965→          {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+   966→        </p>
+   967→      </div>
+   968→    </div>
+   969→  )
+   970→}
+   971→

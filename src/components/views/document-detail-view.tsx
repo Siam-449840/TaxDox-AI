@@ -16,17 +16,21 @@ import {
   CheckCheck,
   ZoomIn,
   ZoomOut,
-  ChevronLeft,
-  ChevronRight,
   Target,
   Zap,
   AlertTriangle,
+  AlertCircle,
   Activity as ActivityIcon,
   Users,
   ShieldCheck,
+  Check,
   Building2,
   Calendar,
   Upload as UploadIcon,
+  Image as ImageIcon,
+  Maximize2,
+  Eye,
+  HardDrive,
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { StatusBadge } from '@/components/shared/status-badge'
@@ -101,6 +105,59 @@ const ACTIVITY_ICON_MAP: Record<string, typeof ActivityIcon> = {
   verify: CheckCircle2,
 }
 
+function formatFileSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.min(
+    sizes.length - 1,
+    Math.floor(Math.log(bytes) / Math.log(k))
+  )
+  const value = bytes / Math.pow(k, i)
+  return `${value.toFixed(i === 0 ? 0 : 1)} ${sizes[i]}`
+}
+
+function confidenceTier(value: number): {
+  label: string
+  text: string
+  bg: string
+  bar: string
+  border: string
+} {
+  const pct = Math.round(value * 100)
+  if (pct >= 95)
+    return {
+      label: 'High',
+      text: 'text-emerald-600 dark:text-emerald-400',
+      bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+      bar: 'bg-emerald-500',
+      border: 'border-l-emerald-500',
+    }
+  if (pct >= 90)
+    return {
+      label: 'Good',
+      text: 'text-teal-600 dark:text-teal-400',
+      bg: 'bg-teal-50 dark:bg-teal-950/40',
+      bar: 'bg-teal-500',
+      border: 'border-l-teal-500',
+    }
+  if (pct >= 80)
+    return {
+      label: 'Fair',
+      text: 'text-amber-600 dark:text-amber-400',
+      bg: 'bg-amber-50 dark:bg-amber-950/40',
+      bar: 'bg-amber-500',
+      border: 'border-l-amber-500',
+    }
+  return {
+    label: 'Low',
+    text: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-50 dark:bg-red-950/40',
+    bar: 'bg-red-500',
+    border: 'border-l-red-500',
+  }
+}
+
 const ACTIVITY_STYLE_MAP: Record<string, string> = {
   upload: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400',
   classify:
@@ -132,8 +189,12 @@ export function DocumentDetailView() {
   const [editValue, setEditValue] = useState('')
   const [verifyingAll, setVerifyingAll] = useState(false)
   const [zoom, setZoom] = useState(100)
-  const [page, setPage] = useState(1)
-  const totalPages = 3
+  const [previewLoading, setPreviewLoading] = useState(true)
+  const [previewError, setPreviewError] = useState(false)
+
+  const isImage = doc?.mimeType?.startsWith('image/') ?? false
+  const isPdf = doc?.mimeType === 'application/pdf'
+  const previewUrl = doc ? `/api/documents/${doc.id}/preview` : null
 
   const fetchDoc = () => {
     if (!documentId) return
@@ -151,6 +212,38 @@ export function DocumentDetailView() {
     fetchDoc()
      
   }, [documentId])
+
+  // Verify preview availability before rendering img/iframe.
+  // The preview API returns 404 JSON when the file is missing on disk —
+  // we HEAD the endpoint to set loading/error states gracefully.
+  useEffect(() => {
+    if (!doc || !previewUrl) return
+    let cancelled = false
+    setPreviewLoading(true)
+    setPreviewError(false)
+
+    // Unsupported file types (Excel, CSV, etc.) get a static fallback card.
+    if (!isImage && !isPdf) {
+      setPreviewLoading(false)
+      return
+    }
+
+    fetch(previewUrl, { method: 'HEAD' })
+      .then((r) => {
+        if (cancelled) return
+        if (!r.ok) setPreviewError(true)
+        setPreviewLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setPreviewError(true)
+        setPreviewLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [doc?.id, previewUrl, isImage, isPdf])
 
   const handleProcessWithAI = async () => {
     if (!documentId) return
@@ -392,6 +485,18 @@ export function DocumentDetailView() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+              aria-hidden
+            >
+              {isImage ? (
+                <ImageIcon className="h-5 w-5" />
+              ) : isPdf ? (
+                <FileText className="h-5 w-5" />
+              ) : (
+                <FileSpreadsheet className="h-5 w-5" />
+              )}
+            </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1
@@ -416,6 +521,7 @@ export function DocumentDetailView() {
                   </Badge>
                 )}
               </div>
+              {/* File metadata info bar */}
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                 {doc.client && (
                   <span className="flex items-center gap-1">
@@ -429,8 +535,17 @@ export function DocumentDetailView() {
                   </span>
                 )}
                 <span className="flex items-center gap-1">
+                  <HardDrive className="h-3 w-3" />
+                  {formatFileSize(doc.fileSize)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <UploadIcon className="h-3 w-3" />
+                  Uploaded by{' '}
+                  {doc.uploadedBy === 'client' ? 'Client' : 'Team Member'}
+                </span>
+                <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  Uploaded {formatDistanceToNow(new Date(doc.uploadedAt), { addSuffix: true })}
+                  {formatDistanceToNow(new Date(doc.uploadedAt), { addSuffix: true })}
                 </span>
               </div>
             </div>
@@ -566,92 +681,152 @@ export function DocumentDetailView() {
           {/* LEFT: Preview */}
           <div className="flex flex-col border-r bg-muted/30">
             {/* Preview toolbar */}
-            <div className="flex items-center justify-between border-b px-4 py-2">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <FileText className="h-3.5 w-3.5" />
-                <span className="font-medium">
-                  Page {page} of {totalPages}
-                </span>
+            <div className="flex items-center justify-between gap-3 border-b bg-background px-4 py-2.5">
+              <div className="flex min-w-0 items-center gap-2 text-xs">
+                <Eye className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 leading-tight">
+                  <p
+                    className="truncate font-medium text-foreground"
+                    title={doc.originalFilename}
+                  >
+                    {doc.originalFilename}
+                  </p>
+                  <p className="truncate text-muted-foreground">
+                    {doc.mimeType || 'application/octet-stream'} ·{' '}
+                    {formatFileSize(doc.fileSize)}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1">
+                {isImage && !previewLoading && !previewError && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setZoom((z) => Math.max(50, z - 25))}
+                      disabled={zoom <= 50}
+                      title="Zoom out"
+                    >
+                      <ZoomOut className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="w-10 text-center text-xs tabular-nums text-muted-foreground">
+                      {zoom}%
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setZoom((z) => Math.min(200, z + 25))}
+                      disabled={zoom >= 200}
+                      title="Zoom in"
+                    >
+                      <ZoomIn className="h-3.5 w-3.5" />
+                    </Button>
+                    <Separator orientation="vertical" className="mx-1 h-5" />
+                  </>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
+                  asChild
+                  title="Open in new tab"
                 >
-                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <a
+                    href={previewUrl!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  </a>
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
+                  asChild
+                  title="Download file"
                 >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-                <Separator orientation="vertical" className="mx-1 h-5" />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setZoom((z) => Math.max(50, z - 25))}
-                  disabled={zoom <= 50}
-                >
-                  <ZoomOut className="h-3.5 w-3.5" />
-                </Button>
-                <span className="w-10 text-center text-xs tabular-nums text-muted-foreground">
-                  {zoom}%
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setZoom((z) => Math.min(200, z + 25))}
-                  disabled={zoom >= 200}
-                >
-                  <ZoomIn className="h-3.5 w-3.5" />
+                  <a href={previewUrl!} download={doc.originalFilename}>
+                    <Download className="h-3.5 w-3.5" />
+                  </a>
                 </Button>
               </div>
             </div>
             {/* Preview area */}
-            <div className="flex-1 overflow-auto p-6">
-              <div
-                className="mx-auto aspect-[8.5/11] max-w-md origin-top rounded-md border bg-white shadow-md transition-transform"
-                style={{
-                  transform: `scale(${zoom / 100})`,
-                }}
-              >
-                <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted">
-                    <FileText className="h-10 w-10 text-muted-foreground" />
+            <div className="flex-1 overflow-auto bg-muted/20 p-4 lg:p-6">
+              <div className="mx-auto flex min-h-[400px] items-center justify-center">
+                {previewLoading ? (
+                  <div className="flex flex-col items-center gap-3 py-12 text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Loading preview…</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Fetching {isImage ? 'image' : 'document'} from server
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    {doc.originalFilename}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Page {page} of {totalPages} ·{' '}
-                    {doc.mimeType || 'application/pdf'}
-                  </p>
-                  <Separator className="my-1 w-32" />
-                  <p className="text-[11px] text-muted-foreground/70">
-                    Preview not available —{' '}
-                    <span className="font-medium text-primary">view source</span>
-                  </p>
-
-                  {/* Simulated document content lines */}
-                  <div className="mt-4 w-full space-y-2 px-6">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="h-2 rounded-full bg-muted/80"
-                        style={{ width: `${75 - i * 8}%` }}
-                      />
-                    ))}
+                ) : previewError ? (
+                  <div className="flex max-w-sm flex-col items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-6 text-center dark:border-amber-900 dark:bg-amber-950/20">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400">
+                      <AlertCircle className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">
+                        Preview unavailable
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        We couldn&rsquo;t load the file preview. The file may
+                        have been moved or is not yet on disk.
+                      </p>
+                    </div>
+                    <Button asChild size="sm" variant="outline">
+                      <a href={previewUrl!} download={doc.originalFilename}>
+                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                        Download file
+                      </a>
+                    </Button>
                   </div>
-                </div>
+                ) : !isImage && !isPdf ? (
+                  <div className="flex max-w-sm flex-col items-center gap-3 rounded-xl border border-dashed bg-background p-6 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      <FileSpreadsheet className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">
+                        Preview not available for this file type
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {doc.mimeType || 'Unknown type'} files can&rsquo;t be
+                        previewed inline. Download to view the original.
+                      </p>
+                    </div>
+                    <Button asChild size="sm">
+                      <a href={previewUrl!} download={doc.originalFilename}>
+                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                        Download file
+                      </a>
+                    </Button>
+                  </div>
+                ) : isImage ? (
+                  <img
+                    src={previewUrl!}
+                    alt={doc.originalFilename}
+                    onError={() => setPreviewError(true)}
+                    style={{
+                      transform: `scale(${zoom / 100})`,
+                      transformOrigin: 'top center',
+                    }}
+                    className="max-w-full max-h-[600px] object-contain rounded-lg border bg-muted/30 shadow-sm transition-transform"
+                  />
+                ) : (
+                  <iframe
+                    src={previewUrl!}
+                    title={doc.originalFilename}
+                    className="w-full h-[600px] rounded-lg border bg-white"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -691,26 +866,50 @@ export function DocumentDetailView() {
                         {/* Summary header */}
                         <div className="grid grid-cols-3 gap-2">
                           <Card className="p-3">
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                              <Target className="h-3 w-3" />
                               Fields
-                            </p>
-                            <p className="mt-0.5 text-lg font-bold tabular-nums">
+                            </div>
+                            <p className="mt-1 text-lg font-bold tabular-nums">
                               {extractions.length}
                             </p>
                           </Card>
-                          <Card className="p-3">
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          <Card
+                            className={cn(
+                              'border-l-2 p-3',
+                              confidenceTier(avgConfidence).border
+                            )}
+                          >
+                            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                              <Sparkles className="h-3 w-3" />
                               Avg Confidence
-                            </p>
-                            <p className="mt-0.5 text-lg font-bold tabular-nums text-primary">
+                            </div>
+                            <p
+                              className={cn(
+                                'mt-1 text-lg font-bold tabular-nums',
+                                confidenceTier(avgConfidence).text
+                              )}
+                            >
                               {Math.round(avgConfidence * 100)}%
                             </p>
+                            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={cn(
+                                  'h-full rounded-full transition-all',
+                                  confidenceTier(avgConfidence).bar
+                                )}
+                                style={{
+                                  width: `${Math.round(avgConfidence * 100)}%`,
+                                }}
+                              />
+                            </div>
                           </Card>
                           <Card className="p-3">
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                              <ShieldCheck className="h-3 w-3" />
                               Verified
-                            </p>
-                            <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-600">
+                            </div>
+                            <p className="mt-1 text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
                               {verifiedCount}/{extractions.length}
                             </p>
                           </Card>
@@ -730,10 +929,16 @@ export function DocumentDetailView() {
                         {/* Grouped extractions */}
                         {groupedExtractions.map(([group, fields]) => (
                           <Card key={group} className="overflow-hidden p-0">
-                            <div className="border-b bg-muted/40 px-4 py-2">
+                            <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
                               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 {GROUP_LABELS[group] || group}
                               </p>
+                              <Badge
+                                variant="outline"
+                                className="h-4 px-1.5 text-[10px] font-medium text-muted-foreground"
+                              >
+                                {fields.length}
+                              </Badge>
                             </div>
                             <div className="divide-y">
                               {fields.map((ext) => (
@@ -862,72 +1067,89 @@ function ExtractionRow({
   onSaveEdit,
 }: ExtractionRowProps) {
   const isLowConfidence = ext.confidence < 0.9
+  const tier = confidenceTier(ext.confidence)
   return (
     <div
       className={cn(
-        'p-3 transition-colors',
-        isLowConfidence && 'bg-amber-50/40 dark:bg-amber-950/20'
+        'relative p-3.5 pl-4 transition-colors',
+        isLowConfidence && 'bg-amber-50 dark:bg-amber-950/20'
       )}
     >
+      {/* Confidence accent bar (left edge) */}
+      <div
+        className={cn('absolute left-0 top-0 h-full w-1', tier.bar)}
+        aria-hidden
+      />
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="text-xs text-muted-foreground">{ext.fieldLabel}</p>
+        {/* LEFT: Field label */}
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="text-sm text-muted-foreground">{ext.fieldLabel}</p>
+        </div>
+
+        {/* RIGHT: Value + confidence + actions */}
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div className="flex items-center justify-end gap-1.5">
             {ext.isVerified && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
-                <ShieldCheck className="h-2.5 w-2.5" />
+              <span
+                className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                title="Verified by team member"
+              >
+                <Check className="h-2.5 w-2.5" />
                 Verified
               </span>
             )}
+            {isEditing ? (
+              <Input
+                value={editValue}
+                onChange={(e) => onChangeEdit(e.target.value)}
+                className="h-8 w-56 text-sm"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onSaveEdit()
+                  if (e.key === 'Escape') onCancelEdit()
+                }}
+              />
+            ) : (
+              <p className="max-w-[260px] break-words text-right text-sm font-medium">
+                {ext.fieldValue || '—'}
+              </p>
+            )}
           </div>
-          {isEditing ? (
-            <Input
-              value={editValue}
-              onChange={(e) => onChangeEdit(e.target.value)}
-              className="mt-1 h-8 text-sm"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onSaveEdit()
-                if (e.key === 'Escape') onCancelEdit()
-              }}
-            />
-          ) : (
-            <p className="mt-0.5 break-words text-sm font-medium">
-              {ext.fieldValue || '—'}
-            </p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <ConfidenceMeter value={ext.confidence} />
-          {isEditing ? (
-            <div className="flex gap-0.5">
+          <div className="flex items-center gap-2">
+            <ConfidenceMeter value={ext.confidence} />
+            {isEditing ? (
+              <div className="flex gap-0.5">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40"
+                  onClick={onSaveEdit}
+                  title="Save"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-muted-foreground"
+                  onClick={onCancelEdit}
+                  title="Cancel"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-7 w-7 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40"
-                onClick={onSaveEdit}
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                onClick={onStartEdit}
+                title="Edit field"
               >
-                <Save className="h-3.5 w-3.5" />
+                <Pencil className="h-3.5 w-3.5" />
               </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 text-muted-foreground"
-                onClick={onCancelEdit}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ) : (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-muted-foreground hover:text-foreground"
-              onClick={onStartEdit}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

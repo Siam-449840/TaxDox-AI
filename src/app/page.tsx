@@ -17,6 +17,7 @@ import { TaxRulesView } from '@/components/views/tax-rules-view'
 import { ClientPortalView } from '@/components/views/client-portal-view'
 import { SettingsView } from '@/components/views/settings-view'
 import { AIAssistant } from '@/components/ai/ai-assistant'
+import { WelcomeModal } from '@/components/onboarding/welcome-modal'
 import { Sparkles, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -74,6 +75,7 @@ function HomeContent() {
         {currentView === 'settings' && <SettingsView />}
       </div>
       <AIAssistant />
+      <WelcomeModal />
     </AppShell>
   )
 }

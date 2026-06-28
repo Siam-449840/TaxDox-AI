@@ -20,6 +20,7 @@ import {
   Building,
   Filter,
   Inbox,
+  ImageIcon,
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { StatCard } from '@/components/shared/stat-card'
@@ -730,34 +731,85 @@ function DocumentCard({ doc, onClick }: DocumentCardProps) {
   const uploadedMs = new Date(doc.uploadedAt).getTime()
   const isNew = Date.now() - uploadedMs < 24 * 60 * 60 * 1000
 
+  // Thumbnail state: only used when the document is an image
+  const isImage = !!doc.mimeType && doc.mimeType.startsWith('image/')
+  const [thumbLoaded, setThumbLoaded] = useState(false)
+  const [thumbError, setThumbError] = useState(false)
+  // If the doc isn't an image (or the thumbnail failed to load), fall back to
+  // the category-colored icon treatment so non-image documents are unaffected.
+  const showThumbnail = isImage && !thumbError
+
   return (
     <button onClick={onClick} className="group block h-full text-left">
       <Card className="card-hover h-full overflow-hidden p-0">
-        {/* Top section with icon */}
-        <div
-          className={cn(
-            'relative flex items-start justify-between gap-3 p-4',
-            style.surface
-          )}
-        >
+        {/* Top section — image thumbnail for image docs, icon for others */}
+        {showThumbnail ? (
+          <div className="relative h-24 w-full overflow-hidden rounded-t-lg bg-muted">
+            {/* Loading skeleton while the thumbnail streams in */}
+            {!thumbLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center shimmer-bg">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            <img
+              src={`/api/documents/${doc.id}/preview`}
+              alt={doc.originalFilename}
+              loading="lazy"
+              onLoad={() => setThumbLoaded(true)}
+              onError={() => setThumbError(true)}
+              className={cn(
+                'h-24 w-full object-cover transition-opacity duration-300',
+                thumbLoaded ? 'opacity-100' : 'opacity-0'
+              )}
+            />
+            {/* Subtle bottom gradient so the status badge stays legible on any image */}
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/30 to-transparent" />
+            <div className="absolute right-2 top-2 flex flex-col items-end gap-1.5">
+              {isNew && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+                  <span className="h-1 w-1 rounded-full bg-white" />
+                  New
+                </span>
+              )}
+              <div className="rounded-full bg-black/45 px-2 py-0.5 backdrop-blur-sm">
+                <StatusBadge
+                  status={doc.status}
+                  className="!bg-transparent !text-white"
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
           <div
             className={cn(
-              'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform duration-200 group-hover:scale-105',
-              style.icon
+              'relative flex items-start justify-between gap-3 p-4',
+              style.surface
             )}
           >
-            <Icon className="h-7 w-7" />
+            <div
+              className={cn(
+                'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform duration-200 group-hover:scale-105',
+                style.icon
+              )}
+            >
+              {/* When a thumbnail fails on an image doc, show ImageIcon instead of the category icon */}
+              {isImage && thumbError ? (
+                <ImageIcon className="h-7 w-7" />
+              ) : (
+                <Icon className="h-7 w-7" />
+              )}
+            </div>
+            <div className="flex flex-col items-end gap-1.5">
+              {isNew && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+                  <span className="h-1 w-1 rounded-full bg-white" />
+                  New
+                </span>
+              )}
+              <StatusBadge status={doc.status} />
+            </div>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
-            {isNew && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
-                <span className="h-1 w-1 rounded-full bg-white" />
-                New
-              </span>
-            )}
-            <StatusBadge status={doc.status} />
-          </div>
-        </div>
+        )}
 
         {/* Body */}
         <div className="space-y-3 p-4">

@@ -1,0 +1,850 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useMemo, useRef, useState } from 'react'
+     4→import {
+     5→  FileText,
+     6→  Receipt,
+     7→  IdCard,
+     8→  Building2,
+     9→  TrendingUp,
+    10→  Home,
+    11→  FileSpreadsheet,
+    12→  Upload,
+    13→  Search,
+    14→  FileCheck2,
+    15→  Clock3,
+    16→  AlertTriangle,
+    17→  Loader2,
+    18→  Users,
+    19→  Calendar,
+    20→  Building,
+    21→  Filter,
+    22→  Inbox,
+    23→} from 'lucide-react'
+    24→import { useAppStore } from '@/lib/store'
+    25→import { StatCard } from '@/components/shared/stat-card'
+    26→import { StatusBadge } from '@/components/shared/status-badge'
+    27→import { ConfidenceMeter } from '@/components/shared/confidence-meter'
+    28→import {
+    29→  DOCUMENT_CATEGORIES,
+    30→  DOCUMENT_TYPES,
+    31→  DOCUMENT_TYPE_MAP,
+    32→} from '@/lib/constants'
+    33→import { Card } from '@/components/ui/card'
+    34→import { Button } from '@/components/ui/button'
+    35→import { Badge } from '@/components/ui/badge'
+    36→import { Input } from '@/components/ui/input'
+    37→import { Label } from '@/components/ui/label'
+    38→import { Separator } from '@/components/ui/separator'
+    39→import {
+    40→  Dialog,
+    41→  DialogContent,
+    42→  DialogDescription,
+    43→  DialogFooter,
+    44→  DialogHeader,
+    45→  DialogTitle,
+    46→} from '@/components/ui/dialog'
+    47→import {
+    48→  Select,
+    49→  SelectContent,
+    50→  SelectItem,
+    51→  SelectTrigger,
+    52→  SelectValue,
+    53→} from '@/components/ui/select'
+    54→import { toast } from 'sonner'
+    55→import { formatDistanceToNow } from 'date-fns'
+    56→import type { TaxDocument, Client, Engagement } from '@/lib/types'
+    57→import { cn } from '@/lib/utils'
+    58→
+    59→const CATEGORY_ICON_MAP: Record<string, typeof FileText> = {
+    60→  income: TrendingUp,
+    61→  deduction: Receipt,
+    62→  identity: IdCard,
+    63→  business: Building2,
+    64→  investment: TrendingUp,
+    65→  realestate: Home,
+    66→  other: FileSpreadsheet,
+    67→}
+    68→
+    69→const CATEGORY_STYLE_MAP: Record<
+    70→  string,
+    71→  { surface: string; icon: string }
+    72→> = {
+    73→  income: {
+    74→    surface: 'bg-emerald-50 dark:bg-emerald-950/30',
+    75→    icon: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+    76→  },
+    77→  deduction: {
+    78→    surface: 'bg-amber-50 dark:bg-amber-950/30',
+    79→    icon: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+    80→  },
+    81→  identity: {
+    82→    surface: 'bg-violet-50 dark:bg-violet-950/30',
+    83→    icon: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400',
+    84→  },
+    85→  business: {
+    86→    surface: 'bg-cyan-50 dark:bg-cyan-950/30',
+    87→    icon: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400',
+    88→  },
+    89→  investment: {
+    90→    surface: 'bg-blue-50 dark:bg-blue-950/30',
+    91→    icon: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
+    92→  },
+    93→  realestate: {
+    94→    surface: 'bg-orange-50 dark:bg-orange-950/30',
+    95→    icon: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400',
+    96→  },
+    97→  other: {
+    98→    surface: 'bg-slate-100 dark:bg-slate-900/40',
+    99→    icon: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+   100→  },
+   101→}
+   102→
+   103→function getCategoryStyle(category: string | undefined) {
+   104→  if (!category) return CATEGORY_STYLE_MAP.other
+   105→  return CATEGORY_STYLE_MAP[category] || CATEGORY_STYLE_MAP.other
+   106→}
+   107→
+   108→function formatBytes(bytes: number): string {
+   109→  if (!bytes) return '0 B'
+   110→  const units = ['B', 'KB', 'MB', 'GB']
+   111→  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+   112→  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+   113→}
+   114→
+   115→export function DocumentsView() {
+   116→  const [documents, setDocuments] = useState<TaxDocument[]>([])
+   117→  const [clients, setClients] = useState<Client[]>([])
+   118→  const [engagements, setEngagements] = useState<Engagement[]>([])
+   119→  const [loading, setLoading] = useState(true)
+   120→  const [search, setSearch] = useState('')
+   121→  const [statusFilter, setStatusFilter] = useState<string>('all')
+   122→  const [typeFilter, setTypeFilter] = useState<string>('all')
+   123→  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+   124→
+   125→  const [uploadOpen, setUploadOpen] = useState(false)
+   126→  const [uploading, setUploading] = useState(false)
+   127→  const [uploadProgress, setUploadProgress] = useState(0)
+   128→  const [processing, setProcessing] = useState(false)
+   129→  const [dragOver, setDragOver] = useState(false)
+   130→  const [pendingFile, setPendingFile] = useState<File | null>(null)
+   131→  const [selectedClientId, setSelectedClientId] = useState<string>('')
+   132→  const [selectedEngagementId, setSelectedEngagementId] = useState<string>('')
+   133→  const fileInputRef = useRef<HTMLInputElement>(null)
+   134→
+   135→  const openDocument = useAppStore((s) => s.openDocument)
+   136→
+   137→  const fetchDocuments = () => {
+   138→    setLoading(true)
+   139→    fetch('/api/documents')
+   140→      .then((r) => r.json())
+   141→      .then((d) => {
+   142→        setDocuments(d.documents || [])
+   143→        setLoading(false)
+   144→      })
+   145→      .catch(() => setLoading(false))
+   146→  }
+   147→
+   148→  useEffect(() => {
+   149→    fetchDocuments()
+   150→    // Pre-fetch clients so we can default `selectedClientId` to the first client
+   151→    // for direct dropzone uploads without requiring the user to open the dialog.
+   152→    fetch('/api/clients')
+   153→      .then((r) => r.json())
+   154→      .then((c) => {
+   155→        const list = c.clients || []
+   156→        setClients(list)
+   157→        if (list.length > 0) {
+   158→          setSelectedClientId((prev) => prev || list[0].id)
+   159→        }
+   160→      })
+   161→      .catch(() => {
+   162→        /* silent */
+   163→      })
+   164→  }, [])
+   165→
+   166→  useEffect(() => {
+   167→    if (!uploadOpen) return
+   168→    Promise.all([
+   169→      fetch('/api/clients').then((r) => r.json()),
+   170→      fetch('/api/engagements').then((r) => r.json()),
+   171→    ])
+   172→      .then(([c, e]) => {
+   173→        setClients(c.clients || [])
+   174→        setEngagements(e.engagements || [])
+   175→      })
+   176→      .catch(() => {
+   177→        /* silent */
+   178→      })
+   179→  }, [uploadOpen])
+   180→
+   181→  const stats = useMemo(() => {
+   182→    const total = documents.length
+   183→    const processingCount = documents.filter(
+   184→      (d) => d.status === 'uploaded' || d.status === 'processing'
+   185→    ).length
+   186→    const processed = documents.filter(
+   187→      (d) => d.status === 'processed' || d.status === 'reviewed'
+   188→    ).length
+   189→    const needsReview = documents.filter(
+   190→      (d) =>
+   191→        (d.status === 'processed' || d.status === 'reviewed') &&
+   192→        (d.extractions || []).some((e) => !e.isVerified)
+   193→    ).length
+   194→    return {
+   195→      total,
+   196→      processing: processingCount,
+   197→      processed,
+   198→      needsReview,
+   199→    }
+   200→  }, [documents])
+   201→
+   202→  const filtered = useMemo(() => {
+   203→    return documents.filter((d) => {
+   204→      if (search) {
+   205→        const q = search.toLowerCase()
+   206→        if (!d.originalFilename.toLowerCase().includes(q)) return false
+   207→      }
+   208→      if (statusFilter !== 'all' && d.status !== statusFilter) return false
+   209→      if (typeFilter !== 'all' && d.documentType !== typeFilter) return false
+   210→      if (categoryFilter !== 'all') {
+   211→        const typeDef = d.documentType ? DOCUMENT_TYPE_MAP[d.documentType] : null
+   212→        if (!typeDef || typeDef.category !== categoryFilter) return false
+   213→      }
+   214→      return true
+   215→    })
+   216→  }, [documents, search, statusFilter, typeFilter, categoryFilter])
+   217→
+   218→  const handleFileSelect = (file: File) => {
+   219→    if (selectedClientId) {
+   220→      // Client context already set (or defaulted to first client) — upload directly
+   221→      handleUpload(file)
+   222→    } else {
+   223→      // No client selected — open dialog so user can pick one first
+   224→      setPendingFile(file)
+   225→      setUploadOpen(true)
+   226→    }
+   227→  }
+   228→
+   229→  const handleUpload = async (file: File) => {
+   230→    // Pick a clientId: prefer selectedClientId, else default to first available client
+   231→    let clientId = selectedClientId
+   232→    if (!clientId) {
+   233→      if (clients.length === 0) {
+   234→        toast.error('Please select a client first')
+   235→        setPendingFile(file)
+   236→        setUploadOpen(true)
+   237→        return
+   238→      }
+   239→      clientId = clients[0].id
+   240→      setSelectedClientId(clientId)
+   241→    }
+   242→    setUploading(true)
+   243→    setUploadProgress(0)
+   244→    try {
+   245→      const formData = new FormData()
+   246→      formData.append('file', file)
+   247→      formData.append('clientId', clientId)
+   248→      formData.append('engagementId', selectedEngagementId || '')
+   249→      formData.append('uploadedBy', 'user')
+   250→
+   251→      // Simulate progress for visual feedback (real multipart upload progress
+   252→      // would require XHR; this provides the same UX affordance).
+   253→      const progressInterval = setInterval(() => {
+   254→        setUploadProgress((p) => Math.min(90, p + Math.random() * 18))
+   255→      }, 180)
+   256→
+   257→      // Don't set Content-Type — the browser sets it with the multipart boundary
+   258→      const res = await fetch('/api/documents/upload', {
+   259→        method: 'POST',
+   260→        body: formData,
+   261→      })
+   262→      const data = await res.json()
+   263→      clearInterval(progressInterval)
+   264→      setUploadProgress(100)
+   265→      if (!res.ok || data.error) {
+   266→        throw new Error(data.error || 'Upload failed')
+   267→      }
+   268→      await new Promise((r) => setTimeout(r, 250))
+   269→      toast.success(`"${file.name}" uploaded`, {
+   270→        description: 'Ready for AI processing.',
+   271→      })
+   272→
+   273→      // Close dialog if open + reset transient state (keep client/engagement
+   274→      // context so subsequent uploads reuse them).
+   275→      setUploadOpen(false)
+   276→      setPendingFile(null)
+   277→      setUploadProgress(0)
+   278→
+   279→      // Auto-trigger AI processing (classify + extract) via GLM-4.6V
+   280→      const documentId = data.document?.id
+   281→      if (documentId) {
+   282→        setProcessing(true)
+   283→        const processingToast = toast.info('Processing with GLM-4.6V...', {
+   284→          description: 'Classifying document type and extracting fields.',
+   285→        })
+   286→        try {
+   287→          await fetch('/api/ai/classify', {
+   288→            method: 'POST',
+   289→            headers: { 'Content-Type': 'application/json' },
+   290→            body: JSON.stringify({ documentId }),
+   291→          })
+   292→          await fetch('/api/ai/extract', {
+   293→            method: 'POST',
+   294→            headers: { 'Content-Type': 'application/json' },
+   295→            body: JSON.stringify({ documentId }),
+   296→          })
+   297→          toast.success('AI processing complete', {
+   298→            description: 'Document classified and fields extracted.',
+   299→          })
+   300→        } catch (err) {
+   301→          console.error('AI processing failed:', err)
+   302→          toast.warning('AI processing incomplete', {
+   303→            description: 'You can re-process from the document detail page.',
+   304→          })
+   305→        } finally {
+   306→          toast.dismiss(processingToast)
+   307→          setProcessing(false)
+   308→        }
+   309→      }
+   310→
+   311→      fetchDocuments()
+   312→    } catch (err) {
+   313→      const message =
+   314→        err instanceof Error ? err.message : 'Upload failed. Please try again.'
+   315→      toast.error(message)
+   316→    } finally {
+   317→      setUploading(false)
+   318→    }
+   319→  }
+   320→
+   321→  const hasFilters =
+   322→    search !== '' ||
+   323→    statusFilter !== 'all' ||
+   324→    typeFilter !== 'all' ||
+   325→    categoryFilter !== 'all'
+   326→
+   327→  const clearFilters = () => {
+   328→    setSearch('')
+   329→    setStatusFilter('all')
+   330→    setTypeFilter('all')
+   331→    setCategoryFilter('all')
+   332→  }
+   333→
+   334→  return (
+   335→    <div className="space-y-6 p-4 lg:p-6">
+   336→      {/* Header */}
+   337→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   338→        <div>
+   339→          <h1 className="text-2xl font-bold tracking-tight">Documents</h1>
+   340→          <p className="mt-1 text-sm text-muted-foreground">
+   341→            AI-powered document management
+   342→          </p>
+   343→        </div>
+   344→        <Button onClick={() => fileInputRef.current?.click()}>
+   345→          <Upload className="mr-1.5 h-4 w-4" />
+   346→          Upload
+   347→        </Button>
+   348→        <input
+   349→          ref={fileInputRef}
+   350→          type="file"
+   351→          className="hidden"
+   352→          multiple
+   353→          accept=".pdf,.png,.jpg,.jpeg,.tiff,.docx"
+   354→          onChange={(e) => {
+   355→            const files = Array.from(e.target.files || [])
+   356→            files.forEach((file) => handleFileSelect(file))
+   357→            e.target.value = ''
+   358→          }}
+   359→        />
+   360→      </div>
+   361→
+   362→      {/* Stats */}
+   363→      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+   364→        <StatCard
+   365→          label="Total Documents"
+   366→          value={stats.total}
+   367→          icon={FileText}
+   368→          accent="primary"
+   369→        />
+   370→        <StatCard
+   371→          label="Processing"
+   372→          value={stats.processing}
+   373→          icon={Clock3}
+   374→          accent="warning"
+   375→        />
+   376→        <StatCard
+   377→          label="Processed"
+   378→          value={stats.processed}
+   379→          icon={FileCheck2}
+   380→          accent="success"
+   381→        />
+   382→        <StatCard
+   383→          label="Needs Review"
+   384→          value={stats.needsReview}
+   385→          icon={AlertTriangle}
+   386→          accent="danger"
+   387→        />
+   388→      </div>
+   389→
+   390→      {/* Dropzone */}
+   391→      <Card
+   392→        className={cn(
+   393→          'group relative flex flex-col items-center justify-center border-2 border-dashed p-6 text-center transition-all duration-200',
+   394→          dragOver
+   395→            ? 'border-primary bg-primary/5'
+   396→            : 'border-muted-foreground/25 bg-muted/30 hover:border-primary/40 hover:bg-primary/[0.02]',
+   397→          (uploading || processing) && 'pointer-events-none'
+   398→        )}
+   399→        onDragOver={(e) => {
+   400→          e.preventDefault()
+   401→          setDragOver(true)
+   402→        }}
+   403→        onDragLeave={() => setDragOver(false)}
+   404→        onDrop={(e) => {
+   405→          e.preventDefault()
+   406→          setDragOver(false)
+   407→          const files = Array.from(e.dataTransfer.files || [])
+   408→          files.forEach((file) => handleFileSelect(file))
+   409→        }}
+   410→      >
+   411→        {/* Gradient hover glow */}
+   412→        <div
+   413→          className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+   414→          style={{
+   415→            background:
+   416→              'radial-gradient(circle at center, oklch(0.48 0.09 195 / 0.06), transparent 70%)',
+   417→          }}
+   418→          aria-hidden
+   419→        />
+   420→        {uploading || processing ? (
+   421→          <div className="relative flex w-full max-w-md flex-col items-center gap-2 py-2">
+   422→            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+   423→              <Loader2 className="h-6 w-6 animate-spin" />
+   424→            </div>
+   425→            <p className="text-sm font-medium">
+   426→              {processing
+   427→                ? 'Processing with GLM-4.6V...'
+   428→                : 'Uploading file...'}
+   429→            </p>
+   430→            <div className="h-1.5 w-48 overflow-hidden rounded-full bg-muted">
+   431→              <div
+   432→                className="h-full rounded-full bg-primary transition-all"
+   433→                style={{
+   434→                  width: `${processing ? 100 : Math.round(uploadProgress)}%`,
+   435→                }}
+   436→              />
+   437→            </div>
+   438→            <p className="text-xs text-muted-foreground">
+   439→              {processing
+   440→                ? 'Classifying and extracting fields'
+   441→                : 'Saving to secure storage'}
+   442→            </p>
+   443→          </div>
+   444→        ) : (
+   445→          <div className="relative flex w-full max-w-md flex-col items-center gap-2 py-2">
+   446→            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-200 group-hover:scale-105">
+   447→              <Upload className="h-6 w-6" />
+   448→            </div>
+   449→            <p className="text-sm font-medium">
+   450→              Drop files here or click to upload
+   451→            </p>
+   452→            <p className="text-xs text-muted-foreground">
+   453→              Supports PDF, PNG, JPG, TIFF, DOCX · Max 25 MB · Multiple files
+   454→              supported
+   455→            </p>
+   456→            <Button
+   457→              variant="outline"
+   458→              size="sm"
+   459→              className="mt-2"
+   460→              onClick={() => fileInputRef.current?.click()}
+   461→            >
+   462→              <FileText className="mr-1.5 h-4 w-4" />
+   463→              Select Files
+   464→            </Button>
+   465→          </div>
+   466→        )}
+   467→      </Card>
+   468→
+   469→      {/* Filters */}
+   470→      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+   471→        <div className="relative flex-1">
+   472→          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   473→          <Input
+   474→            placeholder="Search by filename..."
+   475→            value={search}
+   476→            onChange={(e) => setSearch(e.target.value)}
+   477→            className="pl-9"
+   478→          />
+   479→        </div>
+   480→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+   481→          <SelectTrigger className="w-full md:w-44">
+   482→            <SelectValue placeholder="Status" />
+   483→          </SelectTrigger>
+   484→          <SelectContent>
+   485→            <SelectItem value="all">All statuses</SelectItem>
+   486→            <SelectItem value="uploaded">Uploaded</SelectItem>
+   487→            <SelectItem value="processing">Processing</SelectItem>
+   488→            <SelectItem value="processed">Processed</SelectItem>
+   489→            <SelectItem value="reviewed">Reviewed</SelectItem>
+   490→          </SelectContent>
+   491→        </Select>
+   492→        <Select value={typeFilter} onValueChange={setTypeFilter}>
+   493→          <SelectTrigger className="w-full md:w-56">
+   494→            <SelectValue placeholder="Document type" />
+   495→          </SelectTrigger>
+   496→          <SelectContent>
+   497→            <SelectItem value="all">All types</SelectItem>
+   498→            {DOCUMENT_TYPES.map((t) => (
+   499→              <SelectItem key={t.type} value={t.type}>
+   500→                {t.label}
+   501→              </SelectItem>
+   502→            ))}
+   503→          </SelectContent>
+   504→        </Select>
+   505→        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+   506→          <SelectTrigger className="w-full md:w-44">
+   507→            <SelectValue placeholder="Category" />
+   508→          </SelectTrigger>
+   509→          <SelectContent>
+   510→            <SelectItem value="all">All categories</SelectItem>
+   511→            {DOCUMENT_CATEGORIES.map((c) => (
+   512→              <SelectItem key={c.id} value={c.id}>
+   513→                {c.label}
+   514→              </SelectItem>
+   515→            ))}
+   516→          </SelectContent>
+   517→        </Select>
+   518→      </div>
+   519→
+   520→      {/* Result count + clear */}
+   521→      <div className="flex items-center justify-between">
+   522→        <p className="text-sm text-muted-foreground">
+   523→          {loading
+   524→            ? 'Loading...'
+   525→            : `${filtered.length} of ${documents.length} document${
+   526→                documents.length === 1 ? '' : 's'
+   527→              }`}
+   528→        </p>
+   529→        {hasFilters && !loading && (
+   530→          <Button variant="ghost" size="sm" onClick={clearFilters}>
+   531→            <Filter className="mr-1.5 h-3.5 w-3.5" />
+   532→            Clear filters
+   533→          </Button>
+   534→        )}
+   535→      </div>
+   536→
+   537→      {/* Grid */}
+   538→      {loading ? (
+   539→        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+   540→          {Array.from({ length: 8 }).map((_, i) => (
+   541→            <div key={i} className="h-60 animate-pulse rounded-xl bg-muted" />
+   542→          ))}
+   543→        </div>
+   544→      ) : filtered.length === 0 ? (
+   545→        <Card className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+   546→          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+   547→            <Inbox className="h-7 w-7 text-muted-foreground" />
+   548→          </div>
+   549→          <div>
+   550→            <p className="text-sm font-medium">
+   551→              {hasFilters ? 'No matching documents' : 'No documents yet'}
+   552→            </p>
+   553→            <p className="mt-1 text-xs text-muted-foreground">
+   554→              {hasFilters
+   555→                ? 'Try adjusting your filters or upload a new document.'
+   556→                : 'Upload your first document to get started.'}
+   557→            </p>
+   558→          </div>
+   559→          {!hasFilters && (
+   560→            <Button
+   561→              size="sm"
+   562→              variant="outline"
+   563→              onClick={() => fileInputRef.current?.click()}
+   564→            >
+   565→              <Upload className="mr-1.5 h-4 w-4" />
+   566→              Upload Document
+   567→            </Button>
+   568→          )}
+   569→        </Card>
+   570→      ) : (
+   571→        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+   572→          {filtered.map((doc) => (
+   573→            <DocumentCard
+   574→              key={doc.id}
+   575→              doc={doc}
+   576→              onClick={() => openDocument(doc.id)}
+   577→            />
+   578→          ))}
+   579→        </div>
+   580→      )}
+   581→
+   582→      {/* Upload Dialog */}
+   583→      <Dialog
+   584→        open={uploadOpen}
+   585→        onOpenChange={(o) => !uploading && setUploadOpen(o)}
+   586→      >
+   587→        <DialogContent className="sm:max-w-md">
+   588→          <DialogHeader>
+   589→            <DialogTitle>Upload document</DialogTitle>
+   590→            <DialogDescription>
+   591→              Select a client and engagement to associate with this document.
+   592→            </DialogDescription>
+   593→          </DialogHeader>
+   594→          <div className="space-y-4">
+   595→            {pendingFile && (
+   596→              <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+   597→                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   598→                  <FileText className="h-5 w-5" />
+   599→                </div>
+   600→                <div className="min-w-0 flex-1">
+   601→                  <p className="truncate text-sm font-medium">
+   602→                    {pendingFile.name}
+   603→                  </p>
+   604→                  <p className="text-xs text-muted-foreground">
+   605→                    {formatBytes(pendingFile.size)} ·{' '}
+   606→                    {pendingFile.type || 'application/pdf'}
+   607→                  </p>
+   608→                </div>
+   609→              </div>
+   610→            )}
+   611→
+   612→            {uploading && (
+   613→              <div className="space-y-1.5">
+   614→                <div className="flex items-center justify-between text-xs text-muted-foreground">
+   615→                  <span>Uploading...</span>
+   616→                  <span className="tabular-nums">{Math.round(uploadProgress)}%</span>
+   617→                </div>
+   618→                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+   619→                  <div
+   620→                    className="h-full rounded-full bg-primary transition-all"
+   621→                    style={{ width: `${uploadProgress}%` }}
+   622→                  />
+   623→                </div>
+   624→              </div>
+   625→            )}
+   626→
+   627→            <div className="space-y-2">
+   628→              <Label>Client</Label>
+   629→              <Select
+   630→                value={selectedClientId}
+   631→                onValueChange={(v) => {
+   632→                  setSelectedClientId(v)
+   633→                  setSelectedEngagementId('')
+   634→                }}
+   635→              >
+   636→                <SelectTrigger className="w-full">
+   637→                  <SelectValue placeholder="Select a client" />
+   638→                </SelectTrigger>
+   639→                <SelectContent>
+   640→                  {clients.map((c) => (
+   641→                    <SelectItem key={c.id} value={c.id}>
+   642→                      {c.name}
+   643→                    </SelectItem>
+   644→                  ))}
+   645→                </SelectContent>
+   646→              </Select>
+   647→            </div>
+   648→            <div className="space-y-2">
+   649→              <Label>
+   650→                Engagement{' '}
+   651→                <span className="text-muted-foreground">(optional)</span>
+   652→              </Label>
+   653→              <Select
+   654→                value={selectedEngagementId}
+   655→                onValueChange={setSelectedEngagementId}
+   656→                disabled={!selectedClientId}
+   657→              >
+   658→                <SelectTrigger className="w-full">
+   659→                  <SelectValue placeholder="Select an engagement" />
+   660→                </SelectTrigger>
+   661→                <SelectContent>
+   662→                  {engagements
+   663→                    .filter((e) => e.clientId === selectedClientId)
+   664→                    .map((e) => (
+   665→                      <SelectItem key={e.id} value={e.id}>
+   666→                        {e.engagementType} · {e.taxYear}
+   667→                      </SelectItem>
+   668→                    ))}
+   669→                </SelectContent>
+   670→              </Select>
+   671→            </div>
+   672→          </div>
+   673→          <DialogFooter>
+   674→            <Button
+   675→              variant="outline"
+   676→              onClick={() => setUploadOpen(false)}
+   677→              disabled={uploading}
+   678→            >
+   679→              Cancel
+   680→            </Button>
+   681→            <Button
+   682→              onClick={() => {
+   683→                if (pendingFile) handleUpload(pendingFile)
+   684→              }}
+   685→              disabled={uploading || !pendingFile || !selectedClientId}
+   686→            >
+   687→              {uploading ? (
+   688→                <>
+   689→                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   690→                  Uploading...
+   691→                </>
+   692→              ) : (
+   693→                <>
+   694→                  <Upload className="mr-1.5 h-4 w-4" />
+   695→                  Upload
+   696→                </>
+   697→              )}
+   698→            </Button>
+   699→          </DialogFooter>
+   700→        </DialogContent>
+   701→      </Dialog>
+   702→    </div>
+   703→  )
+   704→}
+   705→
+   706→interface DocumentCardProps {
+   707→  doc: TaxDocument & {
+   708→    engagement?: Engagement
+   709→    pbcItem?: { documentType?: string; description?: string }
+   710→  }
+   711→  onClick: () => void
+   712→}
+   713→
+   714→function DocumentCard({ doc, onClick }: DocumentCardProps) {
+   715→  const typeDef = doc.documentType ? DOCUMENT_TYPE_MAP[doc.documentType] : null
+   716→  const category = typeDef?.category || 'other'
+   717→  const style = getCategoryStyle(category)
+   718→  const Icon = typeDef
+   719→    ? CATEGORY_ICON_MAP[category] || FileText
+   720→    : FileText
+   721→  const extractions = doc.extractions || []
+   722→  const avgConfidence =
+   723→    extractions.length > 0
+   724→      ? extractions.reduce((sum, e) => sum + e.confidence, 0) /
+   725→        extractions.length
+   726→      : doc.confidence
+   727→  const verifiedCount = extractions.filter((e) => e.isVerified).length
+   728→
+   729→  // New badge: uploaded within 24 hours
+   730→  const uploadedMs = new Date(doc.uploadedAt).getTime()
+   731→  const isNew = Date.now() - uploadedMs < 24 * 60 * 60 * 1000
+   732→
+   733→  return (
+   734→    <button onClick={onClick} className="group block h-full text-left">
+   735→      <Card className="card-hover h-full overflow-hidden p-0">
+   736→        {/* Top section with icon */}
+   737→        <div
+   738→          className={cn(
+   739→            'relative flex items-start justify-between gap-3 p-4',
+   740→            style.surface
+   741→          )}
+   742→        >
+   743→          <div
+   744→            className={cn(
+   745→              'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform duration-200 group-hover:scale-105',
+   746→              style.icon
+   747→            )}
+   748→          >
+   749→            <Icon className="h-7 w-7" />
+   750→          </div>
+   751→          <div className="flex flex-col items-end gap-1.5">
+   752→            {isNew && (
+   753→              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+   754→                <span className="h-1 w-1 rounded-full bg-white" />
+   755→                New
+   756→              </span>
+   757→            )}
+   758→            <StatusBadge status={doc.status} />
+   759→          </div>
+   760→        </div>
+   761→
+   762→        {/* Body */}
+   763→        <div className="space-y-3 p-4">
+   764→          <div>
+   765→            <p
+   766→              className="truncate text-sm font-semibold"
+   767→              title={doc.originalFilename}
+   768→            >
+   769→              {doc.originalFilename}
+   770→            </p>
+   771→            <div className="mt-2 flex items-center gap-2">
+   772→              {typeDef ? (
+   773→                <Badge variant="secondary" className="text-[10px] font-medium">
+   774→                  {doc.documentType}
+   775→                </Badge>
+   776→              ) : (
+   777→                <Badge
+   778→                  variant="outline"
+   779→                  className="text-[10px] text-muted-foreground"
+   780→                >
+   781→                  Unclassified
+   782→                </Badge>
+   783→              )}
+   784→              <span className="text-[10px] text-muted-foreground">
+   785→                {(doc.fileSize / 1024).toFixed(0)} KB
+   786→              </span>
+   787→            </div>
+   788→          </div>
+   789→
+   790→          {/* Confidence */}
+   791→          {doc.status === 'processed' && extractions.length > 0 && (
+   792→            <div className="space-y-1">
+   793→              <div className="flex items-center justify-between">
+   794→                <span className="text-xs text-muted-foreground">
+   795→                  Confidence
+   796→                </span>
+   797→                <ConfidenceMeter value={avgConfidence} />
+   798→              </div>
+   799→              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+   800→                <span>
+   801→                  {extractions.length} field{extractions.length === 1 ? '' : 's'}
+   802→                </span>
+   803→                <span className="flex items-center gap-1">
+   804→                  <FileCheck2 className="h-3 w-3 text-emerald-500" />
+   805→                  {verifiedCount}/{extractions.length} verified
+   806→                </span>
+   807→              </div>
+   808→            </div>
+   809→          )}
+   810→
+   811→          {doc.status === 'uploaded' && (
+   812→            <div className="flex items-center gap-1.5 rounded-md bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+   813→              <Clock3 className="h-3 w-3" />
+   814→              Ready for AI processing
+   815→            </div>
+   816→          )}
+   817→
+   818→          <Separator />
+   819→
+   820→          {/* Client + Engagement + Date */}
+   821→          <div className="space-y-1.5">
+   822→            <div className="flex items-center gap-1.5 text-xs">
+   823→              <Users className="h-3 w-3 shrink-0 text-muted-foreground" />
+   824→              <span className="truncate font-medium">
+   825→                {doc.client?.name || 'Unassigned'}
+   826→              </span>
+   827→            </div>
+   828→            {doc.engagement && (
+   829→              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   830→                <Building className="h-3 w-3 shrink-0" />
+   831→                <span className="truncate">
+   832→                  {doc.engagement.engagementType} · {doc.engagement.taxYear}
+   833→                </span>
+   834→              </div>
+   835→            )}
+   836→            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   837→              <Calendar className="h-3 w-3 shrink-0" />
+   838→              <span>
+   839→                {formatDistanceToNow(new Date(doc.uploadedAt), {
+   840→                  addSuffix: true,
+   841→                })}
+   842→              </span>
+   843→            </div>
+   844→          </div>
+   845→        </div>
+   846→      </Card>
+   847→    </button>
+   848→  )
+   849→}
+   850→
