@@ -1,0 +1,2002 @@
+     1→'use client'
+     2→
+     3→import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+     4→import {
+     5→  ArrowLeft,
+     6→  Send,
+     7→  Upload,
+     8→  FileText,
+     9→  FileImage,
+    10→  FileSpreadsheet,
+    11→  CheckCircle2,
+    12→  Clock,
+    13→  AlertCircle,
+    14→  Plus,
+    15→  Sparkles,
+    16→  Mail,
+    17→  MessageSquare,
+    18→  Download,
+    19→  FileCheck2,
+    20→  RefreshCw,
+    21→  CalendarClock,
+    22→  Layers,
+    23→  ListChecks,
+    24→  Bot,
+    25→  Pencil,
+    26→  CircleDot,
+    27→  Loader2,
+    28→  PartyPopper,
+    29→  FileDown,
+    30→  ArrowRight,
+    31→  CheckCircle,
+    32→  Filter,
+    33→  FileX2,
+    34→  Inbox,
+    35→} from 'lucide-react'
+    36→import { useAppStore } from '@/lib/store'
+    37→import { StatusBadge } from '@/components/shared/status-badge'
+    38→import { PriorityBadge } from '@/components/shared/priority-badge'
+    39→import { ProgressRing } from '@/components/shared/progress-ring'
+    40→import { ConfidenceMeter } from '@/components/shared/confidence-meter'
+    41→import {
+    42→  DOCUMENT_CATEGORIES,
+    43→  DOCUMENT_TYPE_MAP,
+    44→  WORKFLOW_STEPS,
+    45→  ENGAGEMENT_TYPES,
+    46→} from '@/lib/constants'
+    47→import { Card } from '@/components/ui/card'
+    48→import { Button } from '@/components/ui/button'
+    49→import { Badge } from '@/components/ui/badge'
+    50→import { Progress } from '@/components/ui/progress'
+    51→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    52→import { Checkbox } from '@/components/ui/checkbox'
+    53→import { ScrollArea } from '@/components/ui/scroll-area'
+    54→import { Separator } from '@/components/ui/separator'
+    55→import { Textarea } from '@/components/ui/textarea'
+    56→import {
+    57→  Table,
+    58→  TableBody,
+    59→  TableCell,
+    60→  TableHead,
+    61→  TableHeader,
+    62→  TableRow,
+    63→} from '@/components/ui/table'
+    64→import {
+    65→  Tooltip,
+    66→  TooltipContent,
+    67→  TooltipProvider,
+    68→  TooltipTrigger,
+    69→} from '@/components/ui/tooltip'
+    70→import { Skeleton } from '@/components/ui/skeleton'
+    71→import { toast } from 'sonner'
+    72→import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
+    73→import { cn } from '@/lib/utils'
+    74→import type {
+    75→  Engagement,
+    76→  PbcItem,
+    77→  TaxDocument,
+    78→  Extraction,
+    79→  Workflow,
+    80→  Activity,
+    81→  Message,
+    82→  Priority,
+    83→} from '@/lib/types'
+    84→
+    85→/* ────────────────────────────────────────────────────────────────────────────
+    86→ *  Local types
+    87→ * ────────────────────────────────────────────────────────────────────────── */
+    88→
+    89→type AssignedUser = {
+    90→  id: string
+    91→  name: string
+    92→  role?: string
+    93→  email?: string
+    94→  avatar?: string | null
+    95→}
+    96→
+    97→type EngagementDetail = Engagement & {
+    98→  client: NonNullable<Engagement['client']>
+    99→  assignedTo?: AssignedUser | null
+   100→  pbcList?: {
+   101→    id: string
+   102→    name: string
+   103→    sentAt?: string | null
+   104→    sentVia?: string | null
+   105→    items: PbcItem[]
+   106→  } | null
+   107→  documents?: TaxDocument[]
+   108→  workflows?: Workflow[]
+   109→  messages?: Message[]
+   110→  activities?: Activity[]
+   111→}
+   112→
+   113→type DocFilterKey = 'all' | 'processing' | 'processed' | 'reviewed'
+   114→
+   115→const TAB_VALUES = ['pbc', 'documents', 'extraction', 'workflow', 'messages'] as const
+   116→type TabValue = (typeof TAB_VALUES)[number]
+   117→
+   118→/* ────────────────────────────────────────────────────────────────────────────
+   119→ *  Helpers
+   120→ * ────────────────────────────────────────────────────────────────────────── */
+   121→
+   122→function fileIconFor(mimeType: string) {
+   123→  if (mimeType.startsWith('image/')) return FileImage
+   124→  if (mimeType.includes('sheet') || mimeType.includes('excel') || mimeType.includes('csv'))
+   125→    return FileSpreadsheet
+   126→  return FileText
+   127→}
+   128→
+   129→function formatFileSize(bytes: number) {
+   130→  if (!bytes) return '—'
+   131→  if (bytes < 1024) return `${bytes} B`
+   132→  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+   133→  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+   134→}
+   135→
+   136→function engagementTypeLabel(type: string) {
+   137→  return ENGAGEMENT_TYPES.find((t) => t.value === type)?.label ?? type
+   138→}
+   139→
+   140→function categoryLabel(categoryId: string) {
+   141→  return DOCUMENT_CATEGORIES.find((c) => c.id === categoryId)?.label ?? categoryId
+   142→}
+   143→
+   144→function initials(name?: string | null) {
+   145→  if (!name) return '?'
+   146→  return name
+   147→    .split(' ')
+   148→    .filter(Boolean)
+   149→    .slice(0, 2)
+   150→    .map((n) => n[0]?.toUpperCase())
+   151→    .join('')
+   152→}
+   153→
+   154→function pbcStatusRank(status: string): number {
+   155→  const order = ['pending', 'uploaded', 'processing', 'extracted', 'reviewed', 'rejected']
+   156→  return order.indexOf(status)
+   157→}
+   158→
+   159→function isPbcComplete(status: string) {
+   160→  return ['extracted', 'reviewed'].includes(status)
+   161→}
+   162→
+   163→/* ────────────────────────────────────────────────────────────────────────────
+   164→ *  Main view
+   165→ * ────────────────────────────────────────────────────────────────────────── */
+   166→
+   167→export function EngagementDetailView() {
+   168→  const engagementId = useAppStore((s) => s.selectedEngagementId)
+   169→  const navigate = useAppStore((s) => s.navigate)
+   170→  const openDocument = useAppStore((s) => s.openDocument)
+   171→
+   172→  const [data, setData] = useState<EngagementDetail | null>(null)
+   173→  const [loading, setLoading] = useState(true)
+   174→  const [notFound, setNotFound] = useState(false)
+   175→  const [activeTab, setActiveTab] = useState<TabValue>('pbc')
+   176→  const [processingDocIds, setProcessingDocIds] = useState<Set<string>>(new Set())
+   177→  const [actionBusy, setActionBusy] = useState<Record<string, boolean>>({})
+   178→
+   179→  const fetchEngagement = useCallback(async () => {
+   180→    if (!engagementId) return
+   181→    setLoading(true)
+   182→    try {
+   183→      const res = await fetch(`/api/engagements/${engagementId}`)
+   184→      if (!res.ok) {
+   185→        setNotFound(true)
+   186→        setLoading(false)
+   187→        return
+   188→      }
+   189→      const json = await res.json()
+   190→      setData(json.engagement as EngagementDetail)
+   191→      setNotFound(false)
+   192→    } catch {
+   193→      setNotFound(true)
+   194→    } finally {
+   195→      setLoading(false)
+   196→    }
+   197→  }, [engagementId])
+   198→
+   199→  useEffect(() => {
+   200→    if (!engagementId) {
+   201→      setLoading(false)
+   202→      return
+   203→    }
+   204→    fetchEngagement()
+   205→  }, [engagementId, fetchEngagement])
+   206→
+   207→  /* ── Actions ─────────────────────────────────────────────────────────── */
+   208→
+   209→  const setBusy = (key: string, v: boolean) =>
+   210→    setActionBusy((s) => ({ ...s, [key]: v }))
+   211→
+   212→  const handleGeneratePbc = async () => {
+   213→    if (!engagementId) return
+   214→    setBusy('gen-pbc', true)
+   215→    try {
+   216→      const res = await fetch(`/api/engagements/${engagementId}/pbc`, { method: 'POST' })
+   217→      if (!res.ok) throw new Error('Failed')
+   218→      toast.success('PBC list generated from default template')
+   219→      await fetchEngagement()
+   220→    } catch {
+   221→      toast.error('Could not generate PBC list')
+   222→    } finally {
+   223→      setBusy('gen-pbc', false)
+   224→    }
+   225→  }
+   226→
+   227→  const handleSendPbc = async () => {
+   228→    if (!engagementId) return
+   229→    setBusy('send-pbc', true)
+   230→    try {
+   231→      const res = await fetch(`/api/engagements/${engagementId}/send`, {
+   232→        method: 'POST',
+   233→        headers: { 'Content-Type': 'application/json' },
+   234→        body: JSON.stringify({ via: 'email' }),
+   235→      })
+   236→      if (!res.ok) throw new Error('Failed')
+   237→      toast.success('PBC list sent to client via email')
+   238→      await fetchEngagement()
+   239→    } catch {
+   240→      toast.error('Could not send PBC list')
+   241→    } finally {
+   242→      setBusy('send-pbc', false)
+   243→    }
+   244→  }
+   245→
+   246→  const handleAddPbcItem = async (pbcListId: string) => {
+   247→    const description = window.prompt('Describe the document you want to request:')
+   248→    if (!description) return
+   249→    const documentType = window.prompt(
+   250→      'Document type (e.g. W-2, 1099-INT, Bank-Statement):',
+   251→      'Other'
+   252→    )
+   253→    if (!documentType) return
+   254→    setBusy('add-pbc', true)
+   255→    try {
+   256→      const res = await fetch(`/api/pbc-lists/${pbcListId}/items`, {
+   257→        method: 'POST',
+   258→        headers: { 'Content-Type': 'application/json' },
+   259→        body: JSON.stringify({
+   260→          documentType,
+   261→          description,
+   262→          category: 'other',
+   263→          required: false,
+   264→          priority: 'medium' as Priority,
+   265→        }),
+   266→      })
+   267→      if (!res.ok) throw new Error('Failed')
+   268→      toast.success('PBC item added')
+   269→      await fetchEngagement()
+   270→    } catch {
+   271→      toast.error('Could not add PBC item')
+   272→    } finally {
+   273→      setBusy('add-pbc', false)
+   274→    }
+   275→  }
+   276→
+   277→  const handleProcessWithAI = async (docId: string) => {
+   278→    setProcessingDocIds((s) => new Set(s).add(docId))
+   279→    const t1 = toast.loading('Classifying document with AI…')
+   280→    try {
+   281→      const classifyRes = await fetch('/api/ai/classify', {
+   282→        method: 'POST',
+   283→        headers: { 'Content-Type': 'application/json' },
+   284→        body: JSON.stringify({ documentId: docId }),
+   285→      })
+   286→      if (!classifyRes.ok) throw new Error('Classify failed')
+   287→      const classifyJson = await classifyRes.json()
+   288→      toast.success(`Classified as ${classifyJson.documentType ?? 'Unknown'}`, { id: t1 })
+   289→
+   290→      const t2 = toast.loading('Extracting fields with AI…')
+   291→      const extractRes = await fetch('/api/ai/extract', {
+   292→        method: 'POST',
+   293→        headers: { 'Content-Type': 'application/json' },
+   294→        body: JSON.stringify({ documentId: docId }),
+   295→      })
+   296→      if (!extractRes.ok) throw new Error('Extract failed')
+   297→      const extractJson = await extractRes.json()
+   298→      toast.success(`Extracted ${extractJson.extractions?.length ?? 0} fields`, { id: t2 })
+   299→      await fetchEngagement()
+   300→    } catch {
+   301→      toast.error('AI processing failed', { id: t1 })
+   302→    } finally {
+   303→      setProcessingDocIds((s) => {
+   304→        const next = new Set(s)
+   305→        next.delete(docId)
+   306→        return next
+   307→      })
+   308→    }
+   309→  }
+   310→
+   311→  const handleReextractAll = async () => {
+   312→    if (!data?.documents?.length) {
+   313→      toast.info('No documents to process')
+   314→      return
+   315→    }
+   316→    const uploaded = data.documents.filter((d) => d.status === 'uploaded')
+   317→    if (uploaded.length === 0) {
+   318→      toast.info('All documents already processed')
+   319→      return
+   320→    }
+   321→    toast.promise(
+   322→      Promise.all(uploaded.map((d) => handleProcessWithAI(d.id))),
+   323→      {
+   324→        loading: `Re-extracting ${uploaded.length} documents…`,
+   325→        success: `Re-extracted ${uploaded.length} documents`,
+   326→        error: 'Some documents failed to extract',
+   327→      }
+   328→    )
+   329→  }
+   330→
+   331→  const handleAdvanceWorkflow = async () => {
+   332→    if (!data || !engagementId) return
+   333→    const steps = data.workflows ?? []
+   334→    const currentIndex = steps.findIndex((w) => w.status === 'in_progress')
+   335→    const nextPendingIndex = steps.findIndex((w) => w.status === 'pending')
+   336→    const targetIndex = currentIndex >= 0 ? currentIndex : nextPendingIndex
+   337→    if (targetIndex < 0) {
+   338→      toast.info('Workflow is already complete')
+   339→      return
+   340→    }
+   341→    const currentStep = steps[targetIndex]
+   342→    const nextStep = steps[targetIndex + 1]
+   343→    setBusy('advance', true)
+   344→    try {
+   345→      // PATCH engagement status to mirror workflow progress.
+   346→      const statusMap: Record<string, string> = {
+   347→        create: 'created',
+   348→        pbc_send: 'pbc_sent',
+   349→        collection: 'collecting',
+   350→        ai_processing: 'processing',
+   351→        human_review: 'review',
+   352→        tax_import: 'filing',
+   353→        filing: 'filing',
+   354→        delivery: 'done',
+   355→      }
+   356→      const nextStatus = nextStep ? statusMap[nextStep.step] ?? data.status : 'done'
+   357→      const newProgress = Math.round(((targetIndex + 1) / WORKFLOW_STEPS.length) * 100)
+   358→
+   359→      await fetch(`/api/engagements/${engagementId}`, {
+   360→        method: 'PATCH',
+   361→        headers: { 'Content-Type': 'application/json' },
+   362→        body: JSON.stringify({ status: nextStatus, progress: newProgress }),
+   363→      })
+   364→
+   365→      // Optimistically advance workflow locally (no dedicated endpoint).
+   366→      setData((prev) =>
+   367→        prev
+   368→          ? {
+   369→              ...prev,
+   370→              status: nextStatus as Engagement['status'],
+   371→              progress: newProgress,
+   372→              workflows: prev.workflows?.map((w, i) => {
+   373→                if (i === targetIndex)
+   374→                  return {
+   375→                    ...w,
+   376→                    status: 'completed',
+   377→                    completedAt: new Date().toISOString(),
+   378→                  }
+   379→                if (i === targetIndex + 1)
+   380→                  return {
+   381→                    ...w,
+   382→                    status: 'in_progress',
+   383→                    startedAt: new Date().toISOString(),
+   384→                  }
+   385→                return w
+   386→              }),
+   387→            }
+   388→          : prev
+   389→      )
+   390→      toast.success(`Advanced to "${nextStep ? stepLabel(nextStep.step) : 'Delivery'}"`)
+   391→    } catch {
+   392→      toast.error('Could not advance workflow')
+   393→    } finally {
+   394→      setBusy('advance', false)
+   395→    }
+   396→  }
+   397→
+   398→  const handleExport = (format: 'csv' | 'ultratax' | 'excel') => {
+   399→    if (!data) return
+   400→    const docs = data.documents ?? []
+   401→    const extractions = docs.flatMap((d) => d.extractions ?? [])
+   402→    if (extractions.length === 0) {
+   403→      toast.info('No extractions to export yet')
+   404→      return
+   405→    }
+   406→    setBusy(`export-${format}`, true)
+   407→    setTimeout(() => {
+   408→      setBusy(`export-${format}`, false)
+   409→      const labels: Record<typeof format, string> = {
+   410→        csv: 'CSV',
+   411→        ultratax: 'UltraTax CS',
+   412→        excel: 'Excel (.xlsx)',
+   413→      }
+   414→      toast.success(`Exported ${extractions.length} fields to ${labels[format]}`)
+   415→    }, 700)
+   416→  }
+   417→
+   418→  const handleSendMessage = async (content: string) => {
+   419→    if (!engagementId || !content.trim()) return
+   420→    const newMsg: Message = {
+   421→      id: `local-${Date.now()}`,
+   422→      engagementId,
+   423→      fromType: 'user',
+   424→      content: content.trim(),
+   425→      read: true,
+   426→      createdAt: new Date().toISOString(),
+   427→    }
+   428→    setData((prev) =>
+   429→      prev ? { ...prev, messages: [...(prev.messages ?? []), newMsg] } : prev
+   430→    )
+   431→    setBusy('send-msg', true)
+   432→    setTimeout(() => setBusy('send-msg', false), 400)
+   433→    toast.success('Message sent to client')
+   434→  }
+   435→
+   436→  const handleSuggestReply = async (
+   437→    onSuggest: (text: string) => void
+   438→  ): Promise<void> => {
+   439→    if (!data) return
+   440→    setBusy('suggest', true)
+   441→    try {
+   442→      const recent = (data.messages ?? []).slice(-6).map((m) => ({
+   443→        role: m.fromType === 'user' ? 'assistant' : 'user',
+   444→        content: m.content,
+   445→      }))
+   446→      const res = await fetch('/api/ai/chat', {
+   447→        method: 'POST',
+   448→        headers: { 'Content-Type': 'application/json' },
+   449→        body: JSON.stringify({
+   450→          messages: [
+   451→            {
+   452→              role: 'user',
+   453→              content: `Suggest a short, professional reply to the client's most recent message for the ${data.engagementType} (${data.taxYear}) engagement for ${data.client.name}. Keep it concise and friendly. Reply with only the suggested message text.`,
+   454→            },
+   455→            ...recent,
+   456→          ],
+   457→        }),
+   458→      })
+   459→      const json = await res.json()
+   460→      const suggestion: string = json.reply || 'Thanks for the update — I will review and get back to you shortly.'
+   461→      onSuggest(suggestion)
+   462→      toast.success('AI suggested a reply')
+   463→    } catch {
+   464→      toast.error('Could not generate suggestion')
+   465→    } finally {
+   466→      setBusy('suggest', false)
+   467→    }
+   468→  }
+   469→
+   470→  /* ── Loading & empty states ─────────────────────────────────────────── */
+   471→
+   472→  if (!engagementId) {
+   473→    return (
+   474→      <div className="flex h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
+   475→        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+   476→          <Inbox className="h-6 w-6 text-muted-foreground" />
+   477→        </div>
+   478→        <div>
+   479→          <h2 className="text-lg font-semibold">No engagement selected</h2>
+   480→          <p className="text-sm text-muted-foreground">
+   481→            Choose an engagement from the list to view its details.
+   482→          </p>
+   483→        </div>
+   484→        <Button variant="outline" size="sm" onClick={() => navigate('engagements')}>
+   485→          <ArrowLeft className="mr-1.5 h-4 w-4" /> Go to engagements
+   486→        </Button>
+   487→      </div>
+   488→    )
+   489→  }
+   490→
+   491→  if (loading) return <EngagementDetailSkeleton />
+   492→
+   493→  if (notFound || !data) {
+   494→    return (
+   495→      <div className="flex h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
+   496→        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400">
+   497→          <AlertCircle className="h-6 w-6" />
+   498→        </div>
+   499→        <div>
+   500→          <h2 className="text-lg font-semibold">Engagement not found</h2>
+   501→          <p className="text-sm text-muted-foreground">
+   502→            This engagement may have been removed or you don&apos;t have access.
+   503→          </p>
+   504→        </div>
+   505→        <Button variant="outline" size="sm" onClick={() => navigate('engagements')}>
+   506→          <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to engagements
+   507→        </Button>
+   508→      </div>
+   509→    )
+   510→  }
+   511→
+   512→  /* ── Derived data ───────────────────────────────────────────────────── */
+   513→
+   514→  const pbcItems = data.pbcList?.items ?? []
+   515→  const pbcCompleted = pbcItems.filter((i) => isPbcComplete(i.status)).length
+   516→  const pbcPct = pbcItems.length ? Math.round((pbcCompleted / pbcItems.length) * 100) : 0
+   517→  const pbcSent = !!data.pbcList?.sentAt
+   518→
+   519→  const daysLeft = data.deadline
+   520→    ? differenceInDays(new Date(data.deadline), new Date())
+   521→    : null
+   522→
+   523→  const documents = data.documents ?? []
+   524→  const extractions = documents.flatMap((d) => d.extractions ?? [])
+   525→  const avgConfidence = extractions.length
+   526→    ? extractions.reduce((s, e) => s + e.confidence, 0) / extractions.length
+   527→    : 0
+   528→  const verifiedCount = extractions.filter((e) => e.isVerified).length
+   529→  const needsReviewCount = extractions.length - verifiedCount
+   530→
+   531→  return (
+   532→    <TooltipProvider delayDuration={200}>
+   533→      <div className="space-y-5 p-4 lg:p-6">
+   534→        <EngagementHeader
+   535→          data={data}
+   536→          daysLeft={daysLeft}
+   537→          pbcSent={pbcSent}
+   538→          onBack={() => navigate('engagements')}
+   539→          onSendPbc={handleSendPbc}
+   540→          busySendPbc={actionBusy['send-pbc']}
+   541→          onExportCsv={() => handleExport('csv')}
+   542→          onMessage={() => setActiveTab('messages')}
+   543→        />
+   544→
+   545→        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
+   546→          <div className="overflow-x-auto">
+   547→            <TabsList className="h-auto w-full justify-start gap-1 rounded-xl bg-muted/60 p-1 sm:w-auto">
+   548→              <TabsTrigger value="pbc" className="gap-1.5">
+   549→                <ListChecks className="h-4 w-4" /> PBC List
+   550→                {pbcItems.length > 0 && (
+   551→                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+   552→                    {pbcCompleted}/{pbcItems.length}
+   553→                  </Badge>
+   554→                )}
+   555→              </TabsTrigger>
+   556→              <TabsTrigger value="documents" className="gap-1.5">
+   557→                <FileText className="h-4 w-4" /> Documents
+   558→                {documents.length > 0 && (
+   559→                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+   560→                    {documents.length}
+   561→                  </Badge>
+   562→                )}
+   563→              </TabsTrigger>
+   564→              <TabsTrigger value="extraction" className="gap-1.5">
+   565→                <Sparkles className="h-4 w-4" /> AI Extraction
+   566→                {extractions.length > 0 && (
+   567→                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+   568→                    {extractions.length}
+   569→                  </Badge>
+   570→                )}
+   571→              </TabsTrigger>
+   572→              <TabsTrigger value="workflow" className="gap-1.5">
+   573→                <Layers className="h-4 w-4" /> Workflow
+   574→              </TabsTrigger>
+   575→              <TabsTrigger value="messages" className="gap-1.5">
+   576→                <MessageSquare className="h-4 w-4" /> Messages
+   577→                {(data.messages?.length ?? 0) > 0 && (
+   578→                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+   579→                    {data.messages!.length}
+   580→                  </Badge>
+   581→                )}
+   582→              </TabsTrigger>
+   583→            </TabsList>
+   584→          </div>
+   585→
+   586→          {/* ── PBC List ─────────────────────────────────────────────── */}
+   587→          <TabsContent value="pbc" className="mt-4">
+   588→            <PbcTab
+   589→              data={data}
+   590→              pbcItems={pbcItems}
+   591→              pbcCompleted={pbcCompleted}
+   592→              pbcPct={pbcPct}
+   593→              pbcSent={pbcSent}
+   594→              busyGenPbc={actionBusy['gen-pbc']}
+   595→              busySendPbc={actionBusy['send-pbc']}
+   596→              busyAddPbc={actionBusy['add-pbc']}
+   597→              onGenerate={handleGeneratePbc}
+   598→              onSend={handleSendPbc}
+   599→              onAddItem={handleAddPbcItem}
+   600→              onOpenDocument={openDocument}
+   601→            />
+   602→          </TabsContent>
+   603→
+   604→          {/* ── Documents ────────────────────────────────────────────── */}
+   605→          <TabsContent value="documents" className="mt-4">
+   606→            <DocumentsTab
+   607→              documents={documents}
+   608→              processingDocIds={processingDocIds}
+   609→              onProcess={handleProcessWithAI}
+   610→              onOpenDocument={openDocument}
+   611→            />
+   612→          </TabsContent>
+   613→
+   614→          {/* ── AI Extraction ────────────────────────────────────────── */}
+   615→          <TabsContent value="extraction" className="mt-4">
+   616→            <ExtractionTab
+   617→              documents={documents}
+   618→              extractions={extractions}
+   619→              avgConfidence={avgConfidence}
+   620→              verifiedCount={verifiedCount}
+   621→              needsReviewCount={needsReviewCount}
+   622→              onReextractAll={handleReextractAll}
+   623→              onExport={handleExport}
+   624→              busyExport={actionBusy}
+   625→              busyReextract={actionBusy['reextract']}
+   626→              onOpenDocument={openDocument}
+   627→            />
+   628→          </TabsContent>
+   629→
+   630→          {/* ── Workflow ─────────────────────────────────────────────── */}
+   631→          <TabsContent value="workflow" className="mt-4">
+   632→            <WorkflowTab
+   633→              workflows={data.workflows ?? []}
+   634→              activities={data.activities ?? []}
+   635→              busyAdvance={actionBusy['advance']}
+   636→              onAdvance={handleAdvanceWorkflow}
+   637→            />
+   638→          </TabsContent>
+   639→
+   640→          {/* ── Messages ─────────────────────────────────────────────── */}
+   641→          <TabsContent value="messages" className="mt-4">
+   642→            <MessagesTab
+   643→              messages={data.messages ?? []}
+   644→              clientName={data.client.name}
+   645→              onSend={handleSendMessage}
+   646→              onSuggest={handleSuggestReply}
+   647→              busySend={actionBusy['send-msg']}
+   648→              busySuggest={actionBusy['suggest']}
+   649→            />
+   650→          </TabsContent>
+   651→        </Tabs>
+   652→      </div>
+   653→    </TooltipProvider>
+   654→  )
+   655→}
+   656→
+   657→function stepLabel(step: string): string {
+   658→  const found = WORKFLOW_STEPS.find((s) => s.step === step)
+   659→  return found?.label ?? step
+   660→}
+   661→
+   662→/* ────────────────────────────────────────────────────────────────────────────
+   663→ *  Header
+   664→ * ────────────────────────────────────────────────────────────────────────── */
+   665→
+   666→function EngagementHeader({
+   667→  data,
+   668→  daysLeft,
+   669→  pbcSent,
+   670→  onBack,
+   671→  onSendPbc,
+   672→  busySendPbc,
+   673→  onExportCsv,
+   674→  onMessage,
+   675→}: {
+   676→  data: EngagementDetail
+   677→  daysLeft: number | null
+   678→  pbcSent: boolean
+   679→  onBack: () => void
+   680→  onSendPbc: () => void
+   681→  busySendPbc: boolean
+   682→  onExportCsv: () => void
+   683→  onMessage: () => void
+   684→}) {
+   685→  const overdue = daysLeft !== null && daysLeft < 0
+   686→  const soon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7
+   687→
+   688→  return (
+   689→    <Card className="overflow-hidden rounded-xl p-0">
+   690→      {/* Top banner */}
+   691→      <div className="bg-gradient-primary px-5 py-4 sm:px-6 sm:py-5">
+   692→        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   693→          <div className="flex items-start gap-3">
+   694→            <Button
+   695→              variant="secondary"
+   696→              size="icon"
+   697→              onClick={onBack}
+   698→              className="h-9 w-9 shrink-0 bg-white/15 text-white hover:bg-white/25"
+   699→              aria-label="Back to engagements"
+   700→            >
+   701→              <ArrowLeft className="h-4 w-4" />
+   702→            </Button>
+   703→            <div className="min-w-0">
+   704→              <div className="flex flex-wrap items-center gap-2">
+   705→                <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
+   706→                  {data.client.name}
+   707→                </h1>
+   708→                <Badge
+   709→                  variant="secondary"
+   710→                  className="border-white/20 bg-white/15 text-white"
+   711→                >
+   712→                  {engagementTypeLabel(data.engagementType)} · FY{data.taxYear}
+   713→                </Badge>
+   714→              </div>
+   715→              <div className="mt-1 flex flex-wrap items-center gap-2 text-white/80">
+   716→                <span className="text-sm">{data.client.email}</span>
+   717→                {data.client.clientType && (
+   718→                  <>
+   719→                    <span className="opacity-50">•</span>
+   720→                    <span className="text-sm capitalize">{data.client.clientType}</span>
+   721→                  </>
+   722→                )}
+   723→                {data.client.country && (
+   724→                  <>
+   725→                    <span className="opacity-50">•</span>
+   726→                    <span className="text-sm">{data.client.country}</span>
+   727→                  </>
+   728→                )}
+   729→              </div>
+   730→            </div>
+   731→          </div>
+   732→          <div className="flex shrink-0 items-center gap-2">
+   733→            {!pbcSent && (
+   734→              <Button
+   735→                size="sm"
+   736→                onClick={onSendPbc}
+   737→                disabled={busySendPbc}
+   738→                className="bg-white text-primary hover:bg-white/90"
+   739→              >
+   740→                {busySendPbc ? (
+   741→                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   742→                ) : (
+   743→                  <Send className="mr-1.5 h-4 w-4" />
+   744→                )}
+   745→                Send PBC
+   746→              </Button>
+   747→            )}
+   748→            <Button
+   749→              size="sm"
+   750→              variant="secondary"
+   751→              onClick={onExportCsv}
+   752→              className="bg-white/15 text-white hover:bg-white/25"
+   753→            >
+   754→              <Download className="mr-1.5 h-4 w-4" /> Export
+   755→            </Button>
+   756→            <Button
+   757→              size="sm"
+   758→              variant="secondary"
+   759→              onClick={onMessage}
+   760→              className="bg-white/15 text-white hover:bg-white/25"
+   761→            >
+   762→              <MessageSquare className="mr-1.5 h-4 w-4" /> Message
+   763→            </Button>
+   764→          </div>
+   765→        </div>
+   766→      </div>
+   767→
+   768→      {/* Stats row */}
+   769→      <div className="grid grid-cols-2 gap-px bg-border lg:grid-cols-5">
+   770→        <HeaderStat
+   771→          label="Status"
+   772→          value={<StatusBadge status={data.status} size="md" />}
+   773→        />
+   774→        <HeaderStat
+   775→          label="Priority"
+   776→          value={<PriorityBadge priority={data.priority as Priority} />}
+   777→        />
+   778→        <HeaderStat
+   779→          label="Deadline"
+   780→          value={
+   781→            <div className="flex flex-col gap-0.5">
+   782→              <span className="text-sm font-semibold">
+   783→                {data.deadline ? format(new Date(data.deadline), 'MMM d, yyyy') : '—'}
+   784→              </span>
+   785→              {daysLeft !== null && (
+   786→                <span
+   787→                  className={cn(
+   788→                    'inline-flex items-center gap-1 text-xs font-medium',
+   789→                    overdue
+   790→                      ? 'text-red-600 dark:text-red-400'
+   791→                      : soon
+   792→                        ? 'text-amber-600 dark:text-amber-400'
+   793→                        : 'text-muted-foreground'
+   794→                  )}
+   795→                >
+   796→                  <CalendarClock className="h-3 w-3" />
+   797→                  {overdue
+   798→                    ? `${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} overdue`
+   799→                    : daysLeft === 0
+   800→                      ? 'Due today'
+   801→                      : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}
+   802→                </span>
+   803→              )}
+   804→            </div>
+   805→          }
+   806→        />
+   807→        <HeaderStat
+   808→          label="Assigned to"
+   809→          value={
+   810→            <div className="flex items-center gap-2">
+   811→              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+   812→                {initials(data.assignedTo?.name)}
+   813→              </div>
+   814→              <div className="min-w-0">
+   815→                <p className="truncate text-sm font-semibold">
+   816→                  {data.assignedTo?.name ?? 'Unassigned'}
+   817→                </p>
+   818→                {data.assignedTo?.role && (
+   819→                  <p className="truncate text-xs capitalize text-muted-foreground">
+   820→                    {data.assignedTo.role}
+   821→                  </p>
+   822→                )}
+   823→              </div>
+   824→            </div>
+   825→          }
+   826→        />
+   827→        <HeaderStat
+   828→          label="Progress"
+   829→          value={
+   830→            <div className="flex items-center gap-3">
+   831→              <ProgressRing value={data.progress} size={42} strokeWidth={4} />
+   832→              <div>
+   833→                <p className="text-sm font-semibold">{data.progress}%</p>
+   834→                <p className="text-xs text-muted-foreground">complete</p>
+   835→              </div>
+   836→            </div>
+   837→          }
+   838→        />
+   839→      </div>
+   840→    </Card>
+   841→  )
+   842→}
+   843→
+   844→function HeaderStat({
+   845→  label,
+   846→  value,
+   847→}: {
+   848→  label: string
+   849→  value: React.ReactNode
+   850→}) {
+   851→  return (
+   852→    <div className="flex flex-col gap-1 bg-card p-3.5 sm:p-4">
+   853→      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+   854→        {label}
+   855→      </p>
+   856→      <div className="min-w-0">{value}</div>
+   857→    </div>
+   858→  )
+   859→}
+   860→
+   861→/* ────────────────────────────────────────────────────────────────────────────
+   862→ *  Tab 1: PBC List
+   863→ * ────────────────────────────────────────────────────────────────────────── */
+   864→
+   865→function PbcTab({
+   866→  data,
+   867→  pbcItems,
+   868→  pbcCompleted,
+   869→  pbcPct,
+   870→  pbcSent,
+   871→  busyGenPbc,
+   872→  busySendPbc,
+   873→  busyAddPbc,
+   874→  onGenerate,
+   875→  onSend,
+   876→  onAddItem,
+   877→  onOpenDocument,
+   878→}: {
+   879→  data: EngagementDetail
+   880→  pbcItems: PbcItem[]
+   881→  pbcCompleted: number
+   882→  pbcPct: number
+   883→  pbcSent: boolean
+   884→  busyGenPbc: boolean
+   885→  busySendPbc: boolean
+   886→  busyAddPbc: boolean
+   887→  onGenerate: () => void
+   888→  onSend: () => void
+   889→  onAddItem: (pbcListId: string) => void
+   890→  onOpenDocument: (id: string) => void
+   891→}) {
+   892→  // Group items by status in the canonical order.
+   893→  const groups = useMemo(() => {
+   894→    const map: Record<string, PbcItem[]> = {}
+   895→    for (const it of pbcItems) {
+   896→      ;(map[it.status] ||= []).push(it)
+   897→    }
+   898→    return map
+   899→  }, [pbcItems])
+   900→
+   901→  const categoryCounts = useMemo(() => {
+   902→    const map: Record<string, number> = {}
+   903→    for (const it of pbcItems) {
+   904→      map[it.category] = (map[it.category] ?? 0) + 1
+   905→    }
+   906→    return map
+   907→  }, [pbcItems])
+   908→
+   909→  // No PBC list yet → empty state.
+   910→  if (!data.pbcList) {
+   911→    return (
+   912→      <Card className="rounded-xl">
+   913→        <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+   914→          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+   915→            <ListChecks className="h-7 w-7" />
+   916→          </div>
+   917→          <h3 className="mt-4 text-lg font-semibold">No PBC list yet</h3>
+   918→          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+   919→            Generate a Prepared by Client document request list from the default{' '}
+   920→            {data.engagementType} template. The client will receive a secure link to
+   921→            upload their documents.
+   922→          </p>
+   923→          <Button className="mt-5" onClick={onGenerate} disabled={busyGenPbc}>
+   924→            {busyGenPbc ? (
+   925→              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   926→            ) : (
+   927→              <Sparkles className="mr-1.5 h-4 w-4" />
+   928→            )}
+   929→            Generate PBC List
+   930→          </Button>
+   931→        </div>
+   932→      </Card>
+   933→    )
+   934→  }
+   935→
+   936→  return (
+   937→    <div className="space-y-4">
+   938→      {/* Progress summary */}
+   939→      <Card className="rounded-xl p-5">
+   940→        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   941→          <div className="min-w-0 flex-1">
+   942→            <div className="flex items-center gap-2">
+   943→              <h3 className="text-base font-semibold">{data.pbcList!.name}</h3>
+   944→              {pbcSent && data.pbcList!.sentAt && (
+   945→                <Badge
+   946→                  variant="outline"
+   947→                  className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400"
+   948→                >
+   949→                  <Mail className="h-3 w-3" />
+   950→                  Sent {formatDistanceToNow(new Date(data.pbcList!.sentAt), {
+   951→                    addSuffix: true,
+   952→                  })}
+   953→                </Badge>
+   954→              )}
+   955→            </div>
+   956→            <p className="mt-1 text-sm text-muted-foreground">
+   957→              {pbcCompleted} of {pbcItems.length} documents received{' '}
+   958→              <span className="font-semibold text-foreground">({pbcPct}%)</span>
+   959→            </p>
+   960→            <Progress value={pbcPct} className="mt-2 h-2" />
+   961→          </div>
+   962→          <div className="flex shrink-0 flex-wrap items-center gap-2">
+   963→            <Button
+   964→              variant="outline"
+   965→              size="sm"
+   966→              onClick={() => onAddItem(data.pbcList!.id)}
+   967→              disabled={busyAddPbc}
+   968→            >
+   969→              {busyAddPbc ? (
+   970→                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   971→              ) : (
+   972→                <Plus className="mr-1.5 h-4 w-4" />
+   973→              )}
+   974→              Add Item
+   975→            </Button>
+   976→            <Button
+   977→              size="sm"
+   978→              onClick={onSend}
+   979→              disabled={busySendPbc || pbcSent}
+   980→              variant={pbcSent ? 'outline' : 'default'}
+   981→            >
+   982→              {busySendPbc ? (
+   983→                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   984→              ) : (
+   985→                <Send className="mr-1.5 h-4 w-4" />
+   986→              )}
+   987→              {pbcSent ? 'Already Sent' : 'Send to Client'}
+   988→            </Button>
+   989→          </div>
+   990→        </div>
+   991→
+   992→        {/* Category summary chips */}
+   993→        <Separator className="my-4" />
+   994→        <div className="flex flex-wrap gap-2">
+   995→          {Object.entries(categoryCounts).map(([cat, count]) => {
+   996→            const def = DOCUMENT_CATEGORIES.find((c) => c.id === cat)
+   997→            const Icon = def?.icon ?? FileText
+   998→            return (
+   999→              <Badge
+  1000→                key={cat}
+  1001→                variant="outline"
+  1002→                className="gap-1.5 rounded-full py-1 pl-2 pr-3 text-xs"
+  1003→              >
+  1004→                <Icon className="h-3 w-3 text-muted-foreground" />
+  1005→                {def?.label ?? cat}
+  1006→                <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums">
+  1007→                  {count}
+  1008→                </span>
+  1009→              </Badge>
+  1010→            )
+  1011→          })}
+  1012→        </div>
+  1013→      </Card>
+  1014→
+  1015→      {/* Grouped items */}
+  1016→      {pbcItems.length === 0 ? (
+  1017→        <Card className="rounded-xl p-10 text-center text-sm text-muted-foreground">
+  1018→          This PBC list has no items yet. Use &ldquo;Add Item&rdquo; to create a
+  1019→          custom request.
+  1020→        </Card>
+  1021→      ) : (
+  1022→        <div className="space-y-4">
+  1023→          {(['pending', 'uploaded', 'processing', 'extracted', 'reviewed', 'rejected'] as const)
+  1024→            .filter((s) => groups[s]?.length)
+  1025→            .map((status) => (
+  1026→              <PbcStatusGroup
+  1027→                key={status}
+  1028→                status={status}
+  1029→                items={groups[status]}
+  1030→                onOpenDocument={onOpenDocument}
+  1031→              />
+  1032→            ))}
+  1033→        </div>
+  1034→      )}
+  1035→    </div>
+  1036→  )
+  1037→}
+  1038→
+  1039→function PbcStatusGroup({
+  1040→  status,
+  1041→  items,
+  1042→  onOpenDocument,
+  1043→}: {
+  1044→  status: string
+  1045→  items: PbcItem[]
+  1046→  onOpenDocument: (id: string) => void
+  1047→}) {
+  1048→  const cfg = PBC_GROUP_CONFIG[status] ?? PBC_GROUP_CONFIG.pending
+  1049→  return (
+  1050→    <Card className="overflow-hidden rounded-xl">
+  1051→      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2.5">
+  1052→        <div className="flex items-center gap-2">
+  1053→          <cfg.icon className={cn('h-4 w-4', cfg.iconClass)} />
+  1054→          <span className="text-sm font-semibold">{cfg.label}</span>
+  1055→          <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+  1056→            {items.length}
+  1057→          </Badge>
+  1058→        </div>
+  1059→      </div>
+  1060→      <div className="divide-y">
+  1061→        {items.map((item) => (
+  1062→          <PbcItemRow key={item.id} item={item} onOpenDocument={onOpenDocument} />
+  1063→        ))}
+  1064→      </div>
+  1065→    </Card>
+  1066→  )
+  1067→}
+  1068→
+  1069→const PBC_GROUP_CONFIG: Record<
+  1070→  string,
+  1071→  { label: string; icon: typeof Clock; iconClass: string }
+  1072→> = {
+  1073→  pending: { label: 'Pending', icon: Clock, iconClass: 'text-slate-500' },
+  1074→  uploaded: { label: 'Uploaded', icon: Upload, iconClass: 'text-blue-500' },
+  1075→  processing: { label: 'Processing', icon: Loader2, iconClass: 'text-violet-500 animate-spin' },
+  1076→  extracted: { label: 'Extracted', icon: Sparkles, iconClass: 'text-emerald-500' },
+  1077→  reviewed: { label: 'Reviewed', icon: CheckCircle2, iconClass: 'text-teal-500' },
+  1078→  rejected: { label: 'Rejected', icon: AlertCircle, iconClass: 'text-red-500' },
+  1079→}
+  1080→
+  1081→function PbcItemRow({
+  1082→  item,
+  1083→  onOpenDocument,
+  1084→}: {
+  1085→  item: PbcItem
+  1086→  onOpenDocument: (id: string) => void
+  1087→}) {
+  1088→  const typeDef = DOCUMENT_TYPE_MAP[item.documentType]
+  1089→  const doc = item.documents?.[0]
+  1090→  return (
+  1091→    <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
+  1092→      <Checkbox
+  1093→        checked={isPbcComplete(item.status)}
+  1094→        disabled
+  1095→        className="mt-0.5"
+  1096→        aria-label="item complete"
+  1097→      />
+  1098→      <div className="min-w-0 flex-1">
+  1099→        <div className="flex flex-wrap items-center gap-2">
+  1100→          <span className="text-sm font-semibold">
+  1101→            {typeDef?.label ?? item.documentType}
+  1102→          </span>
+  1103→          <Badge variant="outline" className="text-[10px]">
+  1104→            {item.documentType}
+  1105→          </Badge>
+  1106→          <PriorityBadge priority={item.priority as Priority} />
+  1107→          {!item.required && (
+  1108→            <Badge
+  1109→              variant="outline"
+  1110→              className="border-slate-200 bg-slate-50 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/40"
+  1111→            >
+  1112→              Optional
+  1113→            </Badge>
+  1114→          )}
+  1115→        </div>
+  1116→        <p className="mt-0.5 text-sm text-muted-foreground">{item.description}</p>
+  1117→        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+  1118→          <Badge
+  1119→            variant="outline"
+  1120→            className="border-primary/20 bg-primary/5 text-[10px] text-primary"
+  1121→          >
+  1122→            {categoryLabel(item.category)}
+  1123→          </Badge>
+  1124→          {doc && (
+  1125→            <button
+  1126→              onClick={() => onOpenDocument(doc.id)}
+  1127→              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-primary hover:bg-primary/5"
+  1128→            >
+  1129→              <FileText className="h-3 w-3" />
+  1130→              {doc.originalFilename}
+  1131→            </button>
+  1132→          )}
+  1133→          {doc && (
+  1134→            <span className="text-[11px]">
+  1135→              · uploaded {formatDistanceToNow(new Date(doc.uploadedAt), { addSuffix: true })}
+  1136→            </span>
+  1137→          )}
+  1138→        </div>
+  1139→      </div>
+  1140→      <div className="shrink-0">
+  1141→        <StatusBadge status={item.status} />
+  1142→      </div>
+  1143→    </div>
+  1144→  )
+  1145→}
+  1146→
+  1147→/* ────────────────────────────────────────────────────────────────────────────
+  1148→ *  Tab 2: Documents
+  1149→ * ────────────────────────────────────────────────────────────────────────── */
+  1150→
+  1151→function DocumentsTab({
+  1152→  documents,
+  1153→  processingDocIds,
+  1154→  onProcess,
+  1155→  onOpenDocument,
+  1156→}: {
+  1157→  documents: TaxDocument[]
+  1158→  processingDocIds: Set<string>
+  1159→  onProcess: (id: string) => void
+  1160→  onOpenDocument: (id: string) => void
+  1161→}) {
+  1162→  const [filter, setFilter] = useState<DocFilterKey>('all')
+  1163→  const [dragOver, setDragOver] = useState(false)
+  1164→  const fileRef = useRef<HTMLInputElement>(null)
+  1165→
+  1166→  const filtered = useMemo(() => {
+  1167→    if (filter === 'all') return documents
+  1168→    return documents.filter((d) => {
+  1169→      if (filter === 'processing') return d.status === 'processing' || d.status === 'uploaded'
+  1170→      if (filter === 'processed') return d.status === 'processed'
+  1171→      if (filter === 'reviewed') return d.status === 'reviewed'
+  1172→      return true
+  1173→    })
+  1174→  }, [documents, filter])
+  1175→
+  1176→  const handleFileSelect = () => {
+  1177→    toast.info('Document upload is simulated in this demo')
+  1178→    if (fileRef.current) fileRef.current.value = ''
+  1179→  }
+  1180→
+  1181→  return (
+  1182→    <div className="space-y-4">
+  1183→      {/* Upload dropzone */}
+  1184→      <Card
+  1185→        className={cn(
+  1186→          'rounded-xl border-2 border-dashed p-6 transition-colors',
+  1187→          dragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/20'
+  1188→        )}
+  1189→        onDragOver={(e) => {
+  1190→          e.preventDefault()
+  1191→          setDragOver(true)
+  1192→        }}
+  1193→        onDragLeave={() => setDragOver(false)}
+  1194→        onDrop={(e) => {
+  1195→          e.preventDefault()
+  1196→          setDragOver(false)
+  1197→          handleFileSelect()
+  1198→        }}
+  1199→      >
+  1200→        <div className="flex flex-col items-center justify-center gap-3 text-center sm:flex-row sm:justify-between sm:text-left">
+  1201→          <div className="flex items-center gap-3">
+  1202→            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+  1203→              <Upload className="h-5 w-5" />
+  1204→            </div>
+  1205→            <div>
+  1206→              <p className="text-sm font-semibold">Drop documents here or click to upload</p>
+  1207→              <p className="text-xs text-muted-foreground">
+  1208→                PDF, JPG, PNG, XLSX — AI will classify & extract automatically
+  1209→              </p>
+  1210→            </div>
+  1211→          </div>
+  1212→          <Button size="sm" onClick={handleFileSelect}>
+  1213→            <Upload className="mr-1.5 h-4 w-4" /> Upload Document
+  1214→          </Button>
+  1215→          <input
+  1216→            ref={fileRef}
+  1217→            type="file"
+  1218→            multiple
+  1219→            className="hidden"
+  1220→            onChange={handleFileSelect}
+  1221→          />
+  1222→        </div>
+  1223→      </Card>
+  1224→
+  1225→      {/* Filters + count */}
+  1226→      <div className="flex flex-wrap items-center justify-between gap-3">
+  1227→        <div className="flex items-center gap-1.5">
+  1228→          <Filter className="h-4 w-4 text-muted-foreground" />
+  1229→          <span className="text-sm text-muted-foreground">Filter:</span>
+  1230→          <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
+  1231→            {(
+  1232→              [
+  1233→                { key: 'all', label: 'All' },
+  1234→                { key: 'processing', label: 'Processing' },
+  1235→                { key: 'processed', label: 'Processed' },
+  1236→                { key: 'reviewed', label: 'Reviewed' },
+  1237→              ] as { key: DocFilterKey; label: string }[]
+  1238→            ).map((opt) => (
+  1239→              <button
+  1240→                key={opt.key}
+  1241→                onClick={() => setFilter(opt.key)}
+  1242→                className={cn(
+  1243→                  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+  1244→                  filter === opt.key
+  1245→                    ? 'bg-card text-foreground shadow-sm'
+  1246→                    : 'text-muted-foreground hover:text-foreground'
+  1247→                )}
+  1248→              >
+  1249→                {opt.label}
+  1250→              </button>
+  1251→            ))}
+  1252→          </div>
+  1253→        </div>
+  1254→        <span className="text-xs text-muted-foreground">
+  1255→          {filtered.length} of {documents.length} documents
+  1256→        </span>
+  1257→      </div>
+  1258→
+  1259→      {/* Document grid */}
+  1260→      {filtered.length === 0 ? (
+  1261→        <Card className="rounded-xl p-12 text-center">
+  1262→          <FileX2 className="mx-auto h-8 w-8 text-muted-foreground" />
+  1263→          <p className="mt-2 text-sm font-medium">No documents found</p>
+  1264→          <p className="text-xs text-muted-foreground">
+  1265→            Upload documents or adjust your filter.
+  1266→          </p>
+  1267→        </Card>
+  1268→      ) : (
+  1269→        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+  1270→          {filtered.map((doc) => (
+  1271→            <DocumentCard
+  1272→              key={doc.id}
+  1273→              doc={doc}
+  1274→              processing={processingDocIds.has(doc.id)}
+  1275→              onProcess={onProcess}
+  1276→              onOpen={() => onOpenDocument(doc.id)}
+  1277→            />
+  1278→          ))}
+  1279→        </div>
+  1280→      )}
+  1281→    </div>
+  1282→  )
+  1283→}
+  1284→
+  1285→function DocumentCard({
+  1286→  doc,
+  1287→  processing,
+  1288→  onProcess,
+  1289→  onOpen,
+  1290→}: {
+  1291→  doc: TaxDocument
+  1292→  processing: boolean
+  1293→  onProcess: (id: string) => void
+  1294→  onOpen: () => void
+  1295→}) {
+  1296→  const Icon = fileIconFor(doc.mimeType)
+  1297→  const typeDef = doc.documentType ? DOCUMENT_TYPE_MAP[doc.documentType] : null
+  1298→  const isProcessed = doc.status === 'processed' || doc.status === 'reviewed'
+  1299→
+  1300→  return (
+  1301→    <Card className="group flex flex-col gap-0 rounded-xl p-4 transition-all hover:shadow-md">
+  1302→      <div className="flex items-start gap-3">
+  1303→        <button
+  1304→          onClick={onOpen}
+  1305→          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15"
+  1306→          aria-label="Open document"
+  1307→        >
+  1308→          {createElement(Icon, { className: 'h-5 w-5' })}
+  1309→        </button>
+  1310→        <div className="min-w-0 flex-1">
+  1311→          <button
+  1312→            onClick={onOpen}
+  1313→            className="block w-full truncate text-left text-sm font-semibold hover:text-primary"
+  1314→            title={doc.originalFilename}
+  1315→          >
+  1316→            {doc.originalFilename}
+  1317→          </button>
+  1318→          <p className="mt-0.5 text-xs text-muted-foreground">
+  1319→            {formatFileSize(doc.fileSize)} · {format(new Date(doc.uploadedAt), 'MMM d')}
+  1320→          </p>
+  1321→        </div>
+  1322→      </div>
+  1323→
+  1324→      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+  1325→        {typeDef ? (
+  1326→          <Badge
+  1327→            variant="outline"
+  1328→            className="border-primary/20 bg-primary/5 text-[10px] text-primary"
+  1329→          >
+  1330→            {doc.documentType}
+  1331→          </Badge>
+  1332→        ) : (
+  1333→          <Badge variant="outline" className="text-[10px]">
+  1334→            Unclassified
+  1335→          </Badge>
+  1336→        )}
+  1337→        <StatusBadge status={doc.status} />
+  1338→      </div>
+  1339→
+  1340→      {isProcessed && (
+  1341→        <div className="mt-3 rounded-lg bg-muted/40 px-2.5 py-1.5">
+  1342→          <div className="flex items-center justify-between">
+  1343→            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+  1344→              Confidence
+  1345→            </span>
+  1346→            <ConfidenceMeter value={doc.confidence} />
+  1347→          </div>
+  1348→        </div>
+  1349→      )}
+  1350→
+  1351→      <Separator className="my-3" />
+  1352→
+  1353→      <div className="mt-auto flex items-center gap-2">
+  1354→        {doc.status === 'uploaded' && (
+  1355→          <Button
+  1356→            size="sm"
+  1357→            className="h-7 flex-1 text-xs"
+  1358→            onClick={() => onProcess(doc.id)}
+  1359→            disabled={processing}
+  1360→          >
+  1361→            {processing ? (
+  1362→              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+  1363→            ) : (
+  1364→              <Sparkles className="mr-1 h-3.5 w-3.5" />
+  1365→            )}
+  1366→            {processing ? 'Processing' : 'Process with AI'}
+  1367→          </Button>
+  1368→        )}
+  1369→        <Button
+  1370→          size="sm"
+  1371→          variant="outline"
+  1372→          className="h-7 text-xs"
+  1373→          onClick={onOpen}
+  1374→        >
+  1375→          Open
+  1376→        </Button>
+  1377→      </div>
+  1378→    </Card>
+  1379→  )
+  1380→}
+  1381→
+  1382→/* ────────────────────────────────────────────────────────────────────────────
+  1383→ *  Tab 3: AI Extraction
+  1384→ * ────────────────────────────────────────────────────────────────────────── */
+  1385→
+  1386→function ExtractionTab({
+  1387→  documents,
+  1388→  extractions,
+  1389→  avgConfidence,
+  1390→  verifiedCount,
+  1391→  needsReviewCount,
+  1392→  onReextractAll,
+  1393→  onExport,
+  1394→  busyExport,
+  1395→  busyReextract,
+  1396→  onOpenDocument,
+  1397→}: {
+  1398→  documents: TaxDocument[]
+  1399→  extractions: Extraction[]
+  1400→  avgConfidence: number
+  1401→  verifiedCount: number
+  1402→  needsReviewCount: number
+  1403→  onReextractAll: () => void
+  1404→  onExport: (format: 'csv' | 'ultratax' | 'excel') => void
+  1405→  busyExport: Record<string, boolean>
+  1406→  busyReextract: boolean
+  1407→  onOpenDocument: (id: string) => void
+  1408→}) {
+  1409→  const docsByExtraction = documents.filter((d) => (d.extractions?.length ?? 0) > 0)
+  1410→
+  1411→  return (
+  1412→    <div className="space-y-4">
+  1413→      {/* Summary */}
+  1414→      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+  1415→        <SummaryStat
+  1416→          icon={Sparkles}
+  1417→          accent="primary"
+  1418→          label="Fields Extracted"
+  1419→          value={extractions.length.toString()}
+  1420→        />
+  1421→        <SummaryStat
+  1422→          icon={CheckCircle2}
+  1423→          accent="success"
+  1424→          label="Average Confidence"
+  1425→          value={`${Math.round(avgConfidence * 100)}%`}
+  1426→        />
+  1427→        <SummaryStat
+  1428→          icon={FileCheck2}
+  1429→          accent="info"
+  1430→          label="Verified"
+  1431→          value={verifiedCount.toString()}
+  1432→        />
+  1433→        <SummaryStat
+  1434→          icon={AlertCircle}
+  1435→          accent="warning"
+  1436→          label="Needs Review"
+  1437→          value={needsReviewCount.toString()}
+  1438→        />
+  1439→      </div>
+  1440→
+  1441→      {/* Actions */}
+  1442→      <Card className="rounded-xl p-4">
+  1443→        <div className="flex flex-wrap items-center justify-between gap-3">
+  1444→          <div>
+  1445→            <h3 className="text-sm font-semibold">Extraction Output</h3>
+  1446→            <p className="text-xs text-muted-foreground">
+  1447→              Review, verify, and export field-level data extracted from{' '}
+  1448→              {docsByExtraction.length} document{docsByExtraction.length === 1 ? '' : 's'}.
+  1449→            </p>
+  1450→          </div>
+  1451→          <div className="flex flex-wrap items-center gap-2">
+  1452→            <Button
+  1453→              size="sm"
+  1454→              variant="outline"
+  1455→              onClick={onReextractAll}
+  1456→              disabled={busyReextract}
+  1457→            >
+  1458→              {busyReextract ? (
+  1459→                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+  1460→              ) : (
+  1461→                <RefreshCw className="mr-1.5 h-4 w-4" />
+  1462→              )}
+  1463→              Re-extract All
+  1464→            </Button>
+  1465→            <Button
+  1466→              size="sm"
+  1467→              variant="outline"
+  1468→              onClick={() => onExport('csv')}
+  1469→              disabled={busyExport['export-csv']}
+  1470→            >
+  1471→              <FileDown className="mr-1.5 h-4 w-4" /> Export CSV
+  1472→            </Button>
+  1473→            <Button
+  1474→              size="sm"
+  1475→              variant="outline"
+  1476→              onClick={() => onExport('ultratax')}
+  1477→              disabled={busyExport['export-ultratax']}
+  1478→            >
+  1479→              <Download className="mr-1.5 h-4 w-4" /> UltraTax
+  1480→            </Button>
+  1481→            <Button
+  1482→              size="sm"
+  1483→              onClick={() => onExport('excel')}
+  1484→              disabled={busyExport['export-excel']}
+  1485→            >
+  1486→              <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Excel
+  1487→            </Button>
+  1488→          </div>
+  1489→        </div>
+  1490→      </Card>
+  1491→
+  1492→      {/* Per-document extraction tables */}
+  1493→      {docsByExtraction.length === 0 ? (
+  1494→        <Card className="rounded-xl p-12 text-center">
+  1495→          <Sparkles className="mx-auto h-8 w-8 text-muted-foreground" />
+  1496→          <p className="mt-2 text-sm font-medium">No extractions yet</p>
+  1497→          <p className="text-xs text-muted-foreground">
+  1498→            Upload documents and run AI processing to extract data fields.
+  1499→          </p>
+  1500→        </Card>
+  1501→      ) : (
+  1502→        <div className="space-y-4">
+  1503→          {docsByExtraction.map((doc) => (
+  1504→            <ExtractionDocSection
+  1505→              key={doc.id}
+  1506→              doc={doc}
+  1507→              onOpenDocument={onOpenDocument}
+  1508→            />
+  1509→          ))}
+  1510→        </div>
+  1511→      )}
+  1512→    </div>
+  1513→  )
+  1514→}
+  1515→
+  1516→function SummaryStat({
+  1517→  icon: Icon,
+  1518→  accent,
+  1519→  label,
+  1520→  value,
+  1521→}: {
+  1522→  icon: typeof Sparkles
+  1523→  accent: 'primary' | 'success' | 'warning' | 'info'
+  1524→  label: string
+  1525→  value: string
+  1526→}) {
+  1527→  const accents: Record<string, string> = {
+  1528→    primary: 'bg-primary/10 text-primary',
+  1529→    success: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  1530→    warning: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+  1531→    info: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400',
+  1532→  }
+  1533→  return (
+  1534→    <Card className="flex items-center gap-3 rounded-xl p-4">
+  1535→      <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', accents[accent])}>
+  1536→        <Icon className="h-5 w-5" />
+  1537→      </div>
+  1538→      <div className="min-w-0">
+  1539→        <p className="text-lg font-bold tabular-nums">{value}</p>
+  1540→        <p className="text-xs text-muted-foreground">{label}</p>
+  1541→      </div>
+  1542→    </Card>
+  1543→  )
+  1544→}
+  1545→
+  1546→function ExtractionDocSection({
+  1547→  doc,
+  1548→  onOpenDocument,
+  1549→}: {
+  1550→  doc: TaxDocument
+  1551→  onOpenDocument: (id: string) => void
+  1552→}) {
+  1553→  const exts = doc.extractions ?? []
+  1554→  const typeDef = doc.documentType ? DOCUMENT_TYPE_MAP[doc.documentType] : null
+  1555→  const docAvg = exts.length
+  1556→    ? exts.reduce((s, e) => s + e.confidence, 0) / exts.length
+  1557→    : 0
+  1558→  const lowConfidenceCount = exts.filter((e) => e.confidence < 0.9).length
+  1559→
+  1560→  return (
+  1561→    <Card className="overflow-hidden rounded-xl">
+  1562→      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3">
+  1563→        <div className="flex min-w-0 items-center gap-3">
+  1564→          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1565→            <FileText className="h-4 w-4" />
+  1566→          </div>
+  1567→          <div className="min-w-0">
+  1568→            <button
+  1569→              onClick={() => onOpenDocument(doc.id)}
+  1570→              className="block truncate text-left text-sm font-semibold hover:text-primary"
+  1571→              title={doc.originalFilename}
+  1572→            >
+  1573→              {doc.originalFilename}
+  1574→            </button>
+  1575→            <div className="mt-0.5 flex items-center gap-2">
+  1576→              {doc.documentType && (
+  1577→                <Badge
+  1578→                  variant="outline"
+  1579→                  className="border-primary/20 bg-primary/5 text-[10px] text-primary"
+  1580→                >
+  1581→                  {doc.documentType}
+  1582→                </Badge>
+  1583→              )}
+  1584→              {typeDef && (
+  1585→                <span className="truncate text-xs text-muted-foreground">
+  1586→                  {typeDef.label}
+  1587→                </span>
+  1588→              )}
+  1589→            </div>
+  1590→          </div>
+  1591→        </div>
+  1592→        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+  1593→          <span className="hidden sm:inline">
+  1594→            {exts.length} fields · avg {Math.round(docAvg * 100)}%
+  1595→          </span>
+  1596→          {lowConfidenceCount > 0 && (
+  1597→            <Badge
+  1598→              variant="outline"
+  1599→              className="border-amber-200 bg-amber-50 text-[10px] text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400"
+  1600→            >
+  1601→              <AlertCircle className="h-3 w-3" />
+  1602→              {lowConfidenceCount} low
+  1603→            </Badge>
+  1604→          )}
+  1605→        </div>
+  1606→      </div>
+  1607→
+  1608→      <Table>
+  1609→        <TableHeader>
+  1610→          <TableRow>
+  1611→            <TableHead className="w-[35%]">Field</TableHead>
+  1612→            <TableHead className="w-[35%]">Value</TableHead>
+  1613→            <TableHead>Confidence</TableHead>
+  1614→            <TableHead className="text-right">Verified</TableHead>
+  1615→            <TableHead className="w-12" />
+  1616→          </TableRow>
+  1617→        </TableHeader>
+  1618→        <TableBody>
+  1619→          {exts.map((ext) => (
+  1620→            <TableRow
+  1621→              key={ext.id}
+  1622→              className={cn(
+  1623→                ext.confidence < 0.9 && 'bg-amber-50/60 dark:bg-amber-950/20'
+  1624→              )}
+  1625→            >
+  1626→              <TableCell>
+  1627→                <div className="flex flex-col">
+  1628→                  <span className="text-sm font-medium">{ext.fieldLabel}</span>
+  1629→                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+  1630→                    {ext.fieldGroup}
+  1631→                  </span>
+  1632→                </div>
+  1633→              </TableCell>
+  1634→              <TableCell className="font-mono text-xs">
+  1635→                {ext.fieldValue || <span className="text-muted-foreground">—</span>}
+  1636→              </TableCell>
+  1637→              <TableCell>
+  1638→                <ConfidenceMeter value={ext.confidence} />
+  1639→              </TableCell>
+  1640→              <TableCell className="text-right">
+  1641→                {ext.isVerified ? (
+  1642→                  <Tooltip>
+  1643→                    <TooltipTrigger asChild>
+  1644→                      <span className="inline-flex">
+  1645→                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+  1646→                      </span>
+  1647→                    </TooltipTrigger>
+  1648→                    <TooltipContent>
+  1649→                      Verified{' '}
+  1650→                      {ext.verifiedAt
+  1651→                        ? formatDistanceToNow(new Date(ext.verifiedAt), { addSuffix: true })
+  1652→                        : ''}
+  1653→                    </TooltipContent>
+  1654→                  </Tooltip>
+  1655→                ) : (
+  1656→                  <Tooltip>
+  1657→                    <TooltipTrigger asChild>
+  1658→                      <span className="inline-flex">
+  1659→                        <Clock className="h-4 w-4 text-amber-500" />
+  1660→                      </span>
+  1661→                    </TooltipTrigger>
+  1662→                    <TooltipContent>Pending verification</TooltipContent>
+  1663→                  </Tooltip>
+  1664→                )}
+  1665→              </TableCell>
+  1666→              <TableCell>
+  1667→                <Button size="icon" variant="ghost" className="h-7 w-7">
+  1668→                  <Pencil className="h-3.5 w-3.5" />
+  1669→                </Button>
+  1670→              </TableCell>
+  1671→            </TableRow>
+  1672→          ))}
+  1673→        </TableBody>
+  1674→      </Table>
+  1675→    </Card>
+  1676→  )
+  1677→}
+  1678→
+  1679→/* ────────────────────────────────────────────────────────────────────────────
+  1680→ *  Tab 4: Workflow
+  1681→ * ────────────────────────────────────────────────────────────────────────── */
+  1682→
+  1683→function WorkflowTab({
+  1684→  workflows,
+  1685→  activities,
+  1686→  busyAdvance,
+  1687→  onAdvance,
+  1688→}: {
+  1689→  workflows: Workflow[]
+  1690→  activities: Activity[]
+  1691→  busyAdvance: boolean
+  1692→  onAdvance: () => void
+  1693→}) {
+  1694→  const currentIdx = useMemo(() => {
+  1695→    const i = workflows.findIndex((w) => w.status === 'in_progress')
+  1696→    if (i >= 0) return i
+  1697→    const completed = workflows.filter((w) => w.status === 'completed').length
+  1698→    return completed - 1
+  1699→  }, [workflows])
+  1700→
+  1701→  const completedCount = workflows.filter((w) => w.status === 'completed').length
+  1702→  const allDone = completedCount === workflows.length && workflows.length > 0
+  1703→  const progressPct = workflows.length
+  1704→    ? Math.round((completedCount / workflows.length) * 100)
+  1705→    : 0
+  1706→
+  1707→  return (
+  1708→    <div className="space-y-4">
+  1709→      {/* Header */}
+  1710→      <Card className="rounded-xl p-5">
+  1711→        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+  1712→          <div className="min-w-0 flex-1">
+  1713→            <div className="flex items-center gap-2">
+  1714→              <h3 className="text-base font-semibold">Engagement Workflow</h3>
+  1715→              <Badge variant="outline" className="text-[10px]">
+  1716→                {completedCount} / {workflows.length} steps
+  1717→              </Badge>
+  1718→            </div>
+  1719→            <p className="mt-1 text-sm text-muted-foreground">
+  1720→              {allDone
+  1721→                ? 'All workflow steps complete. Engagement ready for delivery.'
+  1722→                : `Currently on step ${currentIdx + 1} of ${workflows.length}: ${stepLabel(
+  1723→                    workflows[currentIdx]?.step ?? ''
+  1724→                  )}`}
+  1725→            </p>
+  1726→            <Progress value={progressPct} className="mt-2 h-2" />
+  1727→          </div>
+  1728→          <Button onClick={onAdvance} disabled={busyAdvance || allDone} className="shrink-0">
+  1729→            {busyAdvance ? (
+  1730→              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+  1731→            ) : allDone ? (
+  1732→              <PartyPopper className="mr-1.5 h-4 w-4" />
+  1733→            ) : (
+  1734→              <ArrowRight className="mr-1.5 h-4 w-4" />
+  1735→            )}
+  1736→            {allDone ? 'Workflow Complete' : 'Advance to Next Step'}
+  1737→          </Button>
+  1738→        </div>
+  1739→      </Card>
+  1740→
+  1741→      {/* Stepper */}
+  1742→      <Card className="rounded-xl p-5">
+  1743→        <div className="lg:hidden">
+  1744→          <WorkflowVerticalStepper workflows={workflows} currentIdx={currentIdx} />
+  1745→        </div>
+  1746→        <div className="hidden lg:block">
+  1747→          <WorkflowHorizontalStepper workflows={workflows} currentIdx={currentIdx} />
+  1748→        </div>
+  1749→      </Card>
+  1750→
+  1751→      {/* Activity log */}
+  1752→      <Card className="rounded-xl">
+  1753→        <div className="flex items-center justify-between border-b px-5 py-3">
+  1754→          <div>
+  1755→            <h3 className="text-sm font-semibold">Activity Log</h3>
+  1756→            <p className="text-xs text-muted-foreground">
+  1757→              Recent events on this engagement
+  1758→            </p>
+  1759→          </div>
+  1760→          <Badge variant="secondary" className="text-[10px]">
+  1761→            {activities.length} events
+  1762→          </Badge>
+  1763→        </div>
+  1764→        <div className="px-5 py-3">
+  1765→          <ActivityList activities={activities} />
+  1766→        </div>
+  1767→      </Card>
+  1768→    </div>
+  1769→  )
+  1770→}
+  1771→
+  1772→function WorkflowHorizontalStepper({
+  1773→  workflows,
+  1774→  currentIdx,
+  1775→}: {
+  1776→  workflows: Workflow[]
+  1777→  currentIdx: number
+  1778→}) {
+  1779→  return (
+  1780→    <div className="flex items-start">
+  1781→      {workflows.map((w, i) => {
+  1782→        const def = WORKFLOW_STEPS.find((s) => s.step === w.step)
+  1783→        const Icon = def?.icon ?? CircleDot
+  1784→        const isCompleted = w.status === 'completed'
+  1785→        const isCurrent = w.status === 'in_progress'
+  1786→        const isPending = w.status === 'pending'
+  1787→        const isLast = i === workflows.length - 1
+  1788→        return (
+  1789→          <div
+  1790→            key={w.id}
+  1791→            className={cn('flex flex-1 flex-col items-center text-center', !isLast && 'pr-2')}
+  1792→          >
+  1793→            <div className="flex w-full items-center">
+  1794→              {/* left line */}
+  1795→              <div
+  1796→                className={cn(
+  1797→                  'h-0.5 flex-1',
+  1798→                  i === 0 ? 'opacity-0' : isCompleted || isCurrent ? 'bg-primary' : 'bg-border'
+  1799→                )}
+  1800→              />
+  1801→              {/* node */}
+  1802→              <div
+  1803→                className={cn(
+  1804→                  'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+  1805→                  isCompleted &&
+  1806→                    'border-primary bg-primary text-primary-foreground',
+  1807→                  isCurrent &&
+  1808→                    'border-primary bg-card text-primary animate-pulse-ring',
+  1809→                  isPending && 'border-border bg-card text-muted-foreground'
+  1810→                )}
+  1811→              >
+  1812→                {isCompleted ? (
+  1813→                  <CheckCircle className="h-4 w-4" />
+  1814→                ) : isCurrent ? (
+  1815→                  <Loader2 className="h-4 w-4 animate-spin" />
+  1816→                ) : (
+  1817→                  <Icon className="h-4 w-4" />
+  1818→                )}
+  1819→              </div>
+  1820→              {/* right line */}
+  1821→              <div
+  1822→                className={cn(
+  1823→                  'h-0.5 flex-1',
+  1824→                  isLast
+  1825→                    ? 'opacity-0'
+  1826→                    : isCompleted
+  1827→                      ? 'bg-primary'
+  1828→                      : 'bg-border'
+  1829→                )}
+  1830→              />
+  1831→            </div>
+  1832→            <p
+  1833→              className={cn(
+  1834→                'mt-2 text-[11px] font-medium leading-tight',
+  1835→                isCurrent && 'text-primary',
+  1836→                isCompleted && 'text-foreground',
+  1837→                isPending && 'text-muted-foreground'
+  1838→              )}
+  1839→            >
+  1840→              {def?.label ?? w.step}
+  1841→            </p>
+  1842→            {w.completedAt && (
+  1843→              <p className="mt-0.5 text-[10px] text-muted-foreground">
+  1844→                {format(new Date(w.completedAt), 'MMM d')}
+  1845→              </p>
+  1846→            )}
+  1847→          </div>
+  1848→        )
+  1849→      })}
+  1850→    </div>
+  1851→  )
+  1852→}
+  1853→
+  1854→function WorkflowVerticalStepper({
+  1855→  workflows,
+  1856→  currentIdx,
+  1857→}: {
+  1858→  workflows: Workflow[]
+  1859→  currentIdx: number
+  1860→}) {
+  1861→  return (
+  1862→    <ol className="relative space-y-5">
+  1863→      {workflows.map((w, i) => {
+  1864→        const def = WORKFLOW_STEPS.find((s) => s.step === w.step)
+  1865→        const Icon = def?.icon ?? CircleDot
+  1866→        const isCompleted = w.status === 'completed'
+  1867→        const isCurrent = w.status === 'in_progress'
+  1868→        const isPending = w.status === 'pending'
+  1869→        const isLast = i === workflows.length - 1
+  1870→        return (
+  1871→          <li key={w.id} className="relative flex gap-3">
+  1872→            <div className="flex flex-col items-center">
+  1873→              <div
+  1874→                className={cn(
+  1875→                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2',
+  1876→                  isCompleted && 'border-primary bg-primary text-primary-foreground',
+  1877→                  isCurrent && 'border-primary bg-card text-primary animate-pulse-ring',
+  1878→                  isPending && 'border-border bg-card text-muted-foreground'
+  1879→                )}
+  1880→              >
+  1881→                {isCompleted ? (
+  1882→                  <CheckCircle className="h-4 w-4" />
+  1883→                ) : isCurrent ? (
+  1884→                  <Loader2 className="h-4 w-4 animate-spin" />
+  1885→                ) : (
+  1886→                  <Icon className="h-4 w-4" />
+  1887→                )}
+  1888→              </div>
+  1889→              {!isLast && (
+  1890→                <div
+  1891→                  className={cn(
+  1892→                    'mt-1 w-0.5 flex-1',
+  1893→                    isCompleted ? 'bg-primary' : 'bg-border'
+  1894→                  )}
+  1895→                  style={{ minHeight: 16 }}
+  1896→                />
+  1897→              )}
+  1898→            </div>
+  1899→            <div className={cn('min-w-0 flex-1 pb-1', isLast && 'pb-0')}>
+  1900→              <div className="flex flex-wrap items-center gap-2">
+  1901→                <p
+  1902→                  className={cn(
+  1903→                    'text-sm font-semibold',
+  1904→                    isPending && 'text-muted-foreground',
+  1905→                    isCurrent && 'text-primary'
+  1906→                  )}
+  1907→                >
+  1908→                  {def?.label ?? w.step}
+  1909→                </p>
+  1910→                <StatusBadgeMini status={w.status} />
+  1911→              </div>
+  1912→              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+  1913→                {w.startedAt && (
+  1914→                  <span>Started: {format(new Date(w.startedAt), 'MMM d, yyyy · h:mm a')}</span>
+  1915→                )}
+  1916→                {w.completedAt && (
+  1917→                  <span>Completed: {format(new Date(w.completedAt), 'MMM d, yyyy · h:mm a')}</span>
+  1918→                )}
+  1919→                {!w.startedAt && <span>Not started</span>}
+  1920→              </div>
+  1921→            </div>
+  1922→          </li>
+  1923→        )
+  1924→      })}
+  1925→    </ol>
+  1926→  )
+  1927→}
+  1928→
+  1929→function StatusBadgeMini({ status }: { status: string }) {
+  1930→  const cfg: Record<string, { label: string; cls: string }> = {
+  1931→    completed: {
+  1932→      label: 'Completed',
+  1933→      cls: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400',
+  1934→    },
+  1935→    in_progress: {
+  1936→      label: 'In Progress',
+  1937→      cls: 'border-primary/30 bg-primary/10 text-primary',
+  1938→    },
+  1939→    pending: {
+  1940→      label: 'Pending',
+  1941→      cls: 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-900/40',
+  1942→    },
+  1943→    skipped: {
+  1944→      label: 'Skipped',
+  1945→      cls: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400',
+  1946→    },
+  1947→  }
+  1948→  const c = cfg[status] ?? cfg.pending
+  1949→  return (
+  1950→    <Badge variant="outline" className={cn('text-[10px]', c.cls)}>
+  1951→      {c.label}
+  1952→    </Badge>
+  1953→  )
+  1954→}
+  1955→
+  1956→function ActivityList({ activities }: { activities: Activity[] }) {
+  1957→  if (activities.length === 0) {
+  1958→    return (
+  1959→      <div className="py-6 text-center text-sm text-muted-foreground">
+  1960→        No recent activity.
+  1961→      </div>
+  1962→    )
+  1963→  }
+  1964→  return (
+  1965→    <ScrollArea className="max-h-[400px] pr-3">
+  1966→      <ol className="relative space-y-3">
+  1967→        {activities.map((a, i) => {
+  1968→          const Icon = ACTIVITY_ICON_MAP[a.type] ?? CircleDot
+  1969→          return (
+  1970→            <li key={a.id} className="flex gap-3">
+  1971→              <div className="flex flex-col items-center">
+  1972→                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted">
+  1973→                  <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+  1974→                </div>
+  1975→                {i < activities.length - 1 && (
+  1976→                  <div className="mt-0.5 w-px flex-1 bg-border" style={{ minHeight: 12 }} />
+  1977→                )}
+  1978→              </div>
+  1979→              <div className="min-w-0 flex-1 pb-2">
+  1980→                <p className="text-sm leading-snug">{a.description}</p>
+  1981→                <p className="mt-0.5 text-xs text-muted-foreground">
+  1982→                  <span className="font-medium">{a.actor}</span>
+  1983→                  {' · '}
+  1984→                  {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
+  1985→                </p>
+  1986→              </div>
+  1987→            </li>
+  1988→          )
+  1989→        })}
+  1990→      </ol>
+  1991→    </ScrollArea>
+  1992→  )
+  1993→}
+  1994→
+  1995→const ACTIVITY_ICON_MAP: Record<string, typeof CircleDot> = {
+  1996→  upload: Upload,
+  1997→  classify: Sparkles,
+  1998→  extract: Sparkles,
+  1999→  verify: CheckCircle2,
+  2000→  send: Send,
+
+[showing lines 1-2000 of 2199; use offset=2001 with limit to continue reading]

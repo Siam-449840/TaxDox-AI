@@ -358,7 +358,7 @@ export function ClientsView() {
             <ArrowUpDown className="mr-1.5 h-4 w-4" />
             Refresh
           </Button>
-          <Button size="sm" onClick={openCreate}>
+          <Button size="sm" onClick={openCreate} className="ml-1 shadow-sm">
             <Plus className="mr-1.5 h-4 w-4" />
             Add Client
           </Button>
@@ -373,24 +373,28 @@ export function ClientsView() {
           icon={Users}
           accent="primary"
           trend={{ value: 8, label: 'vs last quarter' }}
+          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
         />
         <StatCard
           label="Active Clients"
           value={stats.active}
           icon={UserCheck}
           accent="success"
+          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
         />
         <StatCard
           label="Business Clients"
           value={stats.business}
           icon={Building2}
           accent="info"
+          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
         />
         <StatCard
           label="Individual Clients"
           value={stats.individual}
           icon={UserIcon}
           accent="warning"
+          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
         />
       </div>
 
@@ -512,7 +516,7 @@ export function ClientsView() {
                   return (
                     <TableRow
                       key={client.id}
-                      className="cursor-pointer"
+                      className="cursor-pointer transition-colors hover:bg-muted/30"
                       onClick={() => handleRowClick(client)}
                     >
                       {/* Client cell */}

@@ -227,12 +227,14 @@ export function DashboardView() {
   return (
     <div className="space-y-6 p-4 lg:p-6">
       {/* Hero header */}
-      <div className="relative overflow-hidden rounded-xl border bg-gradient-primary p-5 text-white shadow-sm sm:p-6">
+      <div className="relative overflow-hidden rounded-xl border border-primary/10 bg-gradient-primary p-5 text-white shadow-lg shadow-primary/20 sm:p-6">
         {/* Decorative pattern */}
         <div className="pointer-events-none absolute inset-0 opacity-30" aria-hidden>
           <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/20 blur-3xl" />
           <div className="absolute -bottom-24 right-32 h-48 w-48 rounded-full bg-cyan-300/30 blur-3xl" />
         </div>
+        {/* Subtle top highlight */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" aria-hidden />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -391,12 +393,12 @@ export function DashboardView() {
                   onClick={() => openEngagement(e.id)}
                   title={`${e.clientName} — ${e.engagementType} ${e.taxYear} · ${e.progress}% complete`}
                   className={cn(
-                    'group flex w-full items-center gap-3 p-4 text-left transition-all hover:bg-muted/50',
+                    'group flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/60',
                     e.priority === 'high'
-                      ? 'border-l-2 border-l-red-400'
+                      ? 'border-l-2 border-l-red-400 dark:border-l-red-500'
                       : e.priority === 'medium'
-                        ? 'border-l-2 border-l-amber-400'
-                        : 'border-l-2 border-l-slate-200 dark:border-l-slate-700'
+                        ? 'border-l-2 border-l-amber-400 dark:border-l-amber-500'
+                        : 'border-l-2 border-l-transparent'
                   )}
                 >
                   <ProgressRing value={e.progress} size={52} strokeWidth={5} />
@@ -457,7 +459,14 @@ export function DashboardView() {
                 key={d.id}
                 onClick={() => openEngagement(d.id)}
                 title={`${d.clientName} — ${d.engagementType} · ${d.progress}% complete · ${d.daysLeft}d left`}
-                className="group flex w-full items-center gap-3 p-4 text-left transition-all hover:bg-muted/50"
+                className={cn(
+                  'group flex w-full items-center gap-3 p-4 text-left transition-all hover:bg-muted/50',
+                  d.daysLeft <= 3
+                    ? 'border-l-2 border-l-red-400 dark:border-l-red-500'
+                    : d.daysLeft <= 7
+                      ? 'border-l-2 border-l-amber-400 dark:border-l-amber-500'
+                      : 'border-l-2 border-l-transparent'
+                )}
               >
                 <div
                   className={cn(

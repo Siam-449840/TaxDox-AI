@@ -11,6 +11,7 @@ import {
   ClipboardList,
   FileText,
   BarChart3,
+  CalendarDays,
   Settings,
   Sparkles,
   UserCircle,
@@ -47,7 +48,7 @@ interface NavItem {
   key: string
   label: string
   icon: typeof LayoutDashboard
-  view: 'dashboard' | 'clients' | 'engagements' | 'documents' | 'reports' | 'client-portal' | 'settings'
+  view: 'dashboard' | 'clients' | 'engagements' | 'documents' | 'reports' | 'calendar' | 'client-portal' | 'settings'
   badge?: string
 }
 
@@ -57,6 +58,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'engagements', label: 'Engagements', icon: ClipboardList, view: 'engagements', badge: '12' },
   { key: 'documents', label: 'Documents', icon: FileText, view: 'documents' },
   { key: 'reports', label: 'Reports', icon: BarChart3, view: 'reports' },
+  { key: 'calendar', label: 'Calendar', icon: CalendarDays, view: 'calendar' },
   { key: 'portal', label: 'Client Portal', icon: UserCircle, view: 'client-portal' },
   { key: 'settings', label: 'Settings', icon: Settings, view: 'settings' },
 ]
@@ -104,8 +106,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary shadow-lg shadow-primary/20">
+        <div className="relative flex h-16 items-center gap-2.5 border-b border-sidebar-border bg-gradient-to-r from-sidebar-accent/40 to-transparent px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary shadow-lg shadow-primary/30 ring-1 ring-white/10">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div className="flex flex-col leading-none">
@@ -129,18 +131,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.key}
                 onClick={() => handleNav(item)}
                 className={cn(
-                  'group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
                   isActive
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-0.5'
                 )}
               >
-                <Icon className="h-4 w-4 shrink-0" />
+                {isActive && (
+                  <span
+                    className="absolute -left-3 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-primary-foreground/80"
+                    aria-hidden
+                  />
+                )}
+                <Icon className={cn(
+                  'h-4 w-4 shrink-0 transition-transform duration-200',
+                  !isActive && 'group-hover:scale-110'
+                )} />
                 <span className="flex-1 text-left">{item.label}</span>
                 {item.badge && (
                   <span
                     className={cn(
-                      'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+                      'rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition-colors',
                       isActive
                         ? 'bg-sidebar-primary-foreground/20'
                         : 'bg-sidebar-accent text-sidebar-accent-foreground'

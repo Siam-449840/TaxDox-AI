@@ -778,22 +778,22 @@ function EngagementHeader({
         <HeaderStat
           label="Deadline"
           value={
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-semibold">
+            <div className="flex flex-col gap-2">
+              <span className="inline-flex items-center gap-1.5 text-base font-semibold tabular-nums">
+                <CalendarClock className="h-4 w-4 text-muted-foreground" />
                 {data.deadline ? format(new Date(data.deadline), 'MMM d, yyyy') : '—'}
               </span>
               {daysLeft !== null && (
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1 text-xs font-medium',
+                    'inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
                     overdue
-                      ? 'text-red-600 dark:text-red-400'
+                      ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400'
                       : soon
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-muted-foreground'
+                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'
+                        : 'bg-muted text-muted-foreground'
                   )}
                 >
-                  <CalendarClock className="h-3 w-3" />
                   {overdue
                     ? `${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} overdue`
                     : daysLeft === 0
@@ -1558,8 +1558,8 @@ function ExtractionDocSection({
   const lowConfidenceCount = exts.filter((e) => e.confidence < 0.9).length
 
   return (
-    <Card className="overflow-hidden rounded-xl">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3">
+    <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <FileText className="h-4 w-4" />
@@ -1567,12 +1567,12 @@ function ExtractionDocSection({
           <div className="min-w-0">
             <button
               onClick={() => onOpenDocument(doc.id)}
-              className="block truncate text-left text-sm font-semibold hover:text-primary"
+              className="block truncate text-left text-sm font-semibold transition-colors hover:text-primary"
               title={doc.originalFilename}
             >
               {doc.originalFilename}
             </button>
-            <div className="mt-0.5 flex items-center gap-2">
+            <div className="mt-1.5 flex items-center gap-2">
               {doc.documentType && (
                 <Badge
                   variant="outline"
@@ -1589,8 +1589,8 @@ function ExtractionDocSection({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="hidden sm:inline">
+        <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+          <span className="hidden sm:inline rounded-md bg-card px-2 py-1 ring-1 ring-border">
             {exts.length} fields · avg {Math.round(docAvg * 100)}%
           </span>
           {lowConfidenceCount > 0 && (

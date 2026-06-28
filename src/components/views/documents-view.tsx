@@ -321,10 +321,10 @@ export function DocumentsView() {
       {/* Dropzone */}
       <Card
         className={cn(
-          'border-2 border-dashed p-6 text-center transition-colors',
+          'group relative border-2 border-dashed p-6 text-center transition-all duration-200',
           dragOver
             ? 'border-primary bg-primary/5'
-            : 'border-muted-foreground/25 bg-muted/30 hover:border-muted-foreground/40'
+            : 'border-muted-foreground/25 bg-muted/30 hover:border-primary/40 hover:bg-primary/[0.02]'
         )}
         onDragOver={(e) => {
           e.preventDefault()
@@ -338,8 +338,17 @@ export function DocumentsView() {
           if (file) handleFileSelect(file)
         }}
       >
-        <div className="mx-auto flex max-w-md flex-col items-center gap-2 py-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        {/* Gradient hover glow */}
+        <div
+          className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          style={{
+            background:
+              'radial-gradient(circle at center, oklch(0.48 0.09 195 / 0.06), transparent 70%)',
+          }}
+          aria-hidden
+        />
+        <div className="relative mx-auto flex max-w-md flex-col items-center gap-2 py-2">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-200 group-hover:scale-105">
             <Upload className="h-6 w-6" />
           </div>
           <p className="text-sm font-medium">
@@ -618,25 +627,37 @@ function DocumentCard({ doc, onClick }: DocumentCardProps) {
       : doc.confidence
   const verifiedCount = extractions.filter((e) => e.isVerified).length
 
+  // New badge: uploaded within 24 hours
+  const uploadedMs = new Date(doc.uploadedAt).getTime()
+  const isNew = Date.now() - uploadedMs < 24 * 60 * 60 * 1000
+
   return (
     <button onClick={onClick} className="group block h-full text-left">
-      <Card className="h-full overflow-hidden p-0 transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <Card className="card-hover h-full overflow-hidden p-0">
         {/* Top section with icon */}
         <div
           className={cn(
-            'relative flex items-start justify-between p-4',
+            'relative flex items-start justify-between gap-3 p-4',
             style.surface
           )}
         >
           <div
             className={cn(
-              'flex h-14 w-14 items-center justify-center rounded-xl shadow-sm',
+              'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform duration-200 group-hover:scale-105',
               style.icon
             )}
           >
             <Icon className="h-7 w-7" />
           </div>
-          <StatusBadge status={doc.status} />
+          <div className="flex flex-col items-end gap-1.5">
+            {isNew && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+                <span className="h-1 w-1 rounded-full bg-white" />
+                New
+              </span>
+            )}
+            <StatusBadge status={doc.status} />
+          </div>
         </div>
 
         {/* Body */}
@@ -648,7 +669,7 @@ function DocumentCard({ doc, onClick }: DocumentCardProps) {
             >
               {doc.originalFilename}
             </p>
-            <div className="mt-1.5 flex items-center gap-1.5">
+            <div className="mt-2 flex items-center gap-2">
               {typeDef ? (
                 <Badge variant="secondary" className="text-[10px] font-medium">
                   {doc.documentType}

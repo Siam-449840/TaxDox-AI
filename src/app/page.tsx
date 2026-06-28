@@ -12,6 +12,7 @@ import { EngagementDetailView } from '@/components/views/engagement-detail-view'
 import { DocumentsView } from '@/components/views/documents-view'
 import { DocumentDetailView } from '@/components/views/document-detail-view'
 import { ReportsView } from '@/components/views/reports-view'
+import { CalendarView } from '@/components/views/calendar-view'
 import { ClientPortalView } from '@/components/views/client-portal-view'
 import { SettingsView } from '@/components/views/settings-view'
 import { AIAssistant } from '@/components/ai/ai-assistant'
@@ -66,6 +67,7 @@ function HomeContent() {
         {currentView === 'documents' && <DocumentsView />}
         {currentView === 'document-detail' && <DocumentDetailView />}
         {currentView === 'reports' && <ReportsView />}
+        {currentView === 'calendar' && <CalendarView />}
         {currentView === 'client-portal' && <ClientPortalView />}
         {currentView === 'settings' && <SettingsView />}
       </div>

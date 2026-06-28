@@ -235,3 +235,50 @@
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
+
+/* Premium card hover */
+@layer utilities {
+  .card-hover {
+    transition: all 0.2s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px -5px rgb(0 0 0 / 0.1), 0 4px 10px -3px rgb(0 0 0 / 0.05);
+  }
+
+  /* Subtle gradient border */
+  .gradient-border {
+    position: relative;
+    background: linear-gradient(var(--card), var(--card)) padding-box,
+                linear-gradient(135deg, oklch(0.48 0.09 195 / 0.2), oklch(0.48 0.09 195 / 0.05)) border-box;
+    border: 1px solid transparent;
+  }
+
+  /* Shimmer loading */
+  .shimmer-bg {
+    background: linear-gradient(90deg, oklch(0.96 0.005 200) 25%, oklch(0.93 0.005 200) 50%, oklch(0.96 0.005 200) 75%);
+    background-size: 200% 100%;
+    animation: shimmer-bg 1.5s infinite;
+  }
+
+  /* Sidebar nav active accent */
+  .nav-active-accent {
+    position: relative;
+  }
+  .nav-active-accent::before {
+    content: '';
+    position: absolute;
+    left: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    border-radius: 0 3px 3px 0;
+    background: linear-gradient(180deg, oklch(0.65 0.12 195), oklch(0.55 0.1 195));
+  }
+}
+
+@keyframes shimmer-bg {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
