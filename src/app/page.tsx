@@ -14,6 +14,7 @@ import { DocumentDetailView } from '@/components/views/document-detail-view'
 import { ClientDetailView } from '@/components/views/client-detail-view'
 import { TeamDetailView } from '@/components/views/team-detail-view'
 import { ReportsView } from '@/components/views/reports-view'
+import { ExportCenterView } from '@/components/views/export-center-view'
 import { CalendarView } from '@/components/views/calendar-view'
 import { TaxRulesView } from '@/components/views/tax-rules-view'
 import { ClientPortalView } from '@/components/views/client-portal-view'
@@ -73,6 +74,7 @@ function HomeContent() {
         {currentView === 'client-detail' && <ClientDetailView />}
         {currentView === 'team-detail' && <TeamDetailView />}
         {currentView === 'reports' && <ReportsView />}
+        {currentView === 'export-center' && <ExportCenterView />}
         {currentView === 'calendar' && <CalendarView />}
         {currentView === 'tax-rules' && <TaxRulesView />}
         {currentView === 'client-portal' && <ClientPortalView />}

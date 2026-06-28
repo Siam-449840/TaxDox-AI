@@ -16,6 +16,9 @@ interface AppState {
   // Command palette
   commandPaletteOpen: boolean
 
+  // Keyboard shortcuts help overlay
+  keyboardHelpOpen: boolean
+
   // Actions
   setView: (view: ViewKey) => void
   openEngagement: (id: string) => void
@@ -27,6 +30,8 @@ interface AppState {
   navigate: (view: ViewKey) => void
   toggleCommandPalette: () => void
   setCommandPalette: (open: boolean) => void
+  setKeyboardHelp: (open: boolean) => void
+  toggleKeyboardHelp: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -86,4 +91,8 @@ export const useAppStore = create<AppState>((set) => ({
   toggleCommandPalette: () =>
     set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
   setCommandPalette: (open) => set({ commandPaletteOpen: open }),
+
+  keyboardHelpOpen: false,
+  setKeyboardHelp: (open) => set({ keyboardHelpOpen: open }),
+  toggleKeyboardHelp: () => set((s) => ({ keyboardHelpOpen: !s.keyboardHelpOpen })),
 }))

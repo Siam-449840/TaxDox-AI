@@ -11,6 +11,7 @@ import {
   ClipboardList,
   FileText,
   BarChart3,
+  Download,
   CalendarDays,
   Settings,
   Sparkles,
@@ -23,12 +24,14 @@ import {
   PanelLeft,
   ShieldCheck,
   Scale,
+  Keyboard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CommandPalette } from '@/components/layout/command-palette'
+import { KeyboardShortcutsHelp } from '@/components/layout/keyboard-shortcuts-help'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,7 +52,7 @@ interface NavItem {
   key: string
   label: string
   icon: typeof LayoutDashboard
-  view: 'dashboard' | 'clients' | 'engagements' | 'documents' | 'reports' | 'calendar' | 'tax-rules' | 'client-portal' | 'settings'
+  view: 'dashboard' | 'clients' | 'engagements' | 'documents' | 'reports' | 'export-center' | 'calendar' | 'tax-rules' | 'client-portal' | 'settings'
   badge?: string
 }
 
@@ -59,6 +62,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'engagements', label: 'Engagements', icon: ClipboardList, view: 'engagements', badge: '12' },
   { key: 'documents', label: 'Documents', icon: FileText, view: 'documents' },
   { key: 'reports', label: 'Reports', icon: BarChart3, view: 'reports' },
+  { key: 'export', label: 'Export', icon: Download, view: 'export-center' },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays, view: 'calendar' },
   { key: 'tax-rules', label: 'Tax Rules', icon: Scale, view: 'tax-rules' },
   { key: 'portal', label: 'Client Portal', icon: UserCircle, view: 'client-portal' },
@@ -91,6 +95,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
   const setCommandPalette = useAppStore((s) => s.setCommandPalette)
   const openCommandPalette = () => setCommandPalette(true)
+  const setKeyboardHelp = useAppStore((s) => s.setKeyboardHelp)
+  const openKeyboardHelp = () => setKeyboardHelp(true)
 
   const handleNav = (item: NavItem) => {
     navigate(item.view)
@@ -272,6 +278,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuItem onClick={() => navigate('settings')}>
                   Preferences
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={openKeyboardHelp}>
+                  <Keyboard className="text-muted-foreground" />
+                  <span className="flex-1">Keyboard Shortcuts</span>
+                  <kbd className="ml-auto rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono font-semibold text-muted-foreground">
+                    ?
+                  </kbd>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/pricing')}>
                   Billing & Plans
                 </DropdownMenuItem>
@@ -290,6 +303,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Global ⌘K command palette */}
       <CommandPalette />
+
+      {/* Global keyboard shortcuts help overlay (? key) */}
+      <KeyboardShortcutsHelp />
     </div>
   )
 }
