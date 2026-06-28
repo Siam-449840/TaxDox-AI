@@ -15,7 +15,12 @@ datasource db {
 model Firm {
   id              String   @id @default(cuid())
   name            String
-  subscriptionTier String  @default("professional") // starter/professional/business/enterprise
+  subscriptionTier String  @default("starter") // starter/professional/business/enterprise
+  subscriptionStatus String @default("trialing") // trialing/active/past_due/canceled/incomplete
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  stripePriceId    String?
+  trialEndsAt     DateTime?
   country         String   @default("US")
   settings        String   @default("{}") // JSON
   createdAt       DateTime @default(now())
@@ -27,17 +32,20 @@ model Firm {
   templates   PbcTemplate[]
   auditLogs   AuditLog[]
   teamMembers TeamMember[]
+  subscriptions SubscriptionEvent[]
 }
 
 model User {
   id        String   @id @default(cuid())
-  firmId    String
-  firm      Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId    String?
+  firm      Firm?    @relation(fields: [firmId], references: [id], onDelete: Cascade)
   email     String   @unique
   name      String
+  password  String?  // hashed via bcrypt (null for OAuth-only users)
   role      String   @default("preparer") // partner/manager/preparer/admin/read-only
   avatar    String?
   status    String   @default("active") // active/disabled
+  emailVerified DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -46,6 +54,54 @@ model User {
   workflows    Workflow[]   @relation("AssignedTo")
   auditLogs    AuditLog[]
   messages     Message[]
+  accounts     Account[]
+  sessions     Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model SubscriptionEvent {
+  id           String   @id @default(cuid())
+  firmId       String
+  firm         Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  eventType    String   // checkout.session.completed, customer.subscription.updated, etc.
+  stripeEventId String?
+  payload      String   @default("{}") // JSON
+  createdAt    DateTime @default(now())
+
+  @@index([firmId])
 }
 
 model TeamMember {

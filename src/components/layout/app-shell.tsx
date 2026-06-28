@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useTheme } from 'next-themes'
+import { useSession, signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
@@ -61,10 +63,28 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme()
+  const { data: session } = useSession()
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const navigate = useAppStore((s) => s.navigate)
   const currentView = useAppStore((s) => s.currentView)
   const setClientPortalMode = useAppStore((s) => s.setClientPortalMode)
+
+  const userName = session?.user?.name || 'User'
+  const userEmail = session?.user?.email || ''
+  const userRole = session?.user?.role || 'preparer'
+  const userInitials = userName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+  const firmName = session?.user?.firmName || 'TaxDox AI'
+  const subTier = session?.user?.subscriptionTier || 'starter'
+
+  const handleSignOut = () => {
+    signOut({ callbackUrl: '/auth/signin' })
+  }
   const setCommandPalette = useAppStore((s) => s.setCommandPalette)
   const openCommandPalette = () => setCommandPalette(true)
 
@@ -142,13 +162,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <ShieldCheck className="h-4 w-4 text-emerald-400" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-white">Meridian CPA Group</p>
-                <p className="text-[10px] text-sidebar-foreground/50">Business Plan · SOC 2</p>
+                <p className="truncate text-xs font-semibold text-white">{firmName}</p>
+                <p className="text-[10px] capitalize text-sidebar-foreground/50">{subTier} Plan · SOC 2</p>
               </div>
             </div>
             <div className="mt-2 flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              <span className="text-[10px] text-sidebar-foreground/60">AI engine online · 97.4% accuracy</span>
+              <span className="text-[10px] text-sidebar-foreground/60">AI engine online · GLM-4.6V</span>
             </div>
           </div>
         </div>
@@ -213,28 +233,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-primary text-xs font-bold text-white">
-                    SC
+                    {userInitials}
                   </div>
                   <div className="hidden text-left lg:block">
-                    <p className="text-xs font-semibold leading-none">Sarah Chen</p>
-                    <p className="mt-0.5 text-[10px] text-muted-foreground">Tax Partner</p>
+                    <p className="text-xs font-semibold leading-none">{userName}</p>
+                    <p className="mt-0.5 text-[10px] capitalize text-muted-foreground">{userRole}</p>
                   </div>
                   <ChevronRight className="hidden h-3 w-3 rotate-90 text-muted-foreground lg:block" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
                   <div>
-                    <p className="text-sm font-semibold">Sarah Chen</p>
-                    <p className="text-xs text-muted-foreground">sarah.chen@meridiancpa.com</p>
+                    <p className="text-sm font-semibold">{userName}</p>
+                    <p className="text-xs text-muted-foreground">{userEmail}</p>
+                    <p className="mt-1 text-[10px] capitalize text-muted-foreground">
+                      {firmName} · {subTier} plan
+                    </p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-                <DropdownMenuItem>Preferences</DropdownMenuItem>
-                <DropdownMenuItem>API Keys</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('settings')}>
+                  Profile Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('settings')}>
+                  Preferences
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/pricing')}>
+                  Billing & Plans
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600">Sign Out</DropdownMenuItem>
+                <DropdownMenuItem className="text-red-600" onClick={handleSignOut}>
+                  Sign Out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

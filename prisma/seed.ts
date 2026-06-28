@@ -3,8 +3,10 @@
 
 import { PrismaClient } from '@prisma/client'
 import { nanoid } from 'nanoid'
+import bcrypt from 'bcryptjs'
 
 const db = new PrismaClient()
+const DEMO_PASSWORD = await bcrypt.hash('TaxDox2025!', 12)
 
 function maskedSSN(last4: string) {
   return `***-**-${last4}`
@@ -162,6 +164,7 @@ async function main() {
   console.log('🌱 Seeding TaxDox AI database...')
 
   // Clean
+  await db.subscriptionEvent.deleteMany()
   await db.auditLog.deleteMany()
   await db.activity.deleteMany()
   await db.message.deleteMany()
@@ -174,6 +177,8 @@ async function main() {
   await db.client.deleteMany()
   await db.teamMember.deleteMany()
   await db.pbcTemplate.deleteMany()
+  await db.session.deleteMany()
+  await db.account.deleteMany()
   await db.user.deleteMany()
   await db.firm.deleteMany()
 
@@ -182,6 +187,7 @@ async function main() {
     data: {
       name: 'Meridian CPA Group',
       subscriptionTier: 'business',
+      subscriptionStatus: 'active',
       country: 'US',
       settings: JSON.stringify({ taxSoftware: ['ultratax', 'cch'], multiCountry: true }),
     },
@@ -195,6 +201,7 @@ async function main() {
         firmId: firm.id,
         email: t.email,
         name: t.name,
+        password: DEMO_PASSWORD,
         role: t.role.toLowerCase().includes('partner')
           ? 'partner'
           : t.role.toLowerCase().includes('manager')
@@ -203,6 +210,7 @@ async function main() {
               ? 'admin'
               : 'preparer',
         status: 'active',
+        emailVerified: new Date(),
       },
     })
     users.push(u)

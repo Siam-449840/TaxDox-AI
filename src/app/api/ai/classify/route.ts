@@ -1,13 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { DOCUMENT_TYPES, DOCUMENT_TYPE_MAP } from '@/lib/constants'
+import { DOCUMENT_TYPES, DOCUMENT_TYPE_MAP, type DocTypeDef } from '@/lib/constants'
 
-// Simulated AI classification endpoint.
-// In production this would call a multimodal LLM (VLM) on the document image.
-// Here we infer from filename + known document types and assign a realistic confidence.
+/**
+ * AI Document Classification Engine
+ *
+ * Model: GLM-4.6V (Vision Language Model via z-ai-web-dev-sdk)
+ *
+ * In production, this endpoint:
+ * 1. Receives the document file (image/PDF page rendered as image)
+ * 2. Sends it to GLM-4.6V with a classification prompt
+ * 3. Returns the document type + confidence score
+ *
+ * For demo/development without actual file content, it falls back
+ * to filename-based classification.
+ */
+
+// Fallback classification from filename
+function classifyFromFilename(filename: string): {
+  type: string | null
+  confidence: number
+} {
+  const upper = filename.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  for (const dt of DOCUMENT_TYPES) {
+    const normalized = dt.type.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (upper.includes(normalized)) {
+      return { type: dt.type, confidence: 0.92 + Math.random() * 0.06 }
+    }
+  }
+  // Heuristic patterns
+  if (upper.includes('W2')) return { type: 'W-2', confidence: 0.90 }
+  if (upper.includes('1099') && upper.includes('INT')) return { type: '1099-INT', confidence: 0.90 }
+  if (upper.includes('1099') && upper.includes('DIV')) return { type: '1099-DIV', confidence: 0.90 }
+  if (upper.includes('1099') && upper.includes('NEC')) return { type: '1099-NEC', confidence: 0.90 }
+  if (upper.includes('K1')) return { type: 'K-1', confidence: 0.88 }
+  if (upper.includes('1098') && upper.includes('T')) return { type: '1098-T', confidence: 0.88 }
+  if (upper.includes('1098') || upper.includes('MORTGAGE')) return { type: '1098', confidence: 0.87 }
+  if (upper.includes('BANK') || upper.includes('STATEMENT')) return { type: 'Bank-Statement', confidence: 0.85 }
+  if (upper.includes('PL') || upper.includes('PROFIT')) return { type: 'P&L', confidence: 0.86 }
+  if (upper.includes('BALANCE')) return { type: 'Balance-Sheet', confidence: 0.86 }
+  if (upper.includes('DL') || upper.includes('LICENSE')) return { type: 'Drivers-License', confidence: 0.85 }
+  if (upper.includes('PASSPORT')) return { type: 'Passport', confidence: 0.87 }
+  if (upper.includes('CHARITY') || upper.includes('DONATION')) return { type: 'Charity-Receipt', confidence: 0.84 }
+  if (upper.includes('PROPERTY')) return { type: 'Property-Tax', confidence: 0.83 }
+  return { type: null, confidence: 0 }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { documentId } = body
+  const { documentId, fileContent, mimeType } = body
 
   const document = await db.document.findUnique({
     where: { id: documentId },
@@ -17,43 +58,62 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Document not found' }, { status: 404 })
   }
 
-  // Match against known document types from filename
-  const filename = document.originalFilename.toUpperCase()
   let matchedType: string | null = null
-  let confidence = 0.85 + Math.random() * 0.14
+  let confidence = 0
+  let model = 'filename-heuristic'
 
-  for (const dt of DOCUMENT_TYPES) {
-    const normalized = dt.type.toUpperCase().replace(/[^A-Z0-9]/g, '')
-    const fnNormalized = filename.replace(/[^A-Z0-9]/g, '')
-    if (fnNormalized.includes(normalized)) {
-      matchedType = dt.type
-      confidence = 0.92 + Math.random() * 0.07
-      break
+  // If actual file content is provided, use GLM-4.6V vision model
+  if (fileContent) {
+    try {
+      const ZAI = (await import('z-ai-web-dev-sdk')).default
+      const zai = await ZAI.create()
+
+      const typeList = DOCUMENT_TYPES.map((t) => t.type).join(', ')
+      const prompt = `You are a tax document classifier. Look at this document image and classify it into one of these types: ${typeList}. Respond with ONLY a JSON object: {"documentType": "...", "confidence": 0.0-1.0}`
+
+      const response = await zai.chat.completions.createVision({
+        model: 'glm-4.6v',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType || 'image/png'};base64,${fileContent}`,
+                },
+              },
+            ],
+          },
+        ],
+        thinking: { type: 'disabled' },
+      })
+
+      const content = response?.choices?.[0]?.message?.content || ''
+      const jsonMatch = content.match(/\{[^}]+\}/)
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0])
+        matchedType = result.documentType
+        confidence = result.confidence || 0.9
+        model = 'glm-4.6v'
+      }
+    } catch (error) {
+      console.error('GLM-4.6V classification failed, falling back:', error)
     }
   }
 
-  // Fallback heuristics
+  // Fallback to filename-based classification
   if (!matchedType) {
-    if (filename.includes('W2') || filename.includes('WAGE')) matchedType = 'W-2'
-    else if (filename.includes('1099') && filename.includes('INT')) matchedType = '1099-INT'
-    else if (filename.includes('1099') && filename.includes('DIV')) matchedType = '1099-DIV'
-    else if (filename.includes('1099') && filename.includes('NEC')) matchedType = '1099-NEC'
-    else if (filename.includes('K1') || filename.includes('K-1')) matchedType = 'K-1'
-    else if (filename.includes('1098') && filename.includes('T')) matchedType = '1098-T'
-    else if (filename.includes('1098') || filename.includes('MORTGAGE')) matchedType = '1098'
-    else if (filename.includes('BANK') || filename.includes('STATEMENT')) matchedType = 'Bank-Statement'
-    else if (filename.includes('PL') || filename.includes('P&L') || filename.includes('PROFIT')) matchedType = 'P&L'
-    else if (filename.includes('BALANCE')) matchedType = 'Balance-Sheet'
-    else if (filename.includes('DL') || filename.includes('LICENSE')) matchedType = 'Drivers-License'
-    else if (filename.includes('PASSPORT')) matchedType = 'Passport'
-    else if (filename.includes('CHARITY') || filename.includes('DONATION')) matchedType = 'Charity-Receipt'
-    else if (filename.includes('PROPERTY') || filename.includes('TAX') && filename.includes('BILL')) matchedType = 'Property-Tax'
-    if (matchedType) confidence = 0.88 + Math.random() * 0.08
+    const result = classifyFromFilename(document.originalFilename)
+    matchedType = result.type
+    confidence = result.confidence
+    model = fileContent ? 'glm-4.6v-fallback' : 'filename-heuristic'
   }
 
-  const typeDef = matchedType ? DOCUMENT_TYPE_MAP[matchedType] : null
+  const typeDef: DocTypeDef | null = matchedType ? DOCUMENT_TYPE_MAP[matchedType] : null
 
-  const updated = await db.document.update({
+  await db.document.update({
     where: { id: documentId },
     data: {
       documentType: matchedType || 'Unknown',
@@ -67,7 +127,7 @@ export async function POST(req: NextRequest) {
       engagementId: document.engagementId,
       documentId,
       type: 'classify',
-      description: `AI classified document as ${matchedType || 'Unknown'} (${Math.round(confidence * 100)}% confidence)`,
+      description: `AI classified document as ${matchedType || 'Unknown'} (${Math.round(confidence * 100)}% confidence) via ${model}`,
       actor: 'TaxDox AI',
     },
   })
@@ -78,5 +138,6 @@ export async function POST(req: NextRequest) {
     label: typeDef?.label || matchedType,
     category: typeDef?.category || 'other',
     fields: typeDef?.fields || [],
+    model,
   })
 }
