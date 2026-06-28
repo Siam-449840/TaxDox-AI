@@ -22,6 +22,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   ShieldCheck,
+  Scale,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
@@ -48,7 +49,7 @@ interface NavItem {
   key: string
   label: string
   icon: typeof LayoutDashboard
-  view: 'dashboard' | 'clients' | 'engagements' | 'documents' | 'reports' | 'calendar' | 'client-portal' | 'settings'
+  view: 'dashboard' | 'clients' | 'engagements' | 'documents' | 'reports' | 'calendar' | 'tax-rules' | 'client-portal' | 'settings'
   badge?: string
 }
 
@@ -59,6 +60,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'documents', label: 'Documents', icon: FileText, view: 'documents' },
   { key: 'reports', label: 'Reports', icon: BarChart3, view: 'reports' },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays, view: 'calendar' },
+  { key: 'tax-rules', label: 'Tax Rules', icon: Scale, view: 'tax-rules' },
   { key: 'portal', label: 'Client Portal', icon: UserCircle, view: 'client-portal' },
   { key: 'settings', label: 'Settings', icon: Settings, view: 'settings' },
 ]

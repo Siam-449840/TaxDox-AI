@@ -125,6 +125,7 @@ export function DocumentsView() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [processing, setProcessing] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [selectedClientId, setSelectedClientId] = useState<string>('')
@@ -146,6 +147,20 @@ export function DocumentsView() {
 
   useEffect(() => {
     fetchDocuments()
+    // Pre-fetch clients so we can default `selectedClientId` to the first client
+    // for direct dropzone uploads without requiring the user to open the dialog.
+    fetch('/api/clients')
+      .then((r) => r.json())
+      .then((c) => {
+        const list = c.clients || []
+        setClients(list)
+        if (list.length > 0) {
+          setSelectedClientId((prev) => prev || list[0].id)
+        }
+      })
+      .catch(() => {
+        /* silent */
+      })
   }, [])
 
   useEffect(() => {
@@ -165,7 +180,7 @@ export function DocumentsView() {
 
   const stats = useMemo(() => {
     const total = documents.length
-    const processing = documents.filter(
+    const processingCount = documents.filter(
       (d) => d.status === 'uploaded' || d.status === 'processing'
     ).length
     const processed = documents.filter(
@@ -176,7 +191,12 @@ export function DocumentsView() {
         (d.status === 'processed' || d.status === 'reviewed') &&
         (d.extractions || []).some((e) => !e.isVerified)
     ).length
-    return { total, processing, processed, needsReview }
+    return {
+      total,
+      processing: processingCount,
+      processed,
+      needsReview,
+    }
   }, [documents])
 
   const filtered = useMemo(() => {
@@ -196,55 +216,103 @@ export function DocumentsView() {
   }, [documents, search, statusFilter, typeFilter, categoryFilter])
 
   const handleFileSelect = (file: File) => {
-    setPendingFile(file)
-    setUploadOpen(true)
+    if (selectedClientId) {
+      // Client context already set (or defaulted to first client) — upload directly
+      handleUpload(file)
+    } else {
+      // No client selected — open dialog so user can pick one first
+      setPendingFile(file)
+      setUploadOpen(true)
+    }
   }
 
-  const handleUpload = async () => {
-    if (!pendingFile) {
-      toast.error('Please select a file to upload')
-      return
-    }
-    if (!selectedClientId) {
-      toast.error('Please select a client')
-      return
+  const handleUpload = async (file: File) => {
+    // Pick a clientId: prefer selectedClientId, else default to first available client
+    let clientId = selectedClientId
+    if (!clientId) {
+      if (clients.length === 0) {
+        toast.error('Please select a client first')
+        setPendingFile(file)
+        setUploadOpen(true)
+        return
+      }
+      clientId = clients[0].id
+      setSelectedClientId(clientId)
     }
     setUploading(true)
     setUploadProgress(0)
     try {
-      // Simulate progress for visual feedback
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('clientId', clientId)
+      formData.append('engagementId', selectedEngagementId || '')
+      formData.append('uploadedBy', 'user')
+
+      // Simulate progress for visual feedback (real multipart upload progress
+      // would require XHR; this provides the same UX affordance).
       const progressInterval = setInterval(() => {
         setUploadProgress((p) => Math.min(90, p + Math.random() * 18))
       }, 180)
 
-      await new Promise((r) => setTimeout(r, 700))
-      const res = await fetch('/api/documents', {
+      // Don't set Content-Type — the browser sets it with the multipart boundary
+      const res = await fetch('/api/documents/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: selectedClientId,
-          engagementId: selectedEngagementId || undefined,
-          originalFilename: pendingFile.name,
-          fileSize: pendingFile.size,
-          mimeType: pendingFile.type || 'application/pdf',
-          uploadedBy: 'user',
-        }),
+        body: formData,
       })
+      const data = await res.json()
       clearInterval(progressInterval)
       setUploadProgress(100)
-      if (!res.ok) throw new Error('Upload failed')
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Upload failed')
+      }
       await new Promise((r) => setTimeout(r, 250))
-      toast.success(`"${pendingFile.name}" uploaded`, {
+      toast.success(`"${file.name}" uploaded`, {
         description: 'Ready for AI processing.',
       })
+
+      // Close dialog if open + reset transient state (keep client/engagement
+      // context so subsequent uploads reuse them).
       setUploadOpen(false)
       setPendingFile(null)
-      setSelectedClientId('')
-      setSelectedEngagementId('')
       setUploadProgress(0)
+
+      // Auto-trigger AI processing (classify + extract) via GLM-4.6V
+      const documentId = data.document?.id
+      if (documentId) {
+        setProcessing(true)
+        const processingToast = toast.info('Processing with GLM-4.6V...', {
+          description: 'Classifying document type and extracting fields.',
+        })
+        try {
+          await fetch('/api/ai/classify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ documentId }),
+          })
+          await fetch('/api/ai/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ documentId }),
+          })
+          toast.success('AI processing complete', {
+            description: 'Document classified and fields extracted.',
+          })
+        } catch (err) {
+          console.error('AI processing failed:', err)
+          toast.warning('AI processing incomplete', {
+            description: 'You can re-process from the document detail page.',
+          })
+        } finally {
+          toast.dismiss(processingToast)
+          setProcessing(false)
+        }
+      }
+
       fetchDocuments()
-    } catch {
-      toast.error('Upload failed. Please try again.')
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Upload failed. Please try again.'
+      toast.error(message)
     } finally {
       setUploading(false)
     }
@@ -281,10 +349,11 @@ export function DocumentsView() {
           ref={fileInputRef}
           type="file"
           className="hidden"
+          multiple
           accept=".pdf,.png,.jpg,.jpeg,.tiff,.docx"
           onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) handleFileSelect(file)
+            const files = Array.from(e.target.files || [])
+            files.forEach((file) => handleFileSelect(file))
             e.target.value = ''
           }}
         />
@@ -321,10 +390,11 @@ export function DocumentsView() {
       {/* Dropzone */}
       <Card
         className={cn(
-          'group relative border-2 border-dashed p-6 text-center transition-all duration-200',
+          'group relative flex flex-col items-center justify-center border-2 border-dashed p-6 text-center transition-all duration-200',
           dragOver
             ? 'border-primary bg-primary/5'
-            : 'border-muted-foreground/25 bg-muted/30 hover:border-primary/40 hover:bg-primary/[0.02]'
+            : 'border-muted-foreground/25 bg-muted/30 hover:border-primary/40 hover:bg-primary/[0.02]',
+          (uploading || processing) && 'pointer-events-none'
         )}
         onDragOver={(e) => {
           e.preventDefault()
@@ -334,8 +404,8 @@ export function DocumentsView() {
         onDrop={(e) => {
           e.preventDefault()
           setDragOver(false)
-          const file = e.dataTransfer.files?.[0]
-          if (file) handleFileSelect(file)
+          const files = Array.from(e.dataTransfer.files || [])
+          files.forEach((file) => handleFileSelect(file))
         }}
       >
         {/* Gradient hover glow */}
@@ -347,26 +417,53 @@ export function DocumentsView() {
           }}
           aria-hidden
         />
-        <div className="relative mx-auto flex max-w-md flex-col items-center gap-2 py-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-200 group-hover:scale-105">
-            <Upload className="h-6 w-6" />
+        {uploading || processing ? (
+          <div className="relative flex w-full max-w-md flex-col items-center gap-2 py-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+            <p className="text-sm font-medium">
+              {processing
+                ? 'Processing with GLM-4.6V...'
+                : 'Uploading file...'}
+            </p>
+            <div className="h-1.5 w-48 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{
+                  width: `${processing ? 100 : Math.round(uploadProgress)}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {processing
+                ? 'Classifying and extracting fields'
+                : 'Saving to secure storage'}
+            </p>
           </div>
-          <p className="text-sm font-medium">
-            Drop files here or click to upload
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Supports PDF, PNG, JPG, TIFF, DOCX · Max 25 MB
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <FileText className="mr-1.5 h-4 w-4" />
-            Select File
-          </Button>
-        </div>
+        ) : (
+          <div className="relative flex w-full max-w-md flex-col items-center gap-2 py-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-200 group-hover:scale-105">
+              <Upload className="h-6 w-6" />
+            </div>
+            <p className="text-sm font-medium">
+              Drop files here or click to upload
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Supports PDF, PNG, JPG, TIFF, DOCX · Max 25 MB · Multiple files
+              supported
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <FileText className="mr-1.5 h-4 w-4" />
+              Select Files
+            </Button>
+          </div>
+        )}
       </Card>
 
       {/* Filters */}
@@ -582,7 +679,9 @@ export function DocumentsView() {
               Cancel
             </Button>
             <Button
-              onClick={handleUpload}
+              onClick={() => {
+                if (pendingFile) handleUpload(pendingFile)
+              }}
               disabled={uploading || !pendingFile || !selectedClientId}
             >
               {uploading ? (

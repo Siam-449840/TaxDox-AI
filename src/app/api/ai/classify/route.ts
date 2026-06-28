@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { DOCUMENT_TYPES, DOCUMENT_TYPE_MAP, type DocTypeDef } from '@/lib/constants'
+import { readFile } from 'fs/promises'
+import path from 'path'
 
 /**
  * AI Document Classification Engine
@@ -62,8 +64,27 @@ export async function POST(req: NextRequest) {
   let confidence = 0
   let model = 'filename-heuristic'
 
-  // If actual file content is provided, use GLM-4.6V vision model
-  if (fileContent) {
+  // Try to read the actual uploaded file from disk
+  let fileBase64: string | null = fileContent || null
+  let fileMime: string = mimeType || document.mimeType
+
+  if (!fileBase64 && document.storedFilename) {
+    try {
+      const filePath = path.join(process.cwd(), 'download', 'uploads', document.storedFilename)
+      const fileBuffer = await readFile(filePath)
+      fileBase64 = fileBuffer.toString('base64')
+      // Only process image files with GLM-4.6V (PDFs would need page rendering)
+      const isImage = fileMime.startsWith('image/')
+      if (!isImage) {
+        fileBase64 = null
+      }
+    } catch (e) {
+      console.log('File not found on disk, using filename classification:', e)
+    }
+  }
+
+  // If we have file content (image), use GLM-4.6V vision model
+  if (fileBase64) {
     try {
       const ZAI = (await import('z-ai-web-dev-sdk')).default
       const zai = await ZAI.create()
@@ -81,7 +102,7 @@ export async function POST(req: NextRequest) {
               {
                 type: 'image_url',
                 image_url: {
-                  url: `data:${mimeType || 'image/png'};base64,${fileContent}`,
+                  url: `data:${fileMime};base64,${fileBase64}`,
                 },
               },
             ],

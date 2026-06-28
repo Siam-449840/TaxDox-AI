@@ -7,6 +7,7 @@ export type ViewKey =
   | 'documents'
   | 'reports'
   | 'calendar'
+  | 'tax-rules'
   | 'client-portal'
   | 'settings'
   | 'engagement-detail'
