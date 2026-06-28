@@ -1,0 +1,270 @@
+// TaxDox AI — Prisma Schema
+// AI-native tax document intelligence platform for accounting firms
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Firm & Users ──────────────────────────────────────────────
+
+model Firm {
+  id              String   @id @default(cuid())
+  name            String
+  subscriptionTier String  @default("professional") // starter/professional/business/enterprise
+  country         String   @default("US")
+  settings        String   @default("{}") // JSON
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users       User[]
+  clients     Client[]
+  engagements Engagement[]
+  templates   PbcTemplate[]
+  auditLogs   AuditLog[]
+  teamMembers TeamMember[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  firmId    String
+  firm      Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  email     String   @unique
+  name      String
+  role      String   @default("preparer") // partner/manager/preparer/admin/read-only
+  avatar    String?
+  status    String   @default("active") // active/disabled
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagements  Engagement[] @relation("AssignedTo")
+  extractions  Extraction[] @relation("VerifiedBy")
+  workflows    Workflow[]   @relation("AssignedTo")
+  auditLogs    AuditLog[]
+  messages     Message[]
+}
+
+model TeamMember {
+  id          String   @id @default(cuid())
+  firmId      String
+  firm        Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  name        String
+  role        String   @default("preparer")
+  email       String
+  capacity    Int      @default(10) // max concurrent tasks
+  currentLoad Int      @default(0)
+  avatar      String?
+  color       String   @default("emerald")
+  createdAt   DateTime @default(now())
+}
+
+// ─── Clients & Engagements ─────────────────────────────────────
+
+model Client {
+  id         String   @id @default(cuid())
+  firmId     String
+  firm       Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  name       String
+  email      String
+  phone      String?
+  taxId      String?  // SSN/EIN (masked)
+  clientType String   @default("individual") // individual/business/trust/nonprofit
+  status     String   @default("active") // active/inactive/prospect
+  country    String   @default("US")
+  metadata   String   @default("{}") // JSON
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  engagements Engagement[]
+  documents   Document[]
+  messages    Message[]
+}
+
+model Engagement {
+  id             String   @id @default(cuid())
+  firmId         String
+  firm           Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  taxYear        Int
+  engagementType String   // 1040/1065/1120/1120S/1041
+  status         String   @default("created") // created/pbc_sent/collecting/processing/review/filing/done
+  assignedToId   String?
+  assignedTo     User?    @relation("AssignedTo", fields: [assignedToId], references: [id])
+  deadline       DateTime?
+  priority       String   @default("medium") // high/medium/low
+  progress       Int      @default(0) // 0-100
+  fee            Float    @default(0)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  pbcList    PbcList?
+  documents  Document[]
+  workflows  Workflow[]
+  messages   Message[]
+  activities Activity[]
+}
+
+// ─── PBC Lists ─────────────────────────────────────────────────
+
+model PbcList {
+  id           String   @id @default(cuid())
+  engagementId String   @unique
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  name         String   @default("PBC Document Request List")
+  sentAt       DateTime?
+  sentVia      String?  // email/portal/sms
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items PbcItem[]
+}
+
+model PbcItem {
+  id            String   @id @default(cuid())
+  pbcListId     String
+  pbcList       PbcList  @relation(fields: [pbcListId], references: [id], onDelete: Cascade)
+  documentType  String   // W-2, 1099-INT, K-1, etc.
+  description   String
+  category      String   @default("income") // income/deduction/identity/business/investment/realestate/other
+  required      Boolean  @default(true)
+  priority      String   @default("medium") // high/medium/low
+  expectedFormat String  @default("pdf") // pdf/jpg/xls/any
+  orderIndex    Int      @default(0)
+  status        String   @default("pending") // pending/uploaded/processing/extracted/reviewed/rejected
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  documents Document[]
+}
+
+model PbcTemplate {
+  id          String   @id @default(cuid())
+  firmId      String
+  firm        Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  clientType  String   @default("individual")
+  engagementType String @default("1040")
+  items       String   @default("[]") // JSON array of item definitions
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Documents & Extractions ───────────────────────────────────
+
+model Document {
+  id              String   @id @default(cuid())
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  engagementId    String?
+  engagement      Engagement? @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  pbcItemId       String?
+  pbcItem         PbcItem?  @relation(fields: [pbcItemId], references: [id], onDelete: SetNull)
+  originalFilename String
+  storedFilename  String
+  fileSize        Int      @default(0)
+  mimeType        String   @default("application/pdf")
+  documentType    String?  // AI classification result
+  confidence      Float    @default(0)
+  status          String   @default("uploaded") // uploaded/processing/processed/reviewed/rejected
+  uploadedBy      String   @default("client")
+  uploadedAt      DateTime @default(now())
+  processedAt     DateTime?
+
+  extractions Extraction[]
+  activities  Activity[]
+
+  @@index([engagementId])
+  @@index([clientId])
+}
+
+model Extraction {
+  id            String   @id @default(cuid())
+  documentId    String
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  fieldName     String
+  fieldLabel    String
+  fieldValue    String
+  fieldGroup    String   @default("general") // entity/recipient/income/tax/other
+  confidence    Float    @default(0)
+  sourceLocation String?
+  isVerified    Boolean  @default(false)
+  verifiedById   String?
+  verifiedBy     User?    @relation("VerifiedBy", fields: [verifiedById], references: [id])
+  verifiedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([documentId])
+}
+
+// ─── Workflow & Activities ─────────────────────────────────────
+
+model Workflow {
+  id           String   @id @default(cuid())
+  engagementId String
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  step         String   // create/pbc_send/collection/ai_processing/human_review/tax_import/filing/delivery
+  status       String   @default("pending") // pending/in_progress/completed/skipped
+  assignedToId String?
+  assignedTo   User?    @relation("AssignedTo", fields: [assignedToId], references: [id])
+  startedAt    DateTime?
+  completedAt  DateTime?
+  metadata     String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([engagementId])
+}
+
+model Activity {
+  id           String   @id @default(cuid())
+  engagementId String?
+  engagement   Engagement? @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  documentId   String?
+  document     Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  type         String   // upload/classify/extract/verify/send/message/status_change
+  description  String
+  actor        String   @default("system")
+  metadata     String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([engagementId])
+}
+
+model Message {
+  id           String   @id @default(cuid())
+  engagementId String?
+  engagement   Engagement? @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  clientId     String?
+  client       Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fromType     String   // client/user/ai
+  content      String
+  read         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([engagementId])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  firmId       String
+  firm         Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action       String
+  resourceType String?
+  resourceId   String?
+  details      String   @default("{}")
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  @@index([firmId])
+}

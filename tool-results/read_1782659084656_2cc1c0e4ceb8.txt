@@ -1,0 +1,1108 @@
+     1→     1→# TAXDOX AI — Complete Product Specification & Market Research Document
+     2→     2→
+     3→     3→## Executive Summary
+     4→     4→
+     5→     5→TaxDox AI is an end-to-end tax document intelligence platform built for accounting firms, with its core focus on solving the industry's most painful problem: **PBC (Prepared by Client) document management**. There are document processing tools on the market (Magnetic, Black Ore), and there are PBC management tools (Suralink, Byron), but **no product seamlessly integrates the two** — and this is precisely TaxDox AI's differentiating advantage.
+     6→     6→
+     7→     7→
+     8→     8→## Part One: In-Depth Market Research
+     9→     9→
+    10→    10→### 1.1 Industry Background: The Accounting Industry's Talent Crisis
+    11→    11→
+    12→    12→The accounting industry is facing an unprecedented talent shortage. Since 2021, **300,000 accountants have left the industry**. CPA candidate numbers have been declining consistently, and firms cannot find replacement talent. Meanwhile, across the United States, **80 million individual tax returns are filed through professionals each year**, representing a **$2 billion outsourcing market**, with individual CPA firms paying **$100,000 to $1 million annually** for this service.
+    13→    13→
+    14→    14→> "Accountants don't have a demand problem; they have a capacity problem." — Blaze O'Byrne, Co-founder of Byron
+    15→    15→
+    16→    16→### 1.2 Core Pain Point: The Chaos of PBC Document Management
+    17→    17→
+    18→    18→**Real-world case**: The tax team at JDS Professional Group uses a client portal to send and receive files, but the portal **does not allow preparers to organize received information in a structured way**. Clients send files through various channels including email, USB drives, and even CDs. In large-scale business entities where clients send **over 100 documents**, this lack of organization quickly becomes overwhelming.
+    19→    19→
+    20→    20→> "Clients give us files, but we can't confirm whether this is what we need. It's like a digital shoebox." — Peter Ordelheide, Tax Manager at JDS
+    21→    21→
+    22→    22→### 1.3 Competitor Deep Analysis
+    23→    23→
+    24→    24→#### Existing Competitor Overview
+    25→    25→
+    26→    26→| Competitor | Core Functionality | PBC Management | AI Extraction | End-to-End | Target Customers | Key Weaknesses |
+    27→    27→|------------|-------------------|----------------|---------------|------------|------------------|----------------|
+    28→    28→| **Magnetic (YC)** | Document scanning → automated tax software input | ❌ | ✅(94%+ accuracy) | ❌ | CPA firms | No PBC list management, data input only |
+    29→    29→| **Byron (YC)** | PBC list generation + document organization + workpapers | ✅ | ✅(97%+ accuracy) | ❌ | Mid-sized+ firms | Limited to 1065/1120/1120-S, no 1040 |
+    30→    30→| **Black Ore** | End-to-end tax preparation automation | ❌ | ✅(99% accuracy) | ✅ | Top 100 firms | Extremely high pricing, enterprise only |
+    31→    31→| **Soraban (YC W21)** | Full-process tax workflow | ✅ | ✅(99-100%) | ✅ | Firms of all sizes | Complex, steep learning curve |
+    32→    32→| **Truss** | AI preparation + human review hybrid model | ❌ | ✅ | ❌ | 1040 returns | 1040 only, no complete PBC management |
+    33→    33→| **Combinely (YC)** | AI colleague — cross-system workflows | ✅ | ✅ | ✅ | Tax teams | Newer, features still being refined |
+    34→    34→| **Suralink** | PBC list + document management | ✅ | ❌ | ❌ | Firms of all sizes | No AI extraction capability |
+    35→    35→| **TaxDome** | Practice management + workflow | ✅ | ✅(Basic) | ❌ | Small firms | AI features basic, not core |
+    36→    36→| **Canopy** | All-in-one practice management | ✅ | ✅ | ✅ | Firms of all sizes | Large system, complex implementation |
+    37→    37→| **Fieldguide** | PBC validation + workflow | ✅ | ✅ | ❌ | Audit + Tax | More audit-focused |
+    38→    38→
+    39→    39→### 1.4 Market Gap Analysis
+    40→    40→
+    41→    41→#### Gap 1: Missing Intelligent PBC Layer
+    42→    42→
+    43→    43→Existing PBC management tools (Suralink, AuditDashboard) can only **organize and track** document requests but cannot **understand** document content. AI extraction tools (Magnetic, Black Ore) can extract data but lack PBC workflow management.
+    44→    44→
+    45→    45→**How TaxDox AI fills the gap**: Automatically generate a **data extraction template** for each request item when the PBC request is sent; immediately perform **intelligent validation** upon document upload (checking completeness, correct formatting, and matching the request); and **automatically map** extracted data to corresponding fields in tax software.
+    46→    46→
+    47→    47→#### Gap 2: Affordability Gap for Small and Mid-sized Firms
+    48→    48→
+    49→    49→Black Ore serves Top 100 firms with extremely high pricing. Magnetic and Byron are mid-priced but feature-incomplete. Small firms (1-10 accountants) cannot afford expensive end-to-end solutions.
+    50→    50→
+    51→    51→**How TaxDox AI fills the gap**: Adopts a **pay-as-you-go** model with low starting prices that scale with growth. The MVP can be built using low-code/AI tools within 30-90 days.
+    52→    52→
+    53→    53→#### Gap 3: Missing Cross-Border Tax Support
+    54→    54→
+    55→    55→Existing solutions primarily focus on the U.S. tax system. With **over 190 countries** having different tax systems, multinational enterprises and international individuals urgently need a platform capable of processing tax documents from multiple countries.
+    56→    56→
+    57→    57→**How TaxDox AI fills the gap**: Builds a **configurable tax rules engine** supporting tax system plugins for multiple countries. MVP supports the U.S., UK, Canada, India, and Australia, with expansion capabilities for the future.
+    58→    58→
+    59→    59→#### Gap 4: Client Experience Gap
+    60→    60→
+    61→    61→Existing tools require clients to learn complex portals. Poor client experience leads to delayed document submissions.
+    62→    62→
+    63→    63→**How TaxDox AI fills the gap**: A **zero-learning-curve** client interface — clients simply **drag and drop files or send emails**, and the AI automatically classifies, validates, and matches request items.
+    64→    64→
+    65→    65→
+    66→    66→## Part Two: Complete Product Specification
+    67→    67→
+    68→    68→### 2.1 Product Vision
+    69→    69→
+    70→    70→> **"Make tax document processing as simple as sending an email."**
+    71→    71→
+    72→    72→TaxDox AI is an AI-native tax document intelligence platform covering the complete lifecycle from PBC request generation to automated document processing to tax software integration.
+    73→    73→
+    74→    74→### 2.2 Core User Personas
+    75→    75→
+    76→    76→| Persona | Description | Pain Points | Usage Frequency |
+    77→    77→|---------|-------------|-------------|-----------------|
+    78→    78→| **Tax Partner** | Firm owner managing multiple clients | Cannot scale business, talent shortage | Daily |
+    79→    79→| **Tax Manager** | Supervises multiple engagements | Tracking document status consumes excessive time | Daily |
+    80→    80→| **Tax Preparer** | Actually processes tax returns | Manual data entry is time-consuming and error-prone | Daily |
+    81→    81→| **Administrative Staff** | Manages PBC lists and client communication | Chasing documents and sending reminders consumes excessive time | Daily |
+    82→    82→| **Client (Taxpayer)** | Provides tax documents | Doesn't know what's needed, uploads in disorganized manner | Annual/Quarterly |
+    83→    83→
+    84→    84→### 2.3 Functional Architecture
+    85→    85→
+    86→    86→```
+    87→    87→┌─────────────────────────────────────────────────────────────────┐
+    88→    88→│                        TAXDOX AI PLATFORM                      │
+    89→    89→├─────────────────────────────────────────────────────────────────┤
+    90→    90→│  Client Layer                                                  │
+    91→    91→│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
+    92→    92→│  │ Client      │  │ Email       │  │ Mobile      │            │
+    93→    93→│  │ Portal      │  │ Upload      │  │ App         │            │
+    94→    94→│  │ (Drag-drop) │  │ (Forward)   │  │ (Photo)     │            │
+    95→    95→│  └─────────────┘  └─────────────┘  └─────────────┘            │
+    96→    96→├─────────────────────────────────────────────────────────────────┤
+    97→    97→│  AI Processing Layer                                           │
+    98→    98→│  ┌─────────────────────────────────────────────────────────┐   │
+    99→    99→│  │  Document      →  Data          →  Validation &       │   │
+   100→   100→│  │  Intelligent      Extraction       Verification        │   │
+   101→   101→│  │  Classifier       Engine           Engine              │   │
+   102→   102→│  │  (100+ types)     (Field-level)    (Completeness/     │   │
+   103→   103→│  │                                    Accuracy)           │   │
+   104→   104→│  └─────────────────────────────────────────────────────────┘   │
+   105→   105→├─────────────────────────────────────────────────────────────────┤
+   106→   106→│  Workflow Layer                                                │
+   107→   107→│  ┌─────────────────────────────────────────────────────────┐   │
+   108→   108→│  │  PBC List        →  Intelligent  →  Progress   → Auto │   │
+   109→   109→│  │  Generation         Assignment      Tracking    Remind │   │
+   110→   110→│  │  (Prior-year)      (Auto-route)   (Real-time  (Email/  │   │
+   111→   111→│  │                    )               Dashboard)  SMS)     │   │
+   112→   112→│  └─────────────────────────────────────────────────────────┘   │
+   113→   113→├─────────────────────────────────────────────────────────────────┤
+   114→   114→│  Integration Layer                                             │
+   115→   115→│  ┌─────────────────────────────────────────────────────────┐   │
+   116→   116→│  │  Tax Software    │  Accounting    │  Storage    │ API  │   │
+   117→   117→│  │  Integration     │  Software      │  Integration│ Open │   │
+   118→   118→│  │  (UltraTax,      │  (QuickBooks,  │  (Box,      │ API) │   │
+   119→   119→│  │  CCH, Lacerte)   │  Xero)         │  GDrive)    │      │   │
+   120→   120→│  └─────────────────────────────────────────────────────────┘   │
+   121→   121→└─────────────────────────────────────────────────────────────────┘
+   122→   122→```
+   123→   123→
+   124→   124→
+   125→   125→## Part Three: Detailed Functional Specifications
+   126→   126→
+   127→   127→### 3.1 Intelligent PBC List Generation Module
+   128→   128→
+   129→   129→#### Function Description
+   130→   130→Automatically generates personalized PBC (Prepared by Client) document request lists for each client.
+   131→   131→
+   132→   132→#### Detailed Feature Points
+   133→   133→
+   134→   134→**3.1.1 Intelligent List Generation**
+   135→   135→- **Based on prior year data**: Extracts required document types from the previous year's tax returns
+   136→   136→- **Client persona-driven**: Generates different templates based on client type (individual/business/trust/nonprofit)
+   137→   137→- **Dynamic adjustment**: Automatically updates request items based on current year's tax law changes
+   138→   138→- **Multi-language support**: Supports generating request lists in English, Spanish, Chinese, and other languages
+   139→   139→
+   140→   140→**3.1.2 List Customization**
+   141→   141→- **Drag-and-drop editor**: Tax managers can drag to reorder request items
+   142→   142→- **Conditional logic**: If client has rental income, automatically add Schedule E related requests
+   143→   143→- **Annotation capability**: Add explanations for each request item (e.g., "Please provide all 2025 1099-INT forms")
+   144→   144→- **Priority marking**: Flag documents as urgent/important/regular
+   145→   145→
+   146→   146→**3.1.3 Automated Distribution**
+   147→   147→- **One-click send**: Distribute via multiple channels including email, portal, and SMS
+   148→   148→- **Personalized links**: Each client receives a unique upload link
+   149→   149→- **Bulk operations**: Send annual PBC lists to all clients simultaneously
+   150→   150→
+   151→   151→### 3.2 Intelligent Document Receipt and Classification Module
+   152→   152→
+   153→   153→#### Function Description
+   154→   154→Automatically receives, classifies, and organizes all uploaded tax documents.
+   155→   155→
+   156→   156→#### Detailed Feature Points
+   157→   157→
+   158→   158→**3.2.1 Multi-Channel Receipt**
+   159→   159→- **Client portal upload**: Drag-and-drop upload, supports batch processing
+   160→   160→- **Email forwarding**: Clients can forward documents to `upload@taxdox.ai`, system automatically associates with corresponding client
+   161→   161→- **Mobile photo capture**: Mobile app photo upload, AI automatically optimizes image quality
+   162→   162→- **Cloud import**: Import from Box, Google Drive, OneDrive/SharePoint
+   163→   163→- **Batch ZIP upload**: Supports uploading entire folder ZIP archives
+   164→   164→
+   165→   165→**3.2.2 AI Intelligent Classification**
+   166→   166→Supports automatic identification of **100+ types of tax documents**:
+   167→   167→
+   168→   168→| Category | Document Types |
+   169→   169→|----------|----------------|
+   170→   170→| **Income Documents** | W-2, 1099-NEC, 1099-MISC, 1099-INT, 1099-DIV, 1099-B, 1099-R, K-1(1065/1120S/1041) |
+   171→   171→| **Deduction Documents** | Mortgage interest 1098, Property tax bills, Charitable donation receipts, Medical expense receipts, Education expense 1098-T |
+   172→   172→| **Identity Documents** | Driver's license, Passport, SSN card, EIN confirmation letter |
+   173→   173→| **Business Documents** | Profit and loss statements, Balance sheets, Bank statements, Credit card statements, Payroll reports |
+   174→   174→| **Investment Documents** | Brokerage statements, Cryptocurrency transaction records, Dividend reinvestment plans |
+   175→   175→| **Real Estate Documents** | Property purchase documents, Rental income records, Depreciation schedules, Property tax assessments |
+   176→   176→| **Other** | Alimony agreements, Divorce decrees, Student loan 1098-E, Health Savings Account 5498-SA |
+   177→   177→
+   178→   178→**3.2.3 Intelligent Renaming and Organization**
+   179→   179→- **Automatic renaming**: Renames `IMG_20260315_142356.jpg` to `2025_W2_AcmeCorp.pdf`
+   180→   180→- **Automatic filing**: Automatically organizes into folders by document type, year, and client
+   181→   181→- **Version control**: New versions of the same document automatically overwrite old versions, with history retained
+   182→   182→- **Duplicate detection**: Detects and flags duplicate document uploads
+   183→   183→
+   184→   184→### 3.3 AI Data Extraction Engine
+   185→   185→
+   186→   186→#### Function Description
+   187→   187→Automatically extracts structured data from tax documents for import into tax software.
+   188→   188→
+   189→   189→#### Detailed Feature Points
+   190→   190→
+   191→   191→**3.3.1 Multi-Format Processing**
+   192→   192→- **PDF**: Native PDF, scanned PDF, encrypted PDF
+   193→   193→- **Images**: JPEG, PNG, TIFF, HEIC (mobile photos)
+   194→   194→- **Handwriting recognition**: Recognizes handwritten notes and signatures
+   195→   195→- **Excel**: Extracts data from Excel spreadsheets
+   196→   196→- **Low-quality scans**: Enhances low-resolution, skewed, and blurry scans
+   197→   197→
+   198→   198→**3.3.2 Field-Level Extraction**
+   199→   199→Each document type has predefined extraction fields:
+   200→   200→
+   201→   201→**W-2 Extraction Fields**:
+   202→   202→- Employer EIN, Employer Name, Employer Address
+   203→   203→- Employee SSN, Employee Name, Employee Address
+   204→   204→- Box 1: Wages, tips, other compensation
+   205→   205→- Box 2: Federal income tax withheld
+   206→   206→- Box 3: Social Security wages
+   207→   207→- Box 4: Social Security tax withheld
+   208→   208→- Box 5: Medicare wages
+   209→   209→- Box 6: Medicare tax withheld
+   210→   210→- Box 7: Tip income
+   211→   211→- Box 8: Allocated tips
+   212→   212→- Box 10: Dependent care benefits
+   213→   213→- Box 12: Code + Amount (multiple lines)
+   214→   214→- Box 13: Retirement plan/Third-party sick pay/Statutory employee
+   215→   215→- Box 14: Other (state disability insurance, etc.)
+   216→   216→- State information: State name, State EIN, State wages, State tax withheld
+   217→   217→
+   218→   218→**1099 Series Extraction Fields**:
+   219→   219→- 1099-NEC: Payer information, Recipient information, Nonemployee compensation
+   220→   220→- 1099-INT: Interest income, Early withdrawal penalty, Investment expenses
+   221→   221→- 1099-DIV: Ordinary dividends, Qualified dividends, Capital gain distributions
+   222→   222→- 1099-B: Transaction date, Cost basis, Sales proceeds
+   223→   223→- 1099-R: Gross distribution, Taxable amount, Federal tax withheld, Code
+   224→   224→
+   225→   225→**K-1 Extraction Fields** (supports 1065, 1120S, 1041):
+   226→   226→- Entity information: EIN, Name, Address, Type
+   227→   227→- Partner/Shareholder information: SSN/EIN, Name, Address, Ownership percentage
+   228→   228→- Detailed allocations of income/deduction/credit sections
+   229→   229→- Self-employment income, Net rental income, Foreign taxes, etc.
+   230→   230→
+   231→   231→**3.3.3 Accuracy and Confidence**
+   232→   232→- **Target accuracy rate**: 95%+ (MVP stage)
+   233→   233→- **Confidence scoring**: Each extracted field includes a 0-100% confidence score
+   234→   234→- **Low confidence flagging**: Fields with <90% confidence flagged for manual review
+   235→   235→- **Continuous learning**: Model automatically improves after manual corrections
+   236→   236→
+   237→   237→**3.3.4 Validation and Verification**
+   238→   238→- **Cross-document validation**: Consistency checks between W-2 wages and 1099 income
+   239→   239→- **Historical comparison**: Compares with prior year data, flags significant changes
+   240→   240→- **Logic validation**: Checks if data conforms to tax law logic (e.g., donations not exceeding 60% of AGI)
+   241→   241→- **Completeness checks**: Flags missing required documents
+   242→   242→
+   243→   243→### 3.4 Tax Software Integration Engine
+   244→   244→
+   245→   245→#### Function Description
+   246→   246→Seamlessly pushes extracted data into mainstream tax software.
+   247→   247→
+   248→   248→#### Detailed Feature Points
+   249→   249→
+   250→   250→**3.4.1 Supported Tax Software (MVP)**
+   251→   251→- **UltraTax CS** (Thomson Reuters)
+   252→   252→- **CCH Axcess Tax** (Wolters Kluwer)
+   253→   253→- **Lacerte** (Intuit)
+   254→   254→- **ProSeries** (Intuit)
+   255→   255→- **Drake Tax** (Drake Software)
+   256→   256→- **ATX** (Wolters Kluwer)
+   257→   257→
+   258→   258→**3.4.2 Integration Methods**
+   259→   259→- **Direct API integration**: Push data via tax software's official API
+   260→   260→- **CSV export**: Generates CSV files for direct import
+   261→   261→- **Excel workpapers**: Generates Excel workbooks with extracted data
+   262→   262→- **Copy-paste assistance**: Highlights fields that need copy-pasting
+   263→   263→
+   264→   264→**3.4.3 Mapping Configuration**
+   265→   265→- **Field mapping**: Users can configure mapping from TaxDox fields to tax software fields
+   266→   266→- **Template saving**: Save mapping templates for reuse
+   267→   267→- **Auto-detection**: Automatically detects tax software version and adjusts mapping
+   268→   268→
+   269→   269→### 3.5 Workflow Automation Engine
+   270→   270→
+   271→   271→#### Function Description
+   272→   272→Automates the complete lifecycle management of tax engagements.
+   273→   273→
+   274→   274→#### Detailed Feature Points
+   275→   275→
+   276→   276→**3.5.1 Engagement Lifecycle**
+   277→   277→```
+   278→   278→Create → PBC Send → Document Collection → AI Processing → Human Review → Tax Software Import → Filing → Delivery
+   279→   279→```
+   280→   280→
+   281→   281→**3.5.2 Automatic Task Assignment**
+   282→   282→- **Load balancing based**: Automatically assigns tasks to available team members
+   283→   283→- **Expertise based**: Complex tasks assigned to senior preparers
+   284→   284→- **Urgency priority**: Tasks approaching deadlines automatically have priority increased
+   285→   285→
+   286→   286→**3.5.3 Progress Tracking Dashboard**
+   287→   287→- **Real-time status**: Document collection progress for each client (e.g., 65% complete)
+   288→   288→- **Bottleneck identification**: Flags request items with the most significant delays
+   289→   289→- **Predicted completion time**: Predicts completion time based on historical data
+   290→   290→- **Team workload view**: Shows current load for each team member
+   291→   291→
+   292→   292→**3.5.4 Automated Reminder System**
+   293→   293→- **Custom reminder rules**: Set reminder timing (e.g., 7 days, 3 days, 1 day before deadline)
+   294→   294→- **Multi-channel reminders**: Email, SMS, App push
+   295→   295→- **Intelligent escalation**: Automatically increases reminder frequency when clients don't respond
+   296→   296→- **Internal reminders**: Task deadline reminders for team members
+   297→   297→
+   298→   298→### 3.6 Client Collaboration Portal
+   299→   299→
+   300→   300→#### Function Description
+   301→   301→Provides a simple, intuitive document submission experience for clients.
+   302→   302→
+   303→   303→#### Detailed Feature Points
+   304→   304→
+   305→   305→**3.6.1 Client View**
+   306→   306→- **Clear request list**: Clients see complete list of documents they need to provide
+   307→   307→- **Upload status**: Each request item shows "Uploaded/Pending/Reviewed"
+   308→   308→- **Simple upload**: Drag-and-drop or click-to-upload, supports batch uploads
+   309→   309→- **Mobile optimized**: Displays perfectly on mobile devices
+   310→   310→
+   311→   311→**3.6.2 Security and Compliance**
+   312→   312→- **Bank-grade encryption**: AES-256 transmission and storage encryption
+   313→   313→- **Two-factor authentication**: Optional enablement
+   314→   314→- **SOC 2 Type II compliance**: Enterprise-grade security standards
+   315→   315→- **Audit trail**: Every action is logged
+   316→   316→- **Data isolation**: Client data not used for training AI models
+   317→   317→
+   318→   318→**3.6.3 Client Communication**
+   319→   319→- **Built-in messaging**: Secure messaging system within the portal
+   320→   320→- **Status updates**: Automatically notifies clients of document review status
+   321→   321→- **FAQ**: AI-powered FAQ answering system
+   322→   322→
+   323→   323→### 3.7 Reporting and Analytics Module
+   324→   324→
+   325→   325→#### Function Description
+   326→   326→Provides insights and data analysis on firm operations.
+   327→   327→
+   328→   328→#### Detailed Feature Points
+   329→   329→
+   330→   330→**3.7.1 Operational Metrics**
+   331→   331→- Average processing time per tax return
+   332→   332→- Average days for document collection
+   333→   333→- Team utilization rate
+   334→   334→- On-time filing rate
+   335→   335→- Client response rate
+   336→   336→
+   337→   337→**3.7.2 Financial Metrics**
+   338→   338→- Revenue per engagement
+   339→   339→- Profitability per client
+   340→   340→- Effective hourly rate
+   341→   341→- Outsourcing cost vs. internal cost
+   342→   342→
+   343→   343→**3.7.3 Quality Metrics**
+   344→   344→- AI extraction accuracy trends
+   345→   345→- Number of manual corrections
+   346→   346→- Number of issues found during review
+   347→   347→- Client satisfaction scores
+   348→   348→
+   349→   349→### 3.8 Admin Console
+   350→   350→
+   351→   351→#### Function Description
+   352→   352→Firm administrators configure and manage the entire platform.
+   353→   353→
+   354→   354→#### Detailed Feature Points
+   355→   355→
+   356→   356→**3.8.1 User Management**
+   357→   357→- Add/remove/disable users
+   358→   358→- Role-based permissions (Partner/Manager/Preparer/Admin/Read-only)
+   359→   359→- SSO integration (Google Workspace, Microsoft Entra)
+   360→   360→
+   361→   361→**3.8.2 Template Management**
+   362→   362→- PBC list template library
+   363→   363→- Document classification rules
+   364→   364→- Extraction field configuration
+   365→   365→- Workflow templates
+   366→   366→
+   367→   367→**3.8.3 Integration Configuration**
+   368→   368→- Tax software connection configuration
+   369→   369→- Storage service connections
+   370→   370→- Email/SMS configuration
+   371→   371→- API key management
+   372→   372→
+   373→   373→**3.8.4 Billing and Subscription**
+   374→   374→- View usage
+   375→   375→- Manage subscription plans
+   376→   376→- Invoices and payments
+   377→   377→
+   378→   378→
+   379→   379→## Part Four: Technical Architecture
+   380→   380→
+   381→   381→### 4.1 Technology Stack Recommendations
+   382→   382→
+   383→   383→| Layer | Technology Choice | Rationale |
+   384→   384→|-------|-------------------|-----------|
+   385→   385→| **Frontend** | React + TypeScript + Tailwind CSS | Component-based, type-safe, rapid development |
+   386→   386→| **Backend** | Node.js/Python (FastAPI) | AI integration friendly, rich ecosystem |
+   387→   387→| **Database** | PostgreSQL + pgvector | Relational + vector search support |
+   388→   388→| **AI/ML** | GPT-4o / Claude 3.5 Sonnet + Open-source OCR | State-of-the-art document understanding and extraction |
+   389→   389→| **Storage** | AWS S3 / Azure Blob | Secure, scalable document storage |
+   390→   390→| **Queue** | Redis / Bull | Asynchronous task processing |
+   391→   391→| **Search** | Elasticsearch | Full-text search across document content |
+   392→   392→| **Deployment** | AWS/Azure/GCP | Enterprise-grade compliance (SOC 2) |
+   393→   393→| **Monitoring** | Sentry + Datadog | Error tracking and performance monitoring |
+   394→   394→
+   395→   395→### 4.2 Data Model (Core Entities)
+   396→   396→
+   397→   397→```sql
+   398→   398→-- Core Entity Relationships
+   399→   399→Users → Firms → Clients → Engagements → PBCLists → PBCItems → Documents → Extractions
+   400→   400→
+   401→   401→-- Key Table Structures
+   402→   402→CREATE TABLE firms (
+   403→   403→  id UUID PRIMARY KEY,
+   404→   404→  name VARCHAR(255),
+   405→   405→  subscription_tier VARCHAR(50),
+   406→   406→  settings JSONB,
+   407→   407→  created_at TIMESTAMP
+   408→   408→);
+   409→   409→
+   410→   410→CREATE TABLE clients (
+   411→   411→  id UUID PRIMARY KEY,
+   412→   412→  firm_id UUID REFERENCES firms(id),
+   413→   413→  name VARCHAR(255),
+   414→   414→  email VARCHAR(255),
+   415→   415→  tax_id VARCHAR(20),
+   416→   416→  client_type VARCHAR(50), -- individual/business/trust/nonprofit
+   417→   417→  metadata JSONB,
+   418→   418→  created_at TIMESTAMP
+   419→   419→);
+   420→   420→
+   421→   421→CREATE TABLE engagements (
+   422→   422→  id UUID PRIMARY KEY,
+   423→   423→  client_id UUID REFERENCES clients(id),
+   424→   424→  firm_id UUID REFERENCES firms(id),
+   425→   425→  tax_year INTEGER,
+   426→   426→  engagement_type VARCHAR(50), -- 1040/1065/1120/1120S/1041
+   427→   427→  status VARCHAR(50),
+   428→   428→  assigned_to UUID REFERENCES users(id),
+   429→   429→  pbc_list_id UUID REFERENCES pbc_lists(id),
+   430→   430→  deadline DATE,
+   431→   431→  created_at TIMESTAMP
+   432→   432→);
+   433→   433→
+   434→   434→CREATE TABLE pbc_lists (
+   435→   435→  id UUID PRIMARY KEY,
+   436→   436→  engagement_id UUID REFERENCES engagements(id),
+   437→   437→  name VARCHAR(255),
+   438→   438→  is_template BOOLEAN,
+   439→   439→  template_id UUID REFERENCES pbc_lists(id),
+   440→   440→  created_at TIMESTAMP
+   441→   441→);
+   442→   442→
+   443→   443→CREATE TABLE pbc_items (
+   444→   444→  id UUID PRIMARY KEY,
+   445→   445→  pbc_list_id UUID REFERENCES pbc_lists(id),
+   446→   446→  document_type VARCHAR(100),
+   447→   447→  description TEXT,
+   448→   448→  required BOOLEAN,
+   449→   449→  priority VARCHAR(20), -- high/medium/low
+   450→   450→  expected_format VARCHAR(50), -- pdf/jpg/xls
+   451→   451→  extraction_template JSONB, -- defines fields to extract
+   452→   452→  order_index INTEGER,
+   453→   453→  created_at TIMESTAMP
+   454→   454→);
+   455→   455→
+   456→   456→CREATE TABLE documents (
+   457→   457→  id UUID PRIMARY KEY,
+   458→   458→  client_id UUID REFERENCES clients(id),
+   459→   459→  engagement_id UUID REFERENCES engagements(id),
+   460→   460→  pbc_item_id UUID REFERENCES pbc_items(id),
+   461→   461→  original_filename VARCHAR(255),
+   462→   462→  stored_filename VARCHAR(255),
+   463→   463→  storage_path VARCHAR(500),
+   464→   464→  file_size BIGINT,
+   465→   465→  mime_type VARCHAR(100),
+   466→   466→  document_type VARCHAR(100), -- AI classification result
+   467→   467→  confidence FLOAT, -- AI classification confidence
+   468→   468→  status VARCHAR(50), -- uploaded/processing/processed/reviewed/rejected
+   469→   469→  uploaded_by VARCHAR(255), -- client_email or user_email
+   470→   470→  uploaded_at TIMESTAMP,
+   471→   471→  processed_at TIMESTAMP
+   472→   472→);
+   473→   473→
+   474→   474→CREATE TABLE extractions (
+   475→   475→  id UUID PRIMARY KEY,
+   476→   476→  document_id UUID REFERENCES documents(id),
+   477→   477→  field_name VARCHAR(100),
+   478→   478→  field_value TEXT,
+   479→   479→  confidence FLOAT,
+   480→   480→  source_location TEXT, -- position within document
+   481→   481→  is_verified BOOLEAN, -- whether manually verified
+   482→   482→  verified_by UUID REFERENCES users(id),
+   483→   483→  verified_at TIMESTAMP,
+   484→   484→  created_at TIMESTAMP
+   485→   485→);
+   486→   486→
+   487→   487→CREATE TABLE workflows (
+   488→   488→  id UUID PRIMARY KEY,
+   489→   489→  engagement_id UUID REFERENCES engagements(id),
+   490→   490→  step VARCHAR(50),
+   491→   491→  status VARCHAR(50),
+   492→   492→  assigned_to UUID REFERENCES users(id),
+   493→   493→  started_at TIMESTAMP,
+   494→   494→  completed_at TIMESTAMP,
+   495→   495→  metadata JSONB
+   496→   496→);
+   497→   497→
+   498→   498→CREATE TABLE audit_logs (
+   499→   499→  id UUID PRIMARY KEY,
+   500→   500→  firm_id UUID REFERENCES firms(id),
+   501→   501→  user_id UUID REFERENCES users(id),
+   502→   502→  action VARCHAR(100),
+   503→   503→  resource_type VARCHAR(50),
+   504→   504→  resource_id UUID,
+   505→   505→  details JSONB,
+   506→   506→  ip_address VARCHAR(45),
+   507→   507→  user_agent TEXT,
+   508→   508→  created_at TIMESTAMP
+   509→   509→);
+   510→   510→```
+   511→   511→
+   512→   512→### 4.3 AI Pipeline Architecture
+   513→   513→
+   514→   514→```
+   515→   515→┌─────────────────────────────────────────────────────────────────┐
+   516→   516→│                      AI PROCESSING PIPELINE                    │
+   517→   517→├─────────────────────────────────────────────────────────────────┤
+   518→   518→│                                                                 │
+   519→   519→│  1. Document Receipt                                           │
+   520→   520→│     └→ Multi-format preprocessing (PDF normalization /        │
+   521→   521→│        Image enhancement / OCR)                               │
+   522→   522→│                                                                 │
+   523→   523→│  2. Document Classification                                    │
+   524→   524→│     └→ Multimodal LLM classification → 100+ document types    │
+   525→   525→│                                                                 │
+   526→   526→│  3. Document Validation                                        │
+   527→   527→│     └→ Completeness check / Readability check / PBC match     │
+   528→   528→│                                                                 │
+   529→   529→│  4. Data Extraction                                            │
+   530→   530→│     └→ Field-level extraction + confidence scoring            │
+   531→   531→│                                                                 │
+   532→   532→│  5. Cross-Document Validation                                  │
+   533→   533→│     └→ Logic validation / Historical comparison / Anomaly     │
+   534→   534→│        detection                                               │
+   535→   535→│                                                                 │
+   536→   536→│  6. Human Review Queue                                         │
+   537→   537→│     └→ Low confidence → Human review / High confidence →      │
+   538→   538→│        Auto-approve                                            │
+   539→   539→│                                                                 │
+   540→   540→│  7. Export/Integration                                         │
+   541→   541→│     └→ Tax software push / Excel export / API output          │
+   542→   542→│                                                                 │
+   543→   543→└─────────────────────────────────────────────────────────────────┘
+   544→   544→```
+   545→   545→
+   546→   546→### 4.4 API Design (Core Endpoints)
+   547→   547→
+   548→   548→```yaml
+   549→   549→# Client Management
+   550→   550→POST   /api/v1/clients              # Create client
+   551→   551→GET    /api/v1/clients              # List clients
+   552→   552→GET    /api/v1/clients/{id}         # Get client details
+   553→   553→PUT    /api/v1/clients/{id}         # Update client
+   554→   554→DELETE /api/v1/clients/{id}         # Delete client
+   555→   555→
+   556→   556→# Engagement Management
+   557→   557→POST   /api/v1/engagements          # Create engagement
+   558→   558→GET    /api/v1/engagements          # List engagements
+   559→   559→GET    /api/v1/engagements/{id}     # Get details
+   560→   560→PUT    /api/v1/engagements/{id}     # Update
+   561→   561→POST   /api/v1/engagements/{id}/pbc # Generate PBC list
+   562→   562→POST   /api/v1/engagements/{id}/send # Send PBC to client
+   563→   563→
+   564→   564→# PBC List Management
+   565→   565→GET    /api/v1/pbc-lists/{id}       # Get PBC list
+   566→   566→PUT    /api/v1/pbc-lists/{id}       # Update PBC list
+   567→   567→POST   /api/v1/pbc-lists/{id}/items # Add PBC item
+   568→   568→DELETE /api/v1/pbc-lists/{id}/items/{item_id} # Delete PBC item
+   569→   569→
+   570→   570→# Document Management
+   571→   571→POST   /api/v1/documents/upload     # Upload document
+   572→   572→GET    /api/v1/documents/{id}       # Get document
+   573→   573→GET    /api/v1/documents/{id}/preview # Preview document
+   574→   574→POST   /api/v1/documents/{id}/process # Trigger AI processing
+   575→   575→GET    /api/v1/documents/{id}/extractions # Get extracted data
+   576→   576→
+   577→   577→# Extraction Data Management
+   578→   578→GET    /api/v1/extractions/{id}     # Get extraction data
+   579→   579→PUT    /api/v1/extractions/{id}     # Update extraction data (manual correction)
+   580→   580→POST   /api/v1/extractions/{id}/verify # Verify extraction data
+   581→   581→
+   582→   582→# Export
+   583→   583→POST   /api/v1/export/tax-software  # Export to tax software
+   584→   584→POST   /api/v1/export/excel         # Export to Excel
+   585→   585→POST   /api/v1/export/csv           # Export to CSV
+   586→   586→
+   587→   587→# Workflow
+   588→   588→GET    /api/v1/workflows/{engagement_id} # Get workflow status
+   589→   589→POST   /api/v1/workflows/{engagement_id}/next # Advance workflow
+   590→   590→
+   591→   591→# Reports
+   592→   592→GET    /api/v1/reports/firm-summary # Firm summary report
+   593→   593→GET    /api/v1/reports/engagement-metrics # Engagement metrics
+   594→   594→GET    /api/v1/reports/team-performance # Team performance
+   595→   595→
+   596→   596→# Webhook
+   597→   597→POST   /api/v1/webhooks/{id}        # Configure webhook
+   598→   598→GET    /api/v1/webhooks             # List webhooks
+   599→   599→```
+   600→   600→
+   601→   601→### 4.5 Security Architecture
+   602→   602→
+   603→   603→```
+   604→   604→┌─────────────────────────────────────────────────────────────────┐
+   605→   605→│                      SECURITY ARCHITECTURE                     │
+   606→   606→├─────────────────────────────────────────────────────────────────┤
+   607→   607→│                                                                 │
+   608→   608→│  🔐 Transport Security                                         │
+   609→   609→│     • TLS 1.3 encryption for all transmission                  │
+   610→   610→│     • HSTS enforces HTTPS                                      │
+   611→   611→│                                                                 │
+   612→   612→│  🔐 Storage Security                                           │
+   613→   613→│     • AES-256 encryption for data at rest                      │
+   614→   614→│     • Logical isolation of client data                         │
+   615→   615→│     • Encryption key rotation                                  │
+   616→   616→│                                                                 │
+   617→   617→│  🔐 Access Control                                             │
+   618→   618→│     • Role-based access control (RBAC)                         │
+   619→   619→│     • Principle of least privilege                             │
+   620→   620→│     • Session timeout and refresh                              │
+   621→   621→│                                                                 │
+   622→   622→│  🔐 Authentication                                             │
+   623→   623→│     • JWT-based authentication                                 │
+   624→   624→│     • Two-factor authentication (TOTP)                         │
+   625→   625→│     • SSO integration (SAML/OIDC)                              │
+   626→   626→│                                                                 │
+   627→   627→│  🔐 Auditing                                                   │
+   628→   628→│     • Audit logs for all actions                               │
+   629→   629→│     • Immutable log storage                                    │
+   630→   630→│     • Real-time security monitoring                            │
+   631→   631→│                                                                 │
+   632→   632→│  🔐 Compliance                                                 │
+   633→   633→│     • SOC 2 Type II                                            │
+   634→   634→│     • GDPR ready                                               │
+   635→   635→│     • IRS 7216 compliance (data does not leave U.S.)           │
+   636→   636→│                                                                 │
+   637→   637→└─────────────────────────────────────────────────────────────────┘
+   638→   638→```
+   639→   639→
+   640→   640→
+   641→   641→## Part Five: UI/UX Design Specifications
+   642→   642→
+   643→   643→### 5.1 Desktop Design (Priority)
+   644→   644→
+   645→   645→#### 5.1.1 Main Layout
+   646→   646→
+   647→   647→```
+   648→   648→┌─────────────────────────────────────────────────────────────────┐
+   649→   649→│  🔷 TaxDox AI                    🔍 Search...  👤 John  ⚙️     │
+   650→   650→├─────────────────────────────────────────────────────────────────┤
+   651→   651→│  📊 Dashboard  │  ┌──────────────────────────────────────────────┐ │
+   652→   652→│  👥 Clients    │  │  📊 Dashboard                              │ │
+   653→   653→│  📋 Engagements│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐   │ │
+   654→   654→│  📄 Documents  │  │  │ Active│ │ Pending│ │Done  │ │Alerts│   │ │
+   655→   655→│  ⚙️ Settings   │  │  │  24   │ │  12   │ │ 89   │ │  5   │   │ │
+   656→   656→│               │  │  └──────┘ └──────┘ └──────┘ └──────┘   │ │
+   657→   657→│               │  │                                          │ │
+   658→   658→│               │  │  📋 Recent Engagements                   │ │
+   659→   659→│               │  │  ┌────────────────────────────────────┐  │ │
+   660→   660→│               │  │  │ Acme Corp  │ 1040  │ 85% │ ⏳ 3d  │  │ │
+   661→   661→│               │  │  │ Smith LLC  │ 1065  │ 45% │ ⏳ 7d  │  │ │
+   662→   662→│               │  │  │ Johnson    │ 1040  │ 100%│ ✅ Done│  │ │
+   663→   663→│               │  │  └────────────────────────────────────┘  │ │
+   664→   664→│               │  │                                          │ │
+   665→   665→│               │  │  📈 Team Workload                       │ │
+   666→   666→│               │  │  [████████░░] Sarah  (8/10)            │ │
+   667→   667→│               │  │  [██████░░░░] Mike   (6/10)            │ │
+   668→   668→│               │  │  [██████████] Lisa   (10/10) 🔥        │ │
+   669→   669→│               │  └──────────────────────────────────────────────┘ │
+   670→   670→└─────────────────────────────────────────────────────────────────┘
+   671→   671→```
+   672→   672→
+   673→   673→#### 5.1.2 Engagement Detail Page
+   674→   674→
+   675→   675→```
+   676→   676→┌─────────────────────────────────────────────────────────────────┐
+   677→   677→│  ← Back to Dashboard    Engagement: Acme Corp - 2025 1040     │
+   678→   678→│  Status: 🟡 In Progress   Due: 2026-04-15   Assigned: Sarah   │
+   679→   679→├─────────────────────────────────────────────────────────────────┤
+   680→   680→│  ┌──────────┬──────────┬──────────┬──────────┐                │
+   681→   681→│  │ 📋 PBC   │ 📄 Docs  │ 🤖 AI    │ 📊 Prog. │                │
+   682→   682→│  │  List    │  (24)   │  Extract │  85%    │                │
+   683→   683→│  └──────────┴──────────┴──────────┴──────────┘                │
+   684→   684→│                                                                 │
+   685→   685→│  📋 PBC Document Request List                                   │
+   686→   686→│  ┌────────────────────────────────────────────────────────────┐ │
+   687→   687→│  │ ✅ W-2 - 2025           │ 📎 uploaded  │ ✅ Extracted   │ │
+   688→   688→│  │ ✅ 1099-INT - 2025      │ 📎 uploaded  │ ✅ Extracted   │ │
+   689→   689→│  │ 🔄 K-1 - 2025           │ 📎 uploaded  │ ⏳ Processing  │ │
+   690→   690→│  │ ⬜ Mortgage 1098 - 2025 │ ⬜ Pending   │ -              │ │
+   691→   691→│  │ ⬜ Charity Receipts     │ ⬜ Pending   │ -              │ │
+   692→   692→│  │ ⬜ Property Tax Bill    │ ⬜ Pending   │ -              │ │
+   693→   693→│  └────────────────────────────────────────────────────────────┘ │
+   694→   694→│                                                                 │
+   695→   695→│  📄 Recent Uploads                                              │
+   696→   696→│  ┌────────────────────────────────────────────────────────────┐ │
+   697→   697→│  │ 📎 K-1_Acme_2025.pdf  │ 2026-03-15 │ ✅ Classified │ 👁️  │ │
+   698→   698→│  │ 📎 W2_Acme_2025.pdf   │ 2026-03-14 │ ✅ Extracted │ 👁️  │ │
+   699→   699→│  │ 📎 1099_Acme_2025.pdf │ 2026-03-14 │ ⚠️ Review   │ 👁️  │ │
+   700→   700→│  └────────────────────────────────────────────────────────────┘ │
+   701→   701→│                                                                 │
+   702→   702→│  💬 Client Messages                                             │
+   703→   703→│  ┌────────────────────────────────────────────────────────────┐ │
+   704→   704→│  │ Client: "K-1 file uploaded, please confirm."  10:30 AM   │ │
+   705→   705→│  │ You: "Received, processing now."              10:35 AM   │ │
+   706→   706→│  └────────────────────────────────────────────────────────────┘ │
+   707→   707→└─────────────────────────────────────────────────────────────────┘
+   708→   708→```
+   709→   709→
+   710→   710→#### 5.1.3 Document Processing View
+   711→   711→
+   712→   712→```
+   713→   713→┌─────────────────────────────────────────────────────────────────┐
+   714→   714→│  ← Back to Engagement    📄 K-1_Acme_2025.pdf                 │
+   715→   715→│  Document Type: K-1 (1065)  Confidence: 97%  Status: ✅ Done   │
+   716→   716→├─────────────────────────────────────────────────────────────────┤
+   717→   717→│  ┌──────────┬──────────────────────────────────────────────────┐ │
+   718→   718→│  │ 📄 Preview│  📊 Extracted Data                             │ │
+   719→   719→│  │          │  ┌────────────────────────────────────────────┐  │ │
+   720→   720→│  │ [PDF     │  │ Entity Information                        │  │ │
+   721→   721→│  │  Preview]│  │  Name: Acme Partners LLC                  │  │ │
+   722→   722→│  │          │  │  EIN: 12-3456789                         │  │ │
+   723→   723→│  │          │  │  Type: Partnership                        │  │ │
+   724→   724→│  │          │  ├────────────────────────────────────────────┤  │ │
+   725→   725→│  │          │  │ Partner Information                       │  │ │
+   726→   726→│  │          │  │  Name: John Smith                         │  │ │
+   727→   727→│  │          │  │  SSN: ***-**-1234                        │  │ │
+   728→   728→│  │          │  │  Ownership%: 33.3%                       │  │ │
+   729→   729→│  │          │  ├────────────────────────────────────────────┤  │ │
+   730→   730→│  │          │  │ 📊 Income Allocation  │ Amount   │ Conf.  │  │ │
+   731→   731→│  │          │  │  Ordinary Business    │ $250,000 │ 98% ✅ │  │ │
+   732→   732→│  │          │  │  Rental Income        │ $12,000  │ 95% ✅ │  │ │
+   733→   733→│  │          │  │  Interest Income      │ $1,500   │ 92% ✅ │  │ │
+   734→   734→│  │          │  │  Capital Gains        │ $8,000   │ 85% ⚠️ │  │ │
+   735→   735→│  │          │  └────────────────────────────────────────────┘  │ │
+   736→   736→│  │          │  [✅ Verify All] [📤 Export to UltraTax] [✏️ Edit]│ │
+   737→   737→│  └──────────┴──────────────────────────────────────────────────┘ │
+   738→   738→└─────────────────────────────────────────────────────────────────┘
+   739→   739→```
+   740→   740→
+   741→   741→### 5.2 Mobile Design
+   742→   742→
+   743→   743→#### 5.2.1 Client Mobile View
+   744→   744→
+   745→   745→```
+   746→   746→┌─────────────────────────────────────────────────────────────────┐
+   747→   747→│  🔷 TaxDox AI                                    🔔 3         │
+   748→   748→│  ────────────────────────────────────────────────────────────── │
+   749→   749→│  👋 Welcome back, John Smith                                   │
+   750→   750→│  Your tax document preparation progress: 65%                   │
+   751→   751→│  ┌────────────────────────────────────────────────────────────┐ │
+   752→   752→│  │  ████████░░░░░░░░░░  65%                                 │ │
+   753→   753→│  │  Deadline: April 15, 2026  ⏳ 23 days                    │ │
+   754→   754→│  └────────────────────────────────────────────────────────────┘ │
+   755→   755→│                                                                 │
+   756→   756→│  📋 Documents You Need to Provide (3 pending)                  │
+   757→   757→│  ┌────────────────────────────────────────────────────────────┐ │
+   758→   758→│  │  ⬜ Mortgage 1098 - 2025          📎 Upload              │ │
+   759→   759→│  │  ⬜ Charity Receipts              📎 Upload              │ │
+   760→   760→│  │  ⬜ Property Tax Bill             📎 Upload              │ │
+   761→   761→│  └────────────────────────────────────────────────────────────┘ │
+   762→   762→│                                                                 │
+   763→   763→│  ✅ Uploaded Documents (5 items)                                │
+   764→   764→│  ┌────────────────────────────────────────────────────────────┐ │
+   765→   765→│  │  ✅ W-2 - 2025                   Reviewed  ✓              │ │
+   766→   766→│  │  ✅ 1099-INT - 2025              Processing  ⟳            │ │
+   767→   767→│  │  ✅ K-1 - 2025                   Pending    ⏳            │ │
+   768→   768→│  └────────────────────────────────────────────────────────────┘ │
+   769→   769→│                                                                 │
+   770→   770→│  📎 Quick Upload                                                │
+   771→   771→│  ┌────────────────────────────────────────────────────────────┐ │
+   772→   772→│  │  [📷 Camera]  [📁 Photos]  [📄 Files]  [📧 Email]        │ │
+   773→   773→│  └────────────────────────────────────────────────────────────┘ │
+   774→   774→│                                                                 │
+   775→   775→│  💬 Message Accountant                                          │
+   776→   776→│  ┌────────────────────────────────────────────────────────────┐ │
+   777→   777→│  │  [Enter message...                            ] [Send]    │ │
+   778→   778→│  └────────────────────────────────────────────────────────────┘ │
+   779→   779→└─────────────────────────────────────────────────────────────────┘
+   780→   780→```
+   781→   781→
+   782→   782→#### 5.2.2 Accountant Mobile View
+   783→   783→
+   784→   784→```
+   785→   785→┌─────────────────────────────────────────────────────────────────┐
+   786→   786→│  🔷 TaxDox AI                                    🔔 12        │
+   787→   787→│  ────────────────────────────────────────────────────────────── │
+   788→   788→│  📊 Today's Overview                                           │
+   789→   789→│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐                         │
+   790→   790→│  │ Need  │ │Pending│ │Done  │ │Remind│                         │
+   791→   791→│  │Review │ │ AI   │ │Today │ │Send  │                         │
+   792→   792→│  │  12   │ │  8   │ │  5   │ │  3   │                         │
+   793→   793→│  └──────┘ └──────┘ └──────┘ └──────┘                         │
+   794→   794→│                                                                 │
+   795→   795→│  ⏰ Urgent Tasks                                                │
+   796→   796→│  ┌────────────────────────────────────────────────────────────┐ │
+   797→   797→│  │  Acme Corp - K-1 Pending    ⏳ 2hrs   🔴                  │ │
+   798→   798→│  │  Smith LLC - Incomplete Doc ⏳ 4hrs   🟡                  │ │
+   799→   799→│  └────────────────────────────────────────────────────────────┘ │
+   800→   800→│                                                                 │
+   801→   801→│  📋 All Engagements                                             │
+   802→   802→│  ┌────────────────────────────────────────────────────────────┐ │
+   803→   803→│  │  Acme Corp     1040  85%  ████████░░  ⏳3d              │ │
+   804→   804→│  │  Smith LLC     1065  45%  ████░░░░░░  ⏳7d              │ │
+   805→   805→│  │  Johnson       1040  100% ██████████  ✅Done            │ │
+   806→   806→│  │  Williams      1120  20%  ██░░░░░░░░  ⏳14d             │ │
+   807→   807→│  └────────────────────────────────────────────────────────────┘ │
+   808→   808→│                                                                 │
+   809→   809→│  📎 Quick Actions                                               │
+   810→   810→│  [➕ New Engagement]  [📤 Bulk Send PBC]  [📊 Reports]         │
+   811→   811→└─────────────────────────────────────────────────────────────────┘
+   812→   812→```
+   813→   813→
+   814→   814→### 5.3 Design System
+   815→   815→
+   816→   816→#### Color Scheme
+   817→   817→- **Primary**: #2563EB (Tax Blue) — Trust, Professional, Reliable
+   818→   818→- **Success**: #10B981 (Emerald) — Completed, Verified
+   819→   819→- **Warning**: #F59E0B (Amber) — Attention needed, Pending
+   820→   820→- **Danger**: #EF4444 (Red) — Urgent, Error
+   821→   821→- **Background**: #F8FAFC (Very light gray) — Clean, Focused
+   822→   822→- **Cards**: #FFFFFF (White) — Clear, Hierarchical
+   823→   823→
+   824→   824→#### Typography
+   825→   825→- **Headings**: Inter (Modern, Clean, Professional)
+   826→   826→- **Body**: Inter (Excellent readability)
+   827→   827→- **Code/Data**: JetBrains Mono (Monospace, Precise)
+   828→   828→
+   829→   829→#### Responsive Breakpoints
+   830→   830→- **Desktop**: ≥1024px (Priority)
+   831→   831→- **Tablet**: 768-1023px
+   832→   832→- **Mobile**: <768px
+   833→   833→
+   834→   834→
+   835→   835→## Part Six: Multi-Country Tax Support
+   836→   836→
+   837→   837→### 6.1 Countries Supported in MVP
+   838→   838→
+   839→   839→| Country | Tax System Characteristics | Key Document Types | Priority |
+   840→   840→|---------|---------------------------|-------------------|----------|
+   841→   841→| **United States** | Federal + State taxes, complex | W-2, 1099 series, K-1, 1040 series | P0 |
+   842→   842→| **United Kingdom** | PAYE, Self-Assessment | P60, P45, SA100, VAT returns | P1 |
+   843→   843→| **Canada** | Federal + Provincial taxes | T4, T5, T3, T1, GST/HST | P1 |
+   844→   844→| **India** | Central + State taxes | Form 16, 26AS, ITR series, GST | P1 |
+   845→   845→| **Australia** | Federal tax system | PAYG, TFN, BAS, IAS, Individual tax return | P2 |
+   846→   846→
+   847→   847→### 6.2 Tax Rules Engine Design
+   848→   848→
+   849→   849→```yaml
+   850→   850→# Tax rules configuration example
+   851→   851→tax_rules:
+   852→   852→  us:
+   853→   853→    federal:
+   854→   854→      - rule: "standard_deduction_2025"
+   855→   855→        type: "deduction"
+   856→   856→        value: 14600  # Single
+   857→   857→        conditions:
+   858→   858→          - filing_status: "single"
+   859→   859→    state:
+   860→   860→      - rule: "california_standard_deduction_2025"
+   861→   861→        type: "deduction"
+   862→   862→        value: 5400
+   863→   863→        conditions:
+   864→   864→          - state: "CA"
+   865→   865→  
+   866→   866→  uk:
+   867→   867→    personal_allowance:
+   868→   868→      - rule: "personal_allowance_2025"
+   869→   869→        type: "deduction"
+   870→   870→        value: 12570  # GBP
+   871→   871→        conditions:
+   872→   872→          - income: "< 100000"
+   873→   873→  
+   874→   874→  canada:
+   875→   875→    federal:
+   876→   876→      - rule: "basic_personal_amount_2025"
+   877→   877→        type: "deduction"
+   878→   878→        value: 15000  # CAD
+   879→   879→```
+   880→   880→
+   881→   881→### 6.3 Multi-Language Support
+   882→   882→
+   883→   883→| Language | Interface | Document Recognition | Extraction | PBC List |
+   884→   884→|----------|-----------|---------------------|------------|----------|
+   885→   885→| English | ✅ | ✅ | ✅ | ✅ |
+   886→   886→| Spanish | ✅ | ✅ | 🟡 | ✅ |
+   887→   887→| Chinese | ✅ | 🟡 | 🟡 | ✅ |
+   888→   888→| French | ✅ | 🟡 | 🟡 | ✅ |
+   889→   889→| Hindi | ✅ | 🟡 | 🟡 | 🟡 |
+   890→   890→
+   891→   891→*✅ Full support | 🟡 Partial support | Blank: Planned*
+   892→   892→
+   893→   893→
+   894→   894→## Part Seven: Development Roadmap
+   895→   895→
+   896→   896→### 7.1 MVP (Months 1-3)
+   897→   897→
+   898→   898→**Goal**: Validate core hypotheses, acquire first 10 paying customers
+   899→   899→
+   900→   900→| Phase | Tasks | Time | Tools |
+   901→   901→|-------|-------|------|-------|
+   902→   902→| **Weeks 1-2** | Project setup, database design, authentication system | 2 weeks | Cursor/Claude Code |
+   903→   903→| **Weeks 3-4** | Client management, Engagement management, Basic UI | 2 weeks | Replit/Lovable |
+   904→   904→| **Weeks 5-6** | PBC list generation, Client portal upload | 2 weeks | Cursor |
+   905→   905→| **Weeks 7-8** | AI document classification (10 core types), Basic extraction | 2 weeks | Claude API + OCR |
+   906→   906→| **Weeks 9-10** | Tax software integration (UltraTax + CSV export) | 2 weeks | API integration |
+   907→   907→| **Weeks 11-12** | Testing, fixes, deployment, launch | 2 weeks | AWS/Azure |
+   908→   908→
+   909→   909→**MVP Core Features**:
+   910→   910→- ✅ Client and Engagement management
+   911→   911→- ✅ PBC list generation (template-based)
+   912→   912→- ✅ Client portal (document upload)
+   913→   913→- ✅ AI document classification (10 core types)
+   914→   914→- ✅ Basic data extraction (W-2, 1099-INT, K-1)
+   915→   915→- ✅ Export to CSV/Excel
+   916→   916→- ✅ Progress tracking
+   917→   917→
+   918→   918→### 7.2 V1.0 (Months 4-6)
+   919→   919→
+   920→   920→**Goal**: Complete feature set, acquire first 100 customers
+   921→   921→
+   922→   922→| Feature | Description |
+   923→   923→|---------|-------------|
+   924→   924→| Full AI Extraction | All 1040-related document types |
+   925→   925→| Tax Software Integration | UltraTax, CCH, Lacerte |
+   926→   926→| Workflow Automation | Auto-assignment, reminders, status updates |
+   927→   927→| Report Dashboards | Operational and financial metrics |
+   928→   928→| Mobile App | Client mobile upload |
+   929→   929→| Multi-User | Team collaboration and permissions |
+   930→   930→
+   931→   931→### 7.3 V2.0 (Months 7-12)
+   932→   932→
+   933→   933→**Goal**: Expansion and scaling
+   934→   934→
+   935→   935→| Feature | Description |
+   936→   936→|---------|-------------|
+   937→   937→| Enterprise Tax | 1065, 1120, 1120S full support |
+   938→   938→| Multi-Country Support | UK, Canada, India |
+   939→   939→| Open API | Partner integrations |
+   940→   940→| Advanced AI | Proactive anomaly detection, tax optimization suggestions |
+   941→   941→| Batch Processing | Bulk import and export |
+   942→   942→
+   943→   943→
+   944→   944→## Part Eight: Customer Acquisition Strategy
+   945→   945→
+   946→   946→### 8.1 First 10 Customers (Months 1-3)
+   947→   947→
+   948→   948→| Strategy | Description | Cost |
+   949→   949→|----------|-------------|------|
+   950→   950→| **Personal Network** | Contact former colleagues, alumni in accounting | $0 |
+   951→   951→| **LinkedIn Outreach** | Targeted contact with small firm partners | $0 |
+   952→   952→| **Free Trial** | Offer 6-month free trial to 5 firms | $0 |
+   953→   953→| **Tax Communities** | Post on r/taxpros, r/CPA | $0 |
+   954→   954→| **Product Hunt** | Launch on Product Hunt | $0 |
+   955→   955→
+   956→   956→### 8.2 First 100 Customers (Months 4-6)
+   957→   957→
+   958→   958→| Strategy | Description | Budget |
+   959→   959→|----------|-------------|--------|
+   960→   960→| **Content Marketing** | Blogs, whitepapers, case studies | $1,000/month |
+   961→   961→| **Industry Events** | Attend tax/accounting conferences | $2,000 |
+   962→   962→| **Partnerships** | Partner with tax software companies | $0 |
+   963→   963→| **Paid Advertising** | LinkedIn targeted ads | $2,000/month |
+   964→   964→| **Referral Program** | Discount for referring new clients | $0 |
+   965→   965→
+   966→   966→### 8.3 First 1,000 Customers (Months 7-12)
+   967→   967→
+   968→   968→| Strategy | Description | Budget |
+   969→   969→|----------|-------------|--------|
+   970→   970→| **Channel Partnerships** | Partner with CPA associations, accounting training institutions | $5,000/month |
+   971→   971→| **Content at Scale** | Webinars, podcasts, video tutorials | $3,000/month |
+   972→   972→| **Sales Team** | Hire 2-3 sales representatives | $20,000/month |
+   973→   973→| **International Expansion** | Enter UK, Canada markets | $10,000 |
+   974→   974→
+   975→   975→
+   976→   976→## Part Nine: Pricing and Revenue Model
+   977→   977→
+   978→   978→### 9.1 Pricing Strategy
+   979→   979→
+   980→   980→| Tier | Price | Suitable For | Features |
+   981→   981→|------|-------|--------------|----------|
+   982→   982→| **Starter** | $99/month | Solo practitioners (1-2 people) | 50 documents/month, Basic extraction, Email support |
+   983→   983→| **Professional** | $299/month | Small firms (3-10 people) | 200 documents/month, Full extraction, All integrations, Priority support |
+   984→   984→| **Business** | $799/month | Mid-sized firms (11-50 people) | 1,000 documents/month, Workflow automation, Reporting, Dedicated support |
+   985→   985→| **Enterprise** | Custom | Large firms (50+ people) | Unlimited documents, Custom integrations, SLA, Dedicated account manager |
+   986→   986→
+   987→   987→### 9.2 Pay-As-You-Go Options
+   988→   988→
+   989→   989→| Billing Method | Price | Use Case |
+   990→   990→|----------------|-------|----------|
+   991→   991→| **Per Document** | $0.50/document | Firms with high seasonal volatility |
+   992→   992→| **Per Engagement** | $10/engagement | Project-based work |
+   993→   993→| **Per User** | $50/user/month | Stable team size |
+   994→   994→
+   995→   995→### 9.3 Revenue Projections (Year 1)
+   996→   996→
+   997→   997→| Month | Customers | MRR | Annual Run Rate |
+   998→   998→|-------|-----------|-----|-----------------|
+   999→   999→| Month 3 | 10 | $3,000 | $36,000 |
+  1000→  1000→| Month 6 | 50 | $15,000 | $180,000 |
+  1001→  1001→| Month 9 | 150 | $45,000 | $540,000 |
+  1002→  1002→| Month 12 | 300 | $90,000 | $1,080,000 |
+  1003→  1003→
+  1004→  1004→### 9.4 Unit Economics
+  1005→  1005→
+  1006→  1006→| Metric | Value |
+  1007→  1007→|--------|-------|
+  1008→  1008→| Customer Acquisition Cost (CAC) | $500-1,500 |
+  1009→  1009→| Average Customer Lifetime (LTV) | 36 months |
+  1010→  1010→| Average Monthly Revenue Per User (ARPU) | $300 |
+  1011→  1011→| LTV/CAC | 6-10x |
+  1012→  1012→| Gross Margin | 85% |
+  1013→  1013→
+  1014→  1014→
+  1015→  1015→## Part Ten: Competitive Differentiation Summary
+  1016→  1016→
+  1017→  1017→### TaxDox AI's Unique Value Proposition
+  1018→  1018→
+  1019→  1019→| Dimension | Competitors | TaxDox AI |
+  1020→  1020→|-----------|-------------|-----------|
+  1021→  1021→| **PBC Management** | Suralink (no AI extraction) | ✅ Integrated AI extraction + management |
+  1022→  1022→| **Document Extraction** | Magnetic (no PBC management) | ✅ Complete PBC context |
+  1023→  1023→| **End-to-End Workflow** | Fragmented tool chain | ✅ Unified platform |
+  1024→  1024→| **Pricing** | High-end (Black Ore) or feature-incomplete | ✅ Progressive pricing |
+  1025→  1025→| **Client Experience** | Complex portals | ✅ Zero learning curve |
+  1026→  1026→| **Multi-Country Support** | US only | ✅ Multi-country tax systems |
+  1027→  1027→| **AI-Native** | Partially AI-enhanced | ✅ AI-first architecture |
+  1028→  1028→
+  1029→  1029→### Core Differentiating Slogan
+  1030→  1030→
+  1031→  1031→> **"Other tools extract data. TaxDox AI understands your tax workflow."**
+  1032→  1032→
+  1033→  1033→
+  1034→  1034→## Part Eleven: Success Metrics
+  1035→  1035→
+  1036→  1036→### 11.1 Product Metrics
+  1037→  1037→
+  1038→  1038→| Metric | Target (6 Months) | Target (12 Months) |
+  1039→  1039→|--------|-------------------|-------------------|
+  1040→  1040→| Document Processing Accuracy | >90% | >95% |
+  1041→  1041→| Document Classification Accuracy | >95% | >98% |
+  1042→  1042→| Average Processing Time | <5 min/document | <2 min/document |
+  1043→  1043→| Customer NPS | >40 | >60 |
+  1044→  1044→
+  1045→  1045→### 11.2 Business Metrics
+  1046→  1046→
+  1047→  1047→| Metric | Target (6 Months) | Target (12 Months) |
+  1048→  1048→|--------|-------------------|-------------------|
+  1049→  1049→| Paying Customers | 50 | 300 |
+  1050→  1050→| MRR | $15,000 | $90,000 |
+  1051→  1051→| Annual Run Rate | $180,000 | $1,080,000 |
+  1052→  1052→| Customer Churn Rate | <5%/month | <3%/month |
+  1053→  1053→
+  1054→  1054→### 11.3 Efficiency Metrics
+  1055→  1055→
+  1056→  1056→| Metric | Baseline (No Tool) | Target (With TaxDox) |
+  1057→  1057→|--------|-------------------|---------------------|
+  1058→  1058→| Preparation Time per Return | 3-5 hours | 30-60 minutes |
+  1059→  1059→| Document Collection Time | 2-4 weeks | 3-5 days |
+  1060→  1060→| Data Entry Error Rate | 5-10% | <1% |
+  1061→  1061→| Returns Processed per Accountant | 100-200/year | 300-500/year |
+  1062→  1062→
+  1063→  1063→
+  1064→  1064→## Part Twelve: Risks and Mitigation
+  1065→  1065→
+  1066→  1066→| Risk | Likelihood | Impact | Mitigation Strategy |
+  1067→  1067→|------|------------|--------|---------------------|
+  1068→  1068→| AI accuracy below target | Medium | High | Human review safety net in MVP, continuous model training |
+  1069→  1069→| Tax software integration difficulties | Medium | High | Prioritize CSV export, gradually add API integration |
+  1070→  1070→| Client data security | Low | Extremely High | Enterprise-grade security from day 1, SOC 2 certification |
+  1071→  1071→| Competitors rapidly follow | High | Medium | Focus on unique PBC + extraction integration, build data flywheel |
+  1072→  1072→| Long sales cycle | High | Medium | Offer free trial, lower decision barriers |
+  1073→  1073→| Regulatory changes | Low | Medium | Build tax rules engine, rapidly respond to changes |
+  1074→  1074→
+  1075→  1075→
+  1076→  1076→## Part Thirteen: Founding Team Requirements
+  1077→  1077→
+  1078→  1078→| Role | Skills | AI-Assisted Possible |
+  1079→  1079→|------|--------|---------------------|
+  1080→  1080→| **Technical Founder** | Full-stack development, AI/ML, Cloud architecture | ✅ Cursor/Claude Code assisted |
+  1081→  1081→| **Product Lead** | Tax domain knowledge, Product design | ✅ AI-assisted design |
+  1082→  1082→| **Domain Expert** | Accounting/Tax background (Advisory) | ❌ Requires human |
+  1083→  1083→| **Growth Lead** | Marketing, Sales | ✅ AI-assisted content generation |
+  1084→  1084→
+  1085→  1085→
+  1086→  1086→## Appendix: Reference Resources
+  1087→  1087→
+  1088→  1088→### Key Data Sources
+  1089→  1089→- American Institute of CPAs (AICPA) Industry Reports
+  1090→  1090→- Y Combinator Tax Tech Company Profiles
+  1091→  1091→- Accounting Today Industry News
+  1092→  1092→- Forbes Tax Tech Analysis
+  1093→  1093→
+  1094→  1094→### Competitor Websites
+  1095→  1095→- Magnetic: https://www.ycombinator.com/companies/magnetic
+  1096→  1096→- Black Ore: https://blackore.ai/
+  1097→  1097→- Soraban: https://www.soraban.com/
+  1098→  1098→- Truss: https://gettruss.io/
+  1099→  1099→- Combinely: https://www.combinely.ai/
+  1100→  1100→- Suralink: https://www.suralink.com/
+  1101→  1101→- TaxDome: https://taxdome.com/
+  1102→  1102→- Canopy: https://www.getcanopy.com/
+  1103→  1103→
+  1104→  1104→---
+  1105→  1105→
+  1106→  1106→**Document Version**: 1.0
+  1107→  1107→**Last Updated**: June 2026
+  1108→  1108→**Prepared For**: AI-Assisted Development (Cursor/Claude Code/Replit Agent)
