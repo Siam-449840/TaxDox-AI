@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +20,6 @@ const DEMO_EMAIL = 'sarah.chen@meridiancpa.com'
 const DEMO_PASSWORD = 'TaxDox2025!'
 
 export function SignInForm() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -49,8 +47,9 @@ export function SignInForm() {
       }
 
       toast.success('Welcome back to TaxDox AI')
-      router.push('/')
-      router.refresh()
+      // Use full page navigation to ensure session cookie is sent and
+      // SessionProvider reinitializes with the authenticated state
+      window.location.href = '/'
     } catch (err) {
       console.error('Sign-in error:', err)
       setError('Something went wrong. Please try again.')

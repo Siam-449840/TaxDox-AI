@@ -2,7 +2,6 @@
 
 import { useMemo, useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -102,7 +101,6 @@ function getPasswordStrength(password: string): PasswordStrength {
 }
 
 export function SignUpForm() {
-  const router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [firmName, setFirmName] = useState('')
@@ -167,13 +165,13 @@ export function SignUpForm() {
       if (!signInRes || signInRes.error) {
         // Account was created but auto sign-in failed — send to sign-in page
         toast.success('Account created! Please sign in to continue.')
-        router.push('/auth/signin')
+        window.location.href = '/auth/signin'
         return
       }
 
       toast.success('Account created — welcome to TaxDox AI!')
-      router.push('/')
-      router.refresh()
+      // Full page reload to ensure session is established
+      window.location.href = '/'
     } catch (err) {
       console.error('Sign-up error:', err)
       setError('Something went wrong. Please try again.')
