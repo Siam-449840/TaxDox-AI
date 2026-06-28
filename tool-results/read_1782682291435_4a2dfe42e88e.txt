@@ -1,0 +1,1633 @@
+     1→'use client'
+     2→
+     3→import { useCallback, useEffect, useState } from 'react'
+     4→import {
+     5→  ArrowLeft,
+     6→  Mail,
+     7→  Phone,
+     8→  CreditCard,
+     9→  Calendar,
+    10→  Copy,
+    11→  Plus,
+    12→  FileText,
+    13→  ClipboardList,
+    14→  Activity as ActivityIcon,
+    15→  Pencil,
+    16→  Building2,
+    17→  User as UserIcon,
+    18→  ScrollText,
+    19→  Heart,
+    20→  TrendingUp,
+    21→  Receipt,
+    22→  IdCard,
+    23→  Home as HomeIcon,
+    24→  FileSpreadsheet,
+    25→  FileImage,
+    26→  Upload,
+    27→  Sparkles,
+    28→  CheckCircle2,
+    29→  Send,
+    30→  MessageSquare,
+    31→  RefreshCw,
+    32→  CircleDot,
+    33→  Inbox,
+    34→  Loader2,
+    35→  AlertCircle,
+    36→  CalendarClock,
+    37→  DollarSign,
+    38→  FolderOpen,
+    39→  Clock,
+    40→  ArrowUpRight,
+    41→} from 'lucide-react'
+    42→import { useAppStore } from '@/lib/store'
+    43→import { StatusBadge } from '@/components/shared/status-badge'
+    44→import { PriorityBadge } from '@/components/shared/priority-badge'
+    45→import { ProgressRing } from '@/components/shared/progress-ring'
+    46→import { ConfidenceMeter } from '@/components/shared/confidence-meter'
+    47→import {
+    48→  CLIENT_TYPES,
+    49→  COUNTRIES,
+    50→  ENGAGEMENT_TYPES,
+    51→  DOCUMENT_CATEGORIES,
+    52→  DOCUMENT_TYPE_MAP,
+    53→} from '@/lib/constants'
+    54→import { Card } from '@/components/ui/card'
+    55→import { Button } from '@/components/ui/button'
+    56→import { Badge } from '@/components/ui/badge'
+    57→import { Progress } from '@/components/ui/progress'
+    58→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    59→import { ScrollArea } from '@/components/ui/scroll-area'
+    60→import { Separator } from '@/components/ui/separator'
+    61→import { Skeleton } from '@/components/ui/skeleton'
+    62→import { toast } from 'sonner'
+    63→import { format, formatDistanceToNow, differenceInDays, isValid } from 'date-fns'
+    64→import { cn } from '@/lib/utils'
+    65→import type {
+    66→  Client,
+    67→  Engagement,
+    68→  TaxDocument,
+    69→  Activity,
+    70→  ClientType,
+    71→  Priority,
+    72→} from '@/lib/types'
+    73→
+    74→/* ────────────────────────────────────────────────────────────────────────────
+    75→ *  Local types
+    76→ * ────────────────────────────────────────────────────────────────────────── */
+    77→
+    78→type AssignedUser = {
+    79→  id: string
+    80→  name: string
+    81→  role?: string
+    82→  email?: string
+    83→  image?: string | null
+    84→}
+    85→
+    86→type EngagementRow = Engagement & {
+    87→  client?: Client
+    88→  assignedTo?: AssignedUser | null
+    89→  _count?: {
+    90→    documents: number
+    91→    pbcItems: number
+    92→    pbcCompleted: number
+    93→    messages: number
+    94→  }
+    95→}
+    96→
+    97→type DocumentRow = TaxDocument & {
+    98→  client?: { name: string; email: string }
+    99→  pbcItem?: { documentType: string; description: string } | null
+   100→}
+   101→
+   102→type ActivityRow = Activity & {
+   103→  engagement?: { id: string; engagementType: string; taxYear: number } | null
+   104→}
+   105→
+   106→type TabValue = 'overview' | 'engagements' | 'documents' | 'activity'
+   107→
+   108→/* ────────────────────────────────────────────────────────────────────────────
+   109→ *  Constants & helpers
+   110→ * ────────────────────────────────────────────────────────────────────────── */
+   111→
+   112→const TYPE_AVATAR_COLORS: Record<ClientType, string> = {
+   113→  individual:
+   114→    'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+   115→  business:
+   116→    'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300',
+   117→  trust: 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300',
+   118→  nonprofit: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',
+   119→}
+   120→
+   121→const TYPE_BADGE_COLORS: Record<ClientType, string> = {
+   122→  individual:
+   123→    'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+   124→  business:
+   125→    'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-900',
+   126→  trust: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900',
+   127→  nonprofit:
+   128→    'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
+   129→}
+   130→
+   131→const TYPE_ICON: Record<ClientType, typeof UserIcon> = {
+   132→  individual: UserIcon,
+   133→  business: Building2,
+   134→  trust: ScrollText,
+   135→  nonprofit: Heart,
+   136→}
+   137→
+   138→const ENGAGEMENT_TYPE_COLORS: Record<string, string> = {
+   139→  '1040':
+   140→    'bg-teal-50 text-teal-700 ring-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:ring-teal-900',
+   141→  '1065':
+   142→    'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900',
+   143→  '1120':
+   144→    'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900',
+   145→  '1120S':
+   146→    'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900',
+   147→  '1041':
+   148→    'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900',
+   149→}
+   150→
+   151→const ACTIVE_ENGAGEMENT_STATUSES = [
+   152→  'created',
+   153→  'pbc_sent',
+   154→  'collecting',
+   155→  'processing',
+   156→  'review',
+   157→  'filing',
+   158→]
+   159→
+   160→/* Activity type → color/icon mapping (per spec). */
+   161→const ACTIVITY_STYLE_MAP: Record<
+   162→  string,
+   163→  { icon: typeof CircleDot; surface: string; iconColor: string; line: string }
+   164→> = {
+   165→  upload: {
+   166→    icon: Upload,
+   167→    surface: 'bg-blue-100 dark:bg-blue-950/40',
+   168→    iconColor: 'text-blue-600 dark:text-blue-400',
+   169→    line: 'bg-blue-200 dark:bg-blue-900',
+   170→  },
+   171→  classify: {
+   172→    icon: Sparkles,
+   173→    surface: 'bg-violet-100 dark:bg-violet-950/40',
+   174→    iconColor: 'text-violet-600 dark:text-violet-400',
+   175→    line: 'bg-violet-200 dark:bg-violet-900',
+   176→  },
+   177→  extract: {
+   178→    icon: FileText,
+   179→    surface: 'bg-teal-100 dark:bg-teal-950/40',
+   180→    iconColor: 'text-teal-600 dark:text-teal-400',
+   181→    line: 'bg-teal-200 dark:bg-teal-900',
+   182→  },
+   183→  verify: {
+   184→    icon: CheckCircle2,
+   185→    surface: 'bg-emerald-100 dark:bg-emerald-950/40',
+   186→    iconColor: 'text-emerald-600 dark:text-emerald-400',
+   187→    line: 'bg-emerald-200 dark:bg-emerald-900',
+   188→  },
+   189→  send: {
+   190→    icon: Send,
+   191→    surface: 'bg-cyan-100 dark:bg-cyan-950/40',
+   192→    iconColor: 'text-cyan-600 dark:text-cyan-400',
+   193→    line: 'bg-cyan-200 dark:bg-cyan-900',
+   194→  },
+   195→  message: {
+   196→    icon: MessageSquare,
+   197→    surface: 'bg-amber-100 dark:bg-amber-950/40',
+   198→    iconColor: 'text-amber-600 dark:text-amber-400',
+   199→    line: 'bg-amber-200 dark:bg-amber-900',
+   200→  },
+   201→  status_change: {
+   202→    icon: RefreshCw,
+   203→    surface: 'bg-slate-100 dark:bg-slate-800/60',
+   204→    iconColor: 'text-slate-600 dark:text-slate-300',
+   205→    line: 'bg-slate-200 dark:bg-slate-700',
+   206→  },
+   207→}
+   208→
+   209→const DEFAULT_ACTIVITY_STYLE = {
+   210→  icon: CircleDot,
+   211→  surface: 'bg-slate-100 dark:bg-slate-800/60',
+   212→  iconColor: 'text-slate-600 dark:text-slate-300',
+   213→  line: 'bg-slate-200 dark:bg-slate-700',
+   214→}
+   215→
+   216→/* Document category icons (mirrors documents-view). */
+   217→const CATEGORY_ICON_MAP: Record<string, typeof FileText> = {
+   218→  income: TrendingUp,
+   219→  deduction: Receipt,
+   220→  identity: IdCard,
+   221→  business: Building2,
+   222→  investment: TrendingUp,
+   223→  realestate: HomeIcon,
+   224→  other: FileSpreadsheet,
+   225→}
+   226→
+   227→const CATEGORY_STYLE_MAP: Record<
+   228→  string,
+   229→  { surface: string; icon: string }
+   230→> = {
+   231→  income: {
+   232→    surface: 'bg-emerald-50 dark:bg-emerald-950/30',
+   233→    icon: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+   234→  },
+   235→  deduction: {
+   236→    surface: 'bg-amber-50 dark:bg-amber-950/30',
+   237→    icon: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+   238→  },
+   239→  identity: {
+   240→    surface: 'bg-violet-50 dark:bg-violet-950/30',
+   241→    icon: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400',
+   242→  },
+   243→  business: {
+   244→    surface: 'bg-cyan-50 dark:bg-cyan-950/30',
+   245→    icon: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400',
+   246→  },
+   247→  investment: {
+   248→    surface: 'bg-blue-50 dark:bg-blue-950/30',
+   249→    icon: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
+   250→  },
+   251→  realestate: {
+   252→    surface: 'bg-orange-50 dark:bg-orange-950/30',
+   253→    icon: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400',
+   254→  },
+   255→  other: {
+   256→    surface: 'bg-slate-100 dark:bg-slate-900/40',
+   257→    icon: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+   258→  },
+   259→}
+   260→
+   261→function getCategoryStyle(category: string | undefined) {
+   262→  if (!category) return CATEGORY_STYLE_MAP.other
+   263→  return CATEGORY_STYLE_MAP[category] || CATEGORY_STYLE_MAP.other
+   264→}
+   265→
+   266→function getInitials(name?: string | null): string {
+   267→  if (!name) return '?'
+   268→  const parts = name.trim().split(/\s+/).filter(Boolean)
+   269→  if (parts.length === 0) return '?'
+   270→  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+   271→  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+   272→}
+   273→
+   274→function getTypeDef(value: string) {
+   275→  return CLIENT_TYPES.find((t) => t.value === value) || CLIENT_TYPES[0]
+   276→}
+   277→
+   278→function getCountryDef(code: string) {
+   279→  return COUNTRIES.find((c) => c.code === code) || COUNTRIES[0]
+   280→}
+   281→
+   282→function engagementTypeLabel(type: string): string {
+   283→  return ENGAGEMENT_TYPES.find((t) => t.value === type)?.label ?? type
+   284→}
+   285→
+   286→/** Format tax ID for display — keeps existing mask, otherwise masks last 4. */
+   287→function formatTaxId(taxId: string | null | undefined, type: ClientType): string {
+   288→  if (!taxId) return '—'
+   289→  if (taxId.includes('*')) return taxId
+   290→  if (type === 'individual' && /^\d{9}$/.test(taxId)) {
+   291→    return `***-**-${taxId.slice(-4)}`
+   292→  }
+   293→  if (type !== 'individual' && /^\d{9}$/.test(taxId)) {
+   294→    return `**-***${taxId.slice(-4)}`
+   295→  }
+   296→  if (taxId.length > 4) return `••••${taxId.slice(-4)}`
+   297→  return taxId
+   298→}
+   299→
+   300→function formatFee(value: number): string {
+   301→  return new Intl.NumberFormat('en-US', {
+   302→    style: 'currency',
+   303→    currency: 'USD',
+   304→    maximumFractionDigits: 0,
+   305→  }).format(value || 0)
+   306→}
+   307→
+   308→function getDeadlineState(deadline?: string | null) {
+   309→  if (!deadline) return null
+   310→  const date = new Date(deadline)
+   311→  if (!isValid(date)) return null
+   312→  const days = differenceInDays(date, new Date())
+   313→  let tone: 'red' | 'amber' | 'neutral' = 'neutral'
+   314→  if (days < 0) tone = 'red'
+   315→  else if (days <= 7) tone = 'amber'
+   316→  return { date, days, tone }
+   317→}
+   318→
+   319→function fileIconFor(mimeType: string): typeof FileText {
+   320→  if (mimeType?.startsWith('image/')) return FileImage
+   321→  if (
+   322→    mimeType?.includes('sheet') ||
+   323→    mimeType?.includes('excel') ||
+   324→    mimeType?.includes('csv')
+   325→  )
+   326→    return FileSpreadsheet
+   327→  return FileText
+   328→}
+   329→
+   330→function formatFileSize(bytes: number): string {
+   331→  if (!bytes) return '—'
+   332→  if (bytes < 1024) return `${bytes} B`
+   333→  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+   334→  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+   335→}
+   336→
+   337→/* ────────────────────────────────────────────────────────────────────────────
+   338→ *  Main view
+   339→ * ────────────────────────────────────────────────────────────────────────── */
+   340→
+   341→export function ClientDetailView() {
+   342→  const clientId = useAppStore((s) => s.selectedClientId)
+   343→  const navigate = useAppStore((s) => s.navigate)
+   344→  const openEngagement = useAppStore((s) => s.openEngagement)
+   345→  const openDocument = useAppStore((s) => s.openDocument)
+   346→
+   347→  const [client, setClient] = useState<Client | null>(null)
+   348→  const [engagements, setEngagements] = useState<EngagementRow[]>([])
+   349→  const [documents, setDocuments] = useState<DocumentRow[]>([])
+   350→  const [activities, setActivities] = useState<ActivityRow[]>([])
+   351→
+   352→  const [loading, setLoading] = useState(true)
+   353→  const [notFound, setNotFound] = useState(false)
+   354→  const [activeTab, setActiveTab] = useState<TabValue>('overview')
+   355→  const [activitiesLoading, setActivitiesLoading] = useState(false)
+   356→
+   357→  /* ── Fetch ─────────────────────────────────────────────────────────── */
+   358→
+   359→  const fetchAll = useCallback(async () => {
+   360→    if (!clientId) {
+   361→      setLoading(false)
+   362→      return
+   363→    }
+   364→    setLoading(true)
+   365→    setNotFound(false)
+   366→    try {
+   367→      const [clientsRes, engRes, docsRes] = await Promise.all([
+   368→        fetch('/api/clients'),
+   369→        fetch(`/api/engagements?clientId=${encodeURIComponent(clientId)}`),
+   370→        fetch(`/api/documents?clientId=${encodeURIComponent(clientId)}`),
+   371→      ])
+   372→
+   373→      if (!clientsRes.ok) throw new Error('Failed to load clients')
+   374→
+   375→      const [clientsJson, engJson, docsJson] = await Promise.all([
+   376→        clientsRes.json(),
+   377→        engRes.json(),
+   378→        docsRes.json(),
+   379→      ])
+   380→
+   381→      const foundClient = (clientsJson.clients as Client[]).find(
+   382→        (c) => c.id === clientId
+   383→      )
+   384→      if (!foundClient) {
+   385→        setNotFound(true)
+   386→        setLoading(false)
+   387→        return
+   388→      }
+   389→      setClient(foundClient)
+   390→      setEngagements((engJson.engagements as EngagementRow[]) || [])
+   391→      setDocuments((docsJson.documents as DocumentRow[]) || [])
+   392→      setActivities([])
+   393→      setLoading(false)
+   394→    } catch (err) {
+   395→      console.error(err)
+   396→      setNotFound(true)
+   397→      setLoading(false)
+   398→    }
+   399→  }, [clientId])
+   400→
+   401→  // Fetch engagement detail records (in parallel) so we can collect their
+   402→  // activity timelines. We cap to the first 12 engagements to stay reasonable.
+   403→  const fetchActivities = useCallback(async () => {
+   404→    if (!engagements.length) {
+   405→      setActivities([])
+   406→      return
+   407→    }
+   408→    setActivitiesLoading(true)
+   409→    try {
+   410→      const targets = engagements.slice(0, 12)
+   411→      const settled = await Promise.allSettled(
+   412→        targets.map((e) =>
+   413→          fetch(`/api/engagements/${e.id}`).then((r) =>
+   414→            r.ok ? r.json() : null
+   415→          )
+   416→        )
+   417→      )
+   418→      const collected: ActivityRow[] = []
+   419→      settled.forEach((res, idx) => {
+   420→        if (res.status !== 'fulfilled' || !res.value) return
+   421→        const detail = res.value.engagement
+   422→        if (!detail?.activities) return
+   423→        const eng = targets[idx]
+   424→        for (const a of detail.activities as Activity[]) {
+   425→          collected.push({
+   426→            ...a,
+   427→            engagement: {
+   428→              id: eng.id,
+   429→              engagementType: eng.engagementType,
+   430→              taxYear: eng.taxYear,
+   431→            },
+   432→          })
+   433→        }
+   434→      })
+   435→      collected.sort(
+   436→        (a, b) =>
+   437→          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+   438→      )
+   439→      setActivities(collected)
+   440→    } catch (err) {
+   441→      console.error('Activity fetch failed', err)
+   442→      setActivities([])
+   443→    } finally {
+   444→      setActivitiesLoading(false)
+   445→    }
+   446→  }, [engagements])
+   447→
+   448→  useEffect(() => {
+   449→    void fetchAll()
+   450→  }, [fetchAll])
+   451→
+   452→  useEffect(() => {
+   453→    if (!loading && engagements.length > 0) {
+   454→      void fetchActivities()
+   455→    }
+   456→  }, [loading, engagements.length, fetchActivities])
+   457→
+   458→  /* ── Actions ───────────────────────────────────────────────────────── */
+   459→
+   460→  const handleCopyEmail = async () => {
+   461→    if (!client?.email) return
+   462→    try {
+   463→      await navigator.clipboard.writeText(client.email)
+   464→      toast.success('Email copied to clipboard')
+   465→    } catch {
+   466→      toast.error('Could not copy email')
+   467→    }
+   468→  }
+   469→
+   470→  const handleNewEngagement = () => {
+   471→    toast.info('New engagement dialog', {
+   472→      description: `Start a new engagement for ${client?.name ?? 'this client'} from the Engagements view.`,
+   473→    })
+   474→  }
+   475→
+   476→  const handleEdit = () => {
+   477→    toast.info('Edit client', {
+   478→      description: 'Client editing is coming soon — use the Clients list to manage records.',
+   479→    })
+   480→  }
+   481→
+   482→  /* ── Empty / loading states ────────────────────────────────────────── */
+   483→
+   484→  if (!clientId) {
+   485→    return (
+   486→      <EmptyState
+   487→        icon={<Inbox className="h-6 w-6 text-muted-foreground" />}
+   488→        title="No client selected"
+   489→        description="Choose a client from the list to view their details."
+   490→        action={
+   491→          <Button variant="outline" size="sm" onClick={() => navigate('clients')}>
+   492→            <ArrowLeft className="mr-1.5 h-4 w-4" /> Go to clients
+   493→          </Button>
+   494→        }
+   495→      />
+   496→    )
+   497→  }
+   498→
+   499→  if (loading) return <ClientDetailSkeleton />
+   500→
+   501→  if (notFound || !client) {
+   502→    return (
+   503→      <EmptyState
+   504→        icon={<AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />}
+   505→        iconWrap="bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+   506→        title="Client not found"
+   507→        description="This client may have been removed or you don't have access."
+   508→        action={
+   509→          <Button variant="outline" size="sm" onClick={() => navigate('clients')}>
+   510→            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to clients
+   511→          </Button>
+   512→        }
+   513→      />
+   514→    )
+   515→  }
+   516→
+   517→  /* ── Derived stats ─────────────────────────────────────────────────── */
+   518→
+   519→  const totalEngagements = engagements.length
+   520→  const totalDocuments = documents.length
+   521→  const activeEngagements = engagements.filter((e) =>
+   522→    ACTIVE_ENGAGEMENT_STATUSES.includes(e.status)
+   523→  ).length
+   524→  const totalFees = engagements.reduce((sum, e) => sum + (e.fee ?? 0), 0)
+   525→  const recentActivities = activities.slice(0, 5)
+   526→
+   527→  return (
+   528→    <div className="space-y-5 p-4 lg:p-6">
+   529→      <ClientHeader
+   530→        client={client}
+   531→        onBack={() => navigate('clients')}
+   532→        onEdit={handleEdit}
+   533→        onNewEngagement={handleNewEngagement}
+   534→      />
+   535→
+   536→      <InfoCardsRow client={client} onCopyEmail={handleCopyEmail} />
+   537→
+   538→      <Tabs
+   539→        value={activeTab}
+   540→        onValueChange={(v) => setActiveTab(v as TabValue)}
+   541→      >
+   542→        <div className="overflow-x-auto">
+   543→          <TabsList className="h-auto w-full justify-start gap-1 rounded-xl bg-muted/60 p-1 sm:w-auto">
+   544→            <TabsTrigger value="overview" className="gap-1.5">
+   545→              <ClipboardList className="h-4 w-4" /> Overview
+   546→            </TabsTrigger>
+   547→            <TabsTrigger value="engagements" className="gap-1.5">
+   548→              <FolderOpen className="h-4 w-4" /> Engagements
+   549→              {totalEngagements > 0 && (
+   550→                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+   551→                  {totalEngagements}
+   552→                </Badge>
+   553→              )}
+   554→            </TabsTrigger>
+   555→            <TabsTrigger value="documents" className="gap-1.5">
+   556→              <FileText className="h-4 w-4" /> Documents
+   557→              {totalDocuments > 0 && (
+   558→                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+   559→                  {totalDocuments}
+   560→                </Badge>
+   561→              )}
+   562→            </TabsTrigger>
+   563→            <TabsTrigger value="activity" className="gap-1.5">
+   564→              <ActivityIcon className="h-4 w-4" /> Activity
+   565→              {activities.length > 0 && (
+   566→                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+   567→                  {activities.length}
+   568→                </Badge>
+   569→              )}
+   570→            </TabsTrigger>
+   571→          </TabsList>
+   572→        </div>
+   573→
+   574→        {/* ── Overview ────────────────────────────────────────────── */}
+   575→        <TabsContent value="overview" className="mt-4">
+   576→          <OverviewTab
+   577→            client={client}
+   578→            totalEngagements={totalEngagements}
+   579→            totalDocuments={totalDocuments}
+   580→            activeEngagements={activeEngagements}
+   581→            totalFees={totalFees}
+   582→            engagements={engagements}
+   583→            documents={documents}
+   584→            recentActivities={recentActivities}
+   585→            activitiesLoading={activitiesLoading}
+   586→            onOpenEngagement={(id) => openEngagement(id)}
+   587→            onOpenDocument={(id) => openDocument(id)}
+   588→          />
+   589→        </TabsContent>
+   590→
+   591→        {/* ── Engagements ────────────────────────────────────────── */}
+   592→        <TabsContent value="engagements" className="mt-4">
+   593→          <EngagementsTab
+   594→            engagements={engagements}
+   595→            onOpenEngagement={(id) => openEngagement(id)}
+   596→          />
+   597→        </TabsContent>
+   598→
+   599→        {/* ── Documents ──────────────────────────────────────────── */}
+   600→        <TabsContent value="documents" className="mt-4">
+   601→          <DocumentsTab
+   602→            documents={documents}
+   603→            onOpenDocument={(id) => openDocument(id)}
+   604→          />
+   605→        </TabsContent>
+   606→
+   607→        {/* ── Activity ───────────────────────────────────────────── */}
+   608→        <TabsContent value="activity" className="mt-4">
+   609→          <ActivityTab
+   610→            activities={activities}
+   611→            loading={activitiesLoading}
+   612→          />
+   613→        </TabsContent>
+   614→      </Tabs>
+   615→    </div>
+   616→  )
+   617→}
+   618→
+   619→/* ────────────────────────────────────────────────────────────────────────────
+   620→ *  Empty state (shared)
+   621→ * ────────────────────────────────────────────────────────────────────────── */
+   622→
+   623→function EmptyState({
+   624→  icon,
+   625→  iconWrap = 'bg-muted',
+   626→  title,
+   627→  description,
+   628→  action,
+   629→}: {
+   630→  icon: React.ReactNode
+   631→  iconWrap?: string
+   632→  title: string
+   633→  description: string
+   634→  action?: React.ReactNode
+   635→}) {
+   636→  return (
+   637→    <div className="flex h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
+   638→      <div
+   639→        className={cn(
+   640→          'flex h-12 w-12 items-center justify-center rounded-full',
+   641→          iconWrap
+   642→        )}
+   643→      >
+   644→        {icon}
+   645→      </div>
+   646→      <div>
+   647→        <h2 className="text-lg font-semibold">{title}</h2>
+   648→        <p className="text-sm text-muted-foreground">{description}</p>
+   649→      </div>
+   650→      {action}
+   651→    </div>
+   652→  )
+   653→}
+   654→
+   655→/* ────────────────────────────────────────────────────────────────────────────
+   656→ *  Header
+   657→ * ────────────────────────────────────────────────────────────────────────── */
+   658→
+   659→function ClientHeader({
+   660→  client,
+   661→  onBack,
+   662→  onEdit,
+   663→  onNewEngagement,
+   664→}: {
+   665→  client: Client
+   666→  onBack: () => void
+   667→  onEdit: () => void
+   668→  onNewEngagement: () => void
+   669→}) {
+   670→  const typeDef = getTypeDef(client.clientType)
+   671→  const countryDef = getCountryDef(client.country)
+   672→  const TypeIcon = TYPE_ICON[client.clientType]
+   673→
+   674→  return (
+   675→    <Card className="overflow-hidden rounded-xl p-0">
+   676→      <div className="bg-gradient-primary px-5 py-4 sm:px-6 sm:py-5">
+   677→        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   678→          <div className="flex items-start gap-3">
+   679→            <Button
+   680→              variant="secondary"
+   681→              size="icon"
+   682→              onClick={onBack}
+   683→              className="h-9 w-9 shrink-0 bg-white/15 text-white hover:bg-white/25"
+   684→              aria-label="Back to clients"
+   685→            >
+   686→              <ArrowLeft className="h-4 w-4" />
+   687→            </Button>
+   688→
+   689→            <div
+   690→              className={cn(
+   691→                'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-white ring-1 ring-inset ring-white/25',
+   692→                'text-xl font-bold'
+   693→              )}
+   694→            >
+   695→              {getInitials(client.name)}
+   696→            </div>
+   697→
+   698→            <div className="min-w-0">
+   699→              <div className="flex flex-wrap items-center gap-2">
+   700→                <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
+   701→                  {client.name}
+   702→                </h1>
+   703→                <Badge
+   704→                  variant="secondary"
+   705→                  className={cn(
+   706→                    'border-white/20 bg-white/15 text-white',
+   707→                    'inline-flex items-center gap-1'
+   708→                  )}
+   709→                >
+   710→                  <span aria-hidden>{typeDef.icon}</span>
+   711→                  {typeDef.label}
+   712→                </Badge>
+   713→              </div>
+   714→              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-white/85">
+   715→                <StatusBadge
+   716→                  status={client.status}
+   717→                  size="sm"
+   718→                  className="!bg-white/15 !text-white"
+   719→                />
+   720→                <span className="inline-flex items-center gap-1 text-sm">
+   721→                  <span aria-hidden className="text-base leading-none">
+   722→                    {countryDef.flag}
+   723→                  </span>
+   724→                  {countryDef.code}
+   725→                </span>
+   726→                <span className="opacity-50">•</span>
+   727→                <span className="inline-flex items-center gap-1 text-sm">
+   728→                  <TypeIcon className="h-3.5 w-3.5" />
+   729→                  {typeDef.label}
+   730→                </span>
+   731→                {client.email && (
+   732→                  <>
+   733→                    <span className="opacity-50">•</span>
+   734→                    <span className="text-sm">{client.email}</span>
+   735→                  </>
+   736→                )}
+   737→              </div>
+   738→            </div>
+   739→          </div>
+   740→
+   741→          <div className="flex shrink-0 flex-wrap items-center gap-2">
+   742→            <Button
+   743→              size="sm"
+   744→              variant="secondary"
+   745→              onClick={onEdit}
+   746→              className="bg-white/15 text-white hover:bg-white/25"
+   747→            >
+   748→              <Pencil className="mr-1.5 h-4 w-4" /> Edit
+   749→            </Button>
+   750→            <Button
+   751→              size="sm"
+   752→              onClick={onNewEngagement}
+   753→              className="bg-white text-primary hover:bg-white/90"
+   754→            >
+   755→              <Plus className="mr-1.5 h-4 w-4" /> New Engagement
+   756→            </Button>
+   757→          </div>
+   758→        </div>
+   759→      </div>
+   760→    </Card>
+   761→  )
+   762→}
+   763→
+   764→/* ────────────────────────────────────────────────────────────────────────────
+   765→ *  Info cards row
+   766→ * ────────────────────────────────────────────────────────────────────────── */
+   767→
+   768→function InfoCardsRow({
+   769→  client,
+   770→  onCopyEmail,
+   771→}: {
+   772→  client: Client
+   773→  onCopyEmail: () => void
+   774→}) {
+   775→  const cards: {
+   776→    icon: React.ReactNode
+   777→    label: string
+   778→    value: React.ReactNode
+   779→    trailing?: React.ReactNode
+   780→  }[] = [
+   781→    {
+   782→      icon: <Mail className="h-4 w-4 text-primary" />,
+   783→      label: 'Email',
+   784→      value: client.email || '—',
+   785→      trailing: client.email ? (
+   786→        <Button
+   787→          variant="ghost"
+   788→          size="icon"
+   789→          className="h-7 w-7"
+   790→          onClick={onCopyEmail}
+   791→          aria-label="Copy email"
+   792→        >
+   793→          <Copy className="h-3.5 w-3.5" />
+   794→        </Button>
+   795→      ) : undefined,
+   796→    },
+   797→    {
+   798→      icon: <Phone className="h-4 w-4 text-primary" />,
+   799→      label: 'Phone',
+   800→      value: client.phone || '—',
+   801→    },
+   802→    {
+   803→      icon: <CreditCard className="h-4 w-4 text-primary" />,
+   804→      label: 'Tax ID',
+   805→      value: (
+   806→        <span className="font-mono tabular-nums">
+   807→          {formatTaxId(client.taxId, client.clientType)}
+   808→        </span>
+   809→      ),
+   810→    },
+   811→    {
+   812→      icon: <Calendar className="h-4 w-4 text-primary" />,
+   813→      label: 'Client Since',
+   814→      value: client.createdAt
+   815→        ? format(new Date(client.createdAt), 'MMM d, yyyy')
+   816→        : '—',
+   817→    },
+   818→  ]
+   819→
+   820→  return (
+   821→    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+   822→      {cards.map((c) => (
+   823→        <Card
+   824→          key={c.label}
+   825→          className="flex items-start gap-3 rounded-xl p-4 transition-colors hover:bg-muted/20"
+   826→        >
+   827→          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+   828→            {c.icon}
+   829→          </div>
+   830→          <div className="min-w-0 flex-1">
+   831→            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+   832→              {c.label}
+   833→            </p>
+   834→            <p className="mt-0.5 truncate text-sm font-semibold" title={String(c.value)}>
+   835→              {c.value}
+   836→            </p>
+   837→          </div>
+   838→          {c.trailing}
+   839→        </Card>
+   840→      ))}
+   841→    </div>
+   842→  )
+   843→}
+   844→
+   845→/* ────────────────────────────────────────────────────────────────────────────
+   846→ *  Tab 1: Overview
+   847→ * ────────────────────────────────────────────────────────────────────────── */
+   848→
+   849→function OverviewTab({
+   850→  client,
+   851→  totalEngagements,
+   852→  totalDocuments,
+   853→  activeEngagements,
+   854→  totalFees,
+   855→  engagements,
+   856→  documents,
+   857→  recentActivities,
+   858→  activitiesLoading,
+   859→  onOpenEngagement,
+   860→  onOpenDocument,
+   861→}: {
+   862→  client: Client
+   863→  totalEngagements: number
+   864→  totalDocuments: number
+   865→  activeEngagements: number
+   866→  totalFees: number
+   867→  engagements: EngagementRow[]
+   868→  documents: DocumentRow[]
+   869→  recentActivities: ActivityRow[]
+   870→  activitiesLoading: boolean
+   871→  onOpenEngagement: (id: string) => void
+   872→  onOpenDocument: (id: string) => void
+   873→}) {
+   874→  const recentDocs = documents.slice(0, 4)
+   875→  const typeDef = getTypeDef(client.clientType)
+   876→  const countryDef = getCountryDef(client.country)
+   877→  const TypeIcon = TYPE_ICON[client.clientType]
+   878→
+   879→  return (
+   880→    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+   881→      {/* Left: client summary */}
+   882→      <div className="space-y-4 lg:col-span-2">
+   883→        <Card className="rounded-xl p-5">
+   884→          <div className="flex items-center justify-between">
+   885→            <h3 className="text-base font-semibold">Client Summary</h3>
+   886→            <Badge variant="outline" className="gap-1.5">
+   887→              <TypeIcon className="h-3 w-3" />
+   888→              {typeDef.label}
+   889→            </Badge>
+   890→          </div>
+   891→          <Separator className="my-4" />
+   892→          <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+   893→            <DetailField
+   894→              icon={<UserIcon className="h-4 w-4" />}
+   895→              label="Full Name"
+   896→              value={client.name}
+   897→            />
+   898→            <DetailField
+   899→              icon={<Mail className="h-4 w-4" />}
+   900→              label="Email"
+   901→              value={client.email || '—'}
+   902→            />
+   903→            <DetailField
+   904→              icon={<Phone className="h-4 w-4" />}
+   905→              label="Phone"
+   906→              value={client.phone || '—'}
+   907→            />
+   908→            <DetailField
+   909→              icon={<CreditCard className="h-4 w-4" />}
+   910→              label="Tax ID"
+   911→              value={
+   912→                <span className="font-mono tabular-nums">
+   913→                  {formatTaxId(client.taxId, client.clientType)}
+   914→                </span>
+   915→              }
+   916→            />
+   917→            <DetailField
+   918→              icon={<Calendar className="h-4 w-4" />}
+   919→              label="Client Since"
+   920→              value={
+   921→                client.createdAt
+   922→                  ? `${format(new Date(client.createdAt), 'MMM d, yyyy')} · ${formatDistanceToNow(
+   923→                      new Date(client.createdAt),
+   924→                      { addSuffix: true }
+   925→                    )}`
+   926→                  : '—'
+   927→              }
+   928→            />
+   929→            <DetailField
+   930→              icon={<Building2 className="h-4 w-4" />}
+   931→              label="Country"
+   932→              value={
+   933→                <span className="inline-flex items-center gap-1.5">
+   934→                  <span aria-hidden>{countryDef.flag}</span>
+   935→                  {countryDef.label} ({countryDef.code})
+   936→                </span>
+   937→              }
+   938→            />
+   939→          </dl>
+   940→        </Card>
+   941→
+   942→        {/* Stats grid */}
+   943→        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   944→          <StatTile
+   945→            icon={<FolderOpen className="h-4 w-4" />}
+   946→            label="Engagements"
+   947→            value={totalEngagements}
+   948→            accent="bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
+   949→          />
+   950→          <StatTile
+   951→            icon={<FileText className="h-4 w-4" />}
+   952→            label="Documents"
+   953→            value={totalDocuments}
+   954→            accent="bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+   955→          />
+   956→          <StatTile
+   957→            icon={<Clock className="h-4 w-4" />}
+   958→            label="Active Eng."
+   959→            value={activeEngagements}
+   960→            accent="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+   961→          />
+   962→          <StatTile
+   963→            icon={<DollarSign className="h-4 w-4" />}
+   964→            label="Total Fees"
+   965→            value={formatFee(totalFees)}
+   966→            accent="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+   967→          />
+   968→        </div>
+   969→
+   970→        {/* Recent activity */}
+   971→        <Card className="rounded-xl p-5">
+   972→          <div className="flex items-center justify-between">
+   973→            <div className="flex items-center gap-2">
+   974→              <ActivityIcon className="h-4 w-4 text-primary" />
+   975→              <h3 className="text-base font-semibold">Recent Activity</h3>
+   976→            </div>
+   977→            <Badge variant="outline" className="text-[11px]">
+   978→              Last 5
+   979→            </Badge>
+   980→          </div>
+   981→          <Separator className="my-4" />
+   982→          {activitiesLoading ? (
+   983→            <div className="space-y-3">
+   984→              {Array.from({ length: 4 }).map((_, i) => (
+   985→                <div key={i} className="flex gap-3">
+   986→                  <Skeleton className="h-7 w-7 shrink-0 rounded-lg" />
+   987→                  <div className="flex-1 space-y-1.5">
+   988→                    <Skeleton className="h-3.5 w-3/4" />
+   989→                    <Skeleton className="h-3 w-1/3" />
+   990→                  </div>
+   991→                </div>
+   992→              ))}
+   993→            </div>
+   994→          ) : recentActivities.length === 0 ? (
+   995→            <div className="flex flex-col items-center gap-2 py-8 text-center">
+   996→              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+   997→                <Inbox className="h-5 w-5 text-muted-foreground" />
+   998→              </div>
+   999→              <p className="text-sm font-medium">No recent activity</p>
+  1000→              <p className="max-w-xs text-xs text-muted-foreground">
+  1001→                Activity from this client&apos;s engagements will appear here.
+  1002→              </p>
+  1003→            </div>
+  1004→          ) : (
+  1005→            <ActivityList activities={recentActivities} />
+  1006→          )}
+  1007→        </Card>
+  1008→      </div>
+  1009→
+  1010→      {/* Right: snapshot of engagements + documents */}
+  1011→      <div className="space-y-4">
+  1012→        <Card className="rounded-xl p-5">
+  1013→          <div className="flex items-center justify-between">
+  1014→            <h3 className="text-sm font-semibold">Active Engagements</h3>
+  1015→            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+  1016→              {engagements.filter((e) =>
+  1017→                ACTIVE_ENGAGEMENT_STATUSES.includes(e.status)
+  1018→              ).length}
+  1019→            </Badge>
+  1020→          </div>
+  1021→          <Separator className="my-3" />
+  1022→          {engagements.length === 0 ? (
+  1023→            <div className="py-6 text-center text-sm text-muted-foreground">
+  1024→              No engagements yet.
+  1025→            </div>
+  1026→          ) : (
+  1027→            <div className="space-y-2">
+  1028→              {engagements.slice(0, 4).map((e) => (
+  1029→                <button
+  1030→                  key={e.id}
+  1031→                  onClick={() => onOpenEngagement(e.id)}
+  1032→                  className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-muted/40"
+  1033→                >
+  1034→                  <Badge
+  1035→                    variant="outline"
+  1036→                    className={cn(
+  1037→                      'shrink-0 px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset',
+  1038→                      ENGAGEMENT_TYPE_COLORS[e.engagementType] ||
+  1039→                        'bg-muted text-foreground ring-border'
+  1040→                    )}
+  1041→                  >
+  1042→                    {e.engagementType}
+  1043→                  </Badge>
+  1044→                  <div className="min-w-0 flex-1">
+  1045→                    <p className="truncate text-sm font-medium">FY{e.taxYear}</p>
+  1046→                    <p className="truncate text-[11px] text-muted-foreground">
+  1047→                      {engagementTypeLabel(e.engagementType)}
+  1048→                    </p>
+  1049→                  </div>
+  1050→                  <ProgressRing value={e.progress ?? 0} size={32} strokeWidth={3} />
+  1051→                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+  1052→                </button>
+  1053→              ))}
+  1054→            </div>
+  1055→          )}
+  1056→        </Card>
+  1057→
+  1058→        <Card className="rounded-xl p-5">
+  1059→          <div className="flex items-center justify-between">
+  1060→            <h3 className="text-sm font-semibold">Recent Documents</h3>
+  1061→            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+  1062→              {totalDocuments}
+  1063→            </Badge>
+  1064→          </div>
+  1065→          <Separator className="my-3" />
+  1066→          {totalDocuments === 0 ? (
+  1067→            <div className="py-6 text-center text-sm text-muted-foreground">
+  1068→              No documents uploaded.
+  1069→            </div>
+  1070→          ) : (
+  1071→            <div className="space-y-1.5">
+  1072→              {recentDocs.map((doc) => {
+  1073→                const typeDef = doc.documentType
+  1074→                  ? DOCUMENT_TYPE_MAP[doc.documentType]
+  1075→                  : null
+  1076→                const Icon = typeDef
+  1077→                  ? CATEGORY_ICON_MAP[typeDef.category] || FileText
+  1078→                  : fileIconFor(doc.mimeType)
+  1079→                return (
+  1080→                  <button
+  1081→                    key={doc.id}
+  1082→                    onClick={() => onOpenDocument(doc.id)}
+  1083→                    className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-muted/40"
+  1084→                  >
+  1085→                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+  1086→                      <Icon className="h-4 w-4" />
+  1087→                    </div>
+  1088→                    <div className="min-w-0 flex-1">
+  1089→                      <p
+  1090→                        className="truncate text-sm font-medium"
+  1091→                        title={doc.originalFilename}
+  1092→                      >
+  1093→                        {doc.originalFilename}
+  1094→                      </p>
+  1095→                      <p className="truncate text-[11px] text-muted-foreground">
+  1096→                        {typeDef ? typeDef.label : 'Unclassified'} ·{' '}
+  1097→                        {formatDistanceToNow(new Date(doc.uploadedAt), {
+  1098→                          addSuffix: true,
+  1099→                        })}
+  1100→                      </p>
+  1101→                    </div>
+  1102→                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+  1103→                  </button>
+  1104→                )
+  1105→              })}
+  1106→            </div>
+  1107→          )}
+  1108→        </Card>
+  1109→      </div>
+  1110→    </div>
+  1111→  )
+  1112→}
+  1113→
+  1114→function DetailField({
+  1115→  icon,
+  1116→  label,
+  1117→  value,
+  1118→}: {
+  1119→  icon: React.ReactNode
+  1120→  label: string
+  1121→  value: React.ReactNode
+  1122→}) {
+  1123→  return (
+  1124→    <div>
+  1125→      <dt className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+  1126→        <span className="text-muted-foreground/70">{icon}</span>
+  1127→        {label}
+  1128→      </dt>
+  1129→      <dd className="mt-1 text-sm font-semibold">{value}</dd>
+  1130→    </div>
+  1131→  )
+  1132→}
+  1133→
+  1134→function StatTile({
+  1135→  icon,
+  1136→  label,
+  1137→  value,
+  1138→  accent,
+  1139→}: {
+  1140→  icon: React.ReactNode
+  1141→  label: string
+  1142→  value: React.ReactNode
+  1143→  accent: string
+  1144→}) {
+  1145→  return (
+  1146→    <Card className="rounded-xl p-4">
+  1147→      <div className="flex items-center gap-2">
+  1148→        <div
+  1149→          className={cn(
+  1150→            'flex h-8 w-8 items-center justify-center rounded-lg',
+  1151→            accent
+  1152→          )}
+  1153→        >
+  1154→          {icon}
+  1155→        </div>
+  1156→        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+  1157→          {label}
+  1158→        </span>
+  1159→      </div>
+  1160→      <p className="mt-2 text-2xl font-bold tracking-tight">{value}</p>
+  1161→    </Card>
+  1162→  )
+  1163→}
+  1164→
+  1165→/* ────────────────────────────────────────────────────────────────────────────
+  1166→ *  Tab 2: Engagements
+  1167→ * ────────────────────────────────────────────────────────────────────────── */
+  1168→
+  1169→function EngagementsTab({
+  1170→  engagements,
+  1171→  onOpenEngagement,
+  1172→}: {
+  1173→  engagements: EngagementRow[]
+  1174→  onOpenEngagement: (id: string) => void
+  1175→}) {
+  1176→  if (engagements.length === 0) {
+  1177→    return (
+  1178→      <Card className="rounded-xl">
+  1179→        <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+  1180→          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+  1181→            <FolderOpen className="h-7 w-7" />
+  1182→          </div>
+  1183→          <h3 className="mt-4 text-lg font-semibold">No engagements yet</h3>
+  1184→          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+  1185→            This client doesn&apos;t have any engagements. Start a new one from
+  1186→            the header to begin collecting documents.
+  1187→          </p>
+  1188→        </div>
+  1189→      </Card>
+  1190→    )
+  1191→  }
+  1192→
+  1193→  return (
+  1194→    <div className="space-y-3">
+  1195→      {engagements.map((e) => (
+  1196→        <EngagementRowCard
+  1197→          key={e.id}
+  1198→          engagement={e}
+  1199→          onClick={() => onOpenEngagement(e.id)}
+  1200→        />
+  1201→      ))}
+  1202→    </div>
+  1203→  )
+  1204→}
+  1205→
+  1206→function EngagementRowCard({
+  1207→  engagement,
+  1208→  onClick,
+  1209→}: {
+  1210→  engagement: EngagementRow
+  1211→  onClick: () => void
+  1212→}) {
+  1213→  const deadline = getDeadlineState(engagement.deadline)
+  1214→  const docCount = engagement._count?.documents ?? 0
+  1215→  const assignedTo = engagement.assignedTo
+  1216→
+  1217→  return (
+  1218→    <Card
+  1219→      className="cursor-pointer rounded-xl p-0 transition-all hover:shadow-md hover:border-primary/40"
+  1220→      onClick={onClick}
+  1221→    >
+  1222→      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+  1223→        {/* Left: type + year + status */}
+  1224→        <div className="flex shrink-0 items-center gap-3 sm:w-56">
+  1225→          <Badge
+  1226→            variant="outline"
+  1227→            className={cn(
+  1228→              'shrink-0 px-2.5 py-1 text-sm font-bold ring-1 ring-inset',
+  1229→              ENGAGEMENT_TYPE_COLORS[engagement.engagementType] ||
+  1230→                'bg-muted text-foreground ring-border'
+  1231→            )}
+  1232→          >
+  1233→            {engagement.engagementType}
+  1234→          </Badge>
+  1235→          <div className="min-w-0">
+  1236→            <p className="text-sm font-semibold">FY{engagement.taxYear}</p>
+  1237→            <p className="truncate text-[11px] text-muted-foreground">
+  1238→              {engagementTypeLabel(engagement.engagementType)}
+  1239→            </p>
+  1240→          </div>
+  1241→        </div>
+  1242→
+  1243→        {/* Middle: status + priority + progress */}
+  1244→        <div className="flex flex-1 flex-wrap items-center gap-4">
+  1245→          <StatusBadge status={engagement.status} size="md" />
+  1246→          <PriorityBadge priority={engagement.priority as Priority} />
+  1247→          <div className="flex min-w-[140px] flex-1 items-center gap-2">
+  1248→            <Progress
+  1249→              value={engagement.progress ?? 0}
+  1250→              className="h-1.5 flex-1"
+  1251→            />
+  1252→            <span className="w-9 text-right text-xs font-semibold tabular-nums text-muted-foreground">
+  1253→              {engagement.progress ?? 0}%
+  1254→            </span>
+  1255→          </div>
+  1256→        </div>
+  1257→
+  1258→        {/* Right: deadline, docs, assignee, fee */}
+  1259→        <div className="flex shrink-0 flex-wrap items-center gap-4 border-t pt-3 text-sm sm:border-t-0 sm:pt-0">
+  1260→          <div className="flex items-center gap-1.5">
+  1261→            <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+  1262→            {deadline ? (
+  1263→              <span
+  1264→                className={cn(
+  1265→                  'text-xs font-medium tabular-nums',
+  1266→                  deadline.tone === 'red'
+  1267→                    ? 'text-red-600 dark:text-red-400'
+  1268→                    : deadline.tone === 'amber'
+  1269→                      ? 'text-amber-600 dark:text-amber-400'
+  1270→                      : 'text-muted-foreground'
+  1271→                )}
+  1272→              >
+  1273→                {format(deadline.date, 'MMM d, yyyy')}
+  1274→              </span>
+  1275→            ) : (
+  1276→              <span className="text-xs text-muted-foreground">No deadline</span>
+  1277→            )}
+  1278→          </div>
+  1279→
+  1280→          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+  1281→            <FileText className="h-3.5 w-3.5" />
+  1282→            <span className="font-medium tabular-nums">{docCount}</span>
+  1283→          </div>
+  1284→
+  1285→          <div className="flex items-center gap-1.5">
+  1286→            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+  1287→              {getInitials(assignedTo?.name)}
+  1288→            </div>
+  1289→            <div className="hidden sm:block">
+  1290→              <p className="max-w-[120px] truncate text-xs font-semibold leading-tight">
+  1291→                {assignedTo?.name ?? 'Unassigned'}
+  1292→              </p>
+  1293→              {assignedTo?.role && (
+  1294→                <p className="text-[10px] capitalize leading-tight text-muted-foreground">
+  1295→                  {assignedTo.role}
+  1296→                </p>
+  1297→              )}
+  1298→            </div>
+  1299→          </div>
+  1300→
+  1301→          <div className="flex items-center gap-1 text-sm font-semibold tabular-nums">
+  1302→            <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+  1303→            {formatFee(engagement.fee ?? 0)}
+  1304→          </div>
+  1305→
+  1306→          <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+  1307→        </div>
+  1308→      </div>
+  1309→    </Card>
+  1310→  )
+  1311→}
+  1312→
+  1313→/* ────────────────────────────────────────────────────────────────────────────
+  1314→ *  Tab 3: Documents
+  1315→ * ────────────────────────────────────────────────────────────────────────── */
+  1316→
+  1317→function DocumentsTab({
+  1318→  documents,
+  1319→  onOpenDocument,
+  1320→}: {
+  1321→  documents: DocumentRow[]
+  1322→  onOpenDocument: (id: string) => void
+  1323→}) {
+  1324→  if (documents.length === 0) {
+  1325→    return (
+  1326→      <Card className="rounded-xl">
+  1327→        <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+  1328→          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+  1329→            <FileText className="h-7 w-7" />
+  1330→          </div>
+  1331→          <h3 className="mt-4 text-lg font-semibold">No documents</h3>
+  1332→          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+  1333→            This client hasn&apos;t uploaded any documents yet. Documents will
+  1334→            appear here once an engagement&apos;s PBC list is fulfilled.
+  1335→          </p>
+  1336→        </div>
+  1337→      </Card>
+  1338→    )
+  1339→  }
+  1340→
+  1341→  return (
+  1342→    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+  1343→      {documents.map((doc) => (
+  1344→        <DocumentCard
+  1345→          key={doc.id}
+  1346→          doc={doc}
+  1347→          onClick={() => onOpenDocument(doc.id)}
+  1348→        />
+  1349→      ))}
+  1350→    </div>
+  1351→  )
+  1352→}
+  1353→
+  1354→function DocumentCard({
+  1355→  doc,
+  1356→  onClick,
+  1357→}: {
+  1358→  doc: DocumentRow
+  1359→  onClick: () => void
+  1360→}) {
+  1361→  const typeDef = doc.documentType ? DOCUMENT_TYPE_MAP[doc.documentType] : null
+  1362→  const category = typeDef?.category || 'other'
+  1363→  const style = getCategoryStyle(category)
+  1364→  const Icon = typeDef
+  1365→    ? CATEGORY_ICON_MAP[category] || FileText
+  1366→    : fileIconFor(doc.mimeType)
+  1367→
+  1368→  const extractions = doc.extractions ?? []
+  1369→  const avgConfidence =
+  1370→    extractions.length > 0
+  1371→      ? extractions.reduce((s, e) => s + e.confidence, 0) /
+  1372→        extractions.length
+  1373→      : doc.confidence ?? 0
+  1374→
+  1375→  const uploadedMs = new Date(doc.uploadedAt).getTime()
+  1376→  const isNew = Date.now() - uploadedMs < 24 * 60 * 60 * 1000
+  1377→
+  1378→  return (
+  1379→    <button onClick={onClick} className="group block h-full text-left">
+  1380→      <Card className="card-hover h-full overflow-hidden rounded-xl p-0">
+  1381→        {/* Top section — category-colored icon */}
+  1382→        <div
+  1383→          className={cn(
+  1384→            'relative flex items-start justify-between gap-3 p-4',
+  1385→            style.surface
+  1386→          )}
+  1387→        >
+  1388→          <div
+  1389→            className={cn(
+  1390→              'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform duration-200 group-hover:scale-105',
+  1391→              style.icon
+  1392→            )}
+  1393→          >
+  1394→            <Icon className="h-7 w-7" />
+  1395→          </div>
+  1396→          <div className="flex flex-col items-end gap-1.5">
+  1397→            {isNew && (
+  1398→              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+  1399→                <span className="h-1 w-1 rounded-full bg-white" />
+  1400→                New
+  1401→              </span>
+  1402→            )}
+  1403→            <StatusBadge status={doc.status} />
+  1404→          </div>
+  1405→        </div>
+  1406→
+  1407→        {/* Bottom — filename + meta */}
+  1408→        <div className="space-y-3 p-4">
+  1409→          <div className="min-w-0">
+  1410→            <p
+  1411→              className="truncate text-sm font-semibold leading-tight"
+  1412→              title={doc.originalFilename}
+  1413→            >
+  1414→              {doc.originalFilename}
+  1415→            </p>
+  1416→            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+  1417→              {typeDef ? typeDef.label : 'Unclassified'}
+  1418→            </p>
+  1419→          </div>
+  1420→
+  1421→          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+  1422→            <span className="inline-flex items-center gap-1">
+  1423→              <FileText className="h-3 w-3" />
+  1424→              {formatFileSize(doc.fileSize)}
+  1425→            </span>
+  1426→            <span className="inline-flex items-center gap-1">
+  1427→              <Calendar className="h-3 w-3" />
+  1428→              {formatDistanceToNow(new Date(doc.uploadedAt), {
+  1429→                addSuffix: true,
+  1430→              })}
+  1431→            </span>
+  1432→          </div>
+  1433→
+  1434→          {/* Confidence meter */}
+  1435→          {doc.status !== 'uploaded' && doc.status !== 'processing' && (
+  1436→            <div className="border-t pt-3">
+  1437→              <div className="flex items-center justify-between">
+  1438→                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+  1439→                  AI Confidence
+  1440→                </span>
+  1441→                <ConfidenceMeter value={avgConfidence} className="ml-auto" />
+  1442→              </div>
+  1443→              {extractions.length > 0 && (
+  1444→                <p className="mt-1.5 text-[11px] text-muted-foreground">
+  1445→                  {extractions.filter((e) => e.isVerified).length} of{' '}
+  1446→                  {extractions.length} fields verified
+  1447→                </p>
+  1448→              )}
+  1449→            </div>
+  1450→          )}
+  1451→
+  1452→          {(doc.status === 'uploaded' || doc.status === 'processing') && (
+  1453→            <div className="flex items-center gap-2 border-t pt-3 text-[11px] text-amber-700 dark:text-amber-400">
+  1454→              {doc.status === 'processing' ? (
+  1455→                <>
+  1456→                  <Loader2 className="h-3 w-3 animate-spin" />
+  1457→                  Processing with AI…
+  1458→                </>
+  1459→              ) : (
+  1460→                <>
+  1461→                  <Sparkles className="h-3 w-3" />
+  1462→                  Ready for AI processing
+  1463→                </>
+  1464→              )}
+  1465→            </div>
+  1466→          )}
+  1467→        </div>
+  1468→      </Card>
+  1469→    </button>
+  1470→  )
+  1471→}
+  1472→
+  1473→/* ────────────────────────────────────────────────────────────────────────────
+  1474→ *  Tab 4: Activity
+  1475→ * ────────────────────────────────────────────────────────────────────────── */
+  1476→
+  1477→function ActivityTab({
+  1478→  activities,
+  1479→  loading,
+  1480→}: {
+  1481→  activities: ActivityRow[]
+  1482→  loading: boolean
+  1483→}) {
+  1484→  if (loading) {
+  1485→    return (
+  1486→      <Card className="rounded-xl p-5">
+  1487→        <div className="space-y-3">
+  1488→          {Array.from({ length: 6 }).map((_, i) => (
+  1489→            <div key={i} className="flex gap-3">
+  1490→              <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />
+  1491→              <div className="flex-1 space-y-1.5">
+  1492→                <Skeleton className="h-3.5 w-3/4" />
+  1493→                <Skeleton className="h-3 w-1/3" />
+  1494→              </div>
+  1495→            </div>
+  1496→          ))}
+  1497→        </div>
+  1498→      </Card>
+  1499→    )
+  1500→  }
+  1501→
+  1502→  if (activities.length === 0) {
+  1503→    return (
+  1504→      <Card className="rounded-xl">
+  1505→        <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+  1506→          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+  1507→            <ActivityIcon className="h-7 w-7" />
+  1508→          </div>
+  1509→          <h3 className="mt-4 text-lg font-semibold">No activity yet</h3>
+  1510→          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+  1511→            Once this client&apos;s engagements start collecting documents and
+  1512→            AI processing, a timeline will appear here.
+  1513→          </p>
+  1514→        </div>
+  1515→      </Card>
+  1516→    )
+  1517→  }
+  1518→
+  1519→  return (
+  1520→    <Card className="rounded-xl p-5">
+  1521→      <div className="mb-4 flex items-center justify-between">
+  1522→        <div className="flex items-center gap-2">
+  1523→          <ActivityIcon className="h-4 w-4 text-primary" />
+  1524→          <h3 className="text-base font-semibold">Activity Timeline</h3>
+  1525→        </div>
+  1526→        <Badge variant="outline" className="text-[11px]">
+  1527→          {activities.length} {activities.length === 1 ? 'event' : 'events'}
+  1528→        </Badge>
+  1529→      </div>
+  1530→      <ActivityList activities={activities} showEngagement />
+  1531→    </Card>
+  1532→  )
+  1533→}
+  1534→
+  1535→/* ────────────────────────────────────────────────────────────────────────────
+  1536→ *  Activity list (used in Overview + Activity tab)
+  1537→ * ────────────────────────────────────────────────────────────────────────── */
+  1538→
+  1539→function ActivityList({
+  1540→  activities,
+  1541→  showEngagement = false,
+  1542→}: {
+  1543→  activities: ActivityRow[]
+  1544→  showEngagement?: boolean
+  1545→}) {
+  1546→  if (activities.length === 0) {
+  1547→    return (
+  1548→      <div className="py-6 text-center text-sm text-muted-foreground">
+  1549→        No recent activity.
+  1550→      </div>
+  1551→    )
+  1552→  }
+  1553→
+  1554→  return (
+  1555→    <ScrollArea className="max-h-[560px] pr-3">
+  1556→      <ol className="relative space-y-3">
+  1557→        {activities.map((a, i) => {
+  1558→          const cfg = ACTIVITY_STYLE_MAP[a.type] ?? DEFAULT_ACTIVITY_STYLE
+  1559→          const Icon = cfg.icon
+  1560→          const isLast = i === activities.length - 1
+  1561→          return (
+  1562→            <li key={a.id} className="flex gap-3">
+  1563→              <div className="flex flex-col items-center">
+  1564→                <div
+  1565→                  className={cn(
+  1566→                    'flex h-8 w-8 items-center justify-center rounded-lg',
+  1567→                    cfg.surface
+  1568→                  )}
+  1569→                >
+  1570→                  <Icon className={cn('h-4 w-4', cfg.iconColor)} />
+  1571→                </div>
+  1572→                {!isLast && (
+  1573→                  <div
+  1574→                    className={cn('mt-0.5 w-px flex-1', cfg.line)}
+  1575→                    style={{ minHeight: 16 }}
+  1576→                  />
+  1577→                )}
+  1578→              </div>
+  1579→              <div className="min-w-0 flex-1 pb-3">
+  1580→                <p className="text-sm leading-snug">{a.description}</p>
+  1581→                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+  1582→                  <span className="font-medium text-foreground/80">
+  1583→                    {a.actor}
+  1584→                  </span>
+  1585→                  <span aria-hidden>·</span>
+  1586→                  <span>
+  1587→                    {formatDistanceToNow(new Date(a.createdAt), {
+  1588→                      addSuffix: true,
+  1589→                    })}
+  1590→                  </span>
+  1591→                  {showEngagement && a.engagement && (
+  1592→                    <>
+  1593→                      <span aria-hidden>·</span>
+  1594→                      <Badge
+  1595→                        variant="outline"
+  1596→                        className="px-1.5 py-0 text-[10px] font-semibold ring-1 ring-inset"
+  1597→                      >
+  1598→                        {a.engagement.engagementType} · FY{a.engagement.taxYear}
+  1599→                      </Badge>
+  1600→                    </>
+  1601→                  )}
+  1602→                </div>
+  1603→              </div>
+  1604→            </li>
+  1605→          )
+  1606→        })}
+  1607→      </ol>
+  1608→    </ScrollArea>
+  1609→  )
+  1610→}
+  1611→
+  1612→/* ────────────────────────────────────────────────────────────────────────────
+  1613→ *  Skeleton
+  1614→ * ────────────────────────────────────────────────────────────────────────── */
+  1615→
+  1616→function ClientDetailSkeleton() {
+  1617→  return (
+  1618→    <div className="space-y-5 p-4 lg:p-6">
+  1619→      <Skeleton className="h-28 w-full rounded-xl" />
+  1620→      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+  1621→        {Array.from({ length: 4 }).map((_, i) => (
+  1622→          <Skeleton key={i} className="h-20 rounded-xl" />
+  1623→        ))}
+  1624→      </div>
+  1625→      <Skeleton className="h-10 w-full rounded-xl" />
+  1626→      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+  1627→        <Skeleton className="h-64 rounded-xl lg:col-span-2" />
+  1628→        <Skeleton className="h-64 rounded-xl" />
+  1629→      </div>
+  1630→    </div>
+  1631→  )
+  1632→}
+  1633→

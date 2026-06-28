@@ -1356,3 +1356,203 @@ The TaxDox AI platform is stable and production-ready. Previous round identified
 6. **OAuth providers**: Google Workspace / Microsoft Entra SSO for enterprise
 
 Priority for next round: Polish the client detail view further, and consider adding email notification simulation for PBC requests and deadline reminders.
+
+---
+Task ID: EMAIL-1
+Agent: Email Notification Builder
+Task: Build email notification simulation with templates, logging, and engagement detail panel
+
+Work Log:
+- Read worklog.md to understand project context (TaxDox AI platform, teal primary color scheme, single-page App Router with Zustand view switching, Prisma + SQLite, /api routes protected by next-auth middleware)
+- Inspected target files: `prisma/schema.prisma` (Firm/Engagement/Client models, all using cuid IDs + Cascade deletes), `src/app/api/engagements/[id]/send/route.ts` (existing PBC send handler), `src/components/views/engagement-detail-view.tsx` (5-tab layout with TAB_VALUES const + activeTab state, uses Tabs/TabsList/TabsTrigger/TabsContent shadcn primitives, Mail icon already imported), `prisma/seed.ts` (creates 12 engagements with PBC lists, documents, extractions, workflows, messages), and `src/lib/types.ts` (Engagement type with `deadline?: string`)
+- **1. Prisma schema** (`prisma/schema.prisma`):
+  - Added new `EmailLog` model with cuid id, firm/engagement/client relations (engagement + client optional to support welcome emails), toEmail/toName/fromName (default "Meridian CPA Group"), subject, body, template, status (default "sent"), sentAt/createdAt timestamps, and @@index on firmId/engagementId/clientId for fast filtering
+  - Added `emails EmailLog[]` relation to `Firm`, `Engagement`, and `Client` models
+  - Ran `bun run db:push` → "Your database is now in sync with your Prisma schema"
+- **2. Email templates library** (new file `src/lib/email-templates.ts`):
+  - Exported `EmailTemplate` union type and `EmailContent` interface
+  - Five professional template generators, each returning `{ subject, body, template }` with realistic plain-text content + Meridian CPA Group signature:
+    - `pbcRequestEmail(clientName, engagementType, taxYear, deadline)` — "Action Required: Document Request for Your [type] Tax Return ([year])" with 5-step upload instructions + secure portal link
+    - `deadlineReminderEmail(clientName, engagementType, taxYear, daysLeft, deadline)` — urgency prefix varies by daysLeft (≤3d = "URGENT: This is a final reminder", ≤7d = "Friendly reminder", else "Quick reminder")
+    - `documentReceivedEmail(clientName, documentType, filename)` — confirmation with "what happens next" 3-step pipeline
+    - `extractionCompleteEmail(clientName, documentType, fieldCount, confidence)` — summary with fields/confidence/document type
+    - `welcomeEmail(clientName, firmName)` — 5-step portal feature overview
+  - `formatDeadline()` helper that locale-formats string or Date input as "Monday, April 15, 2026"
+  - Exported `EMAIL_TEMPLATES` registry (key/label/description/builder), `EMAIL_TEMPLATE_COLORS` (pbc_request=blue, deadline_reminder=amber, document_received=teal, extraction_complete=violet, welcome=emerald — matches design spec), and `EMAIL_TEMPLATE_LABELS` (human-readable badge labels)
+- **3. Emails API** (new file `src/app/api/emails/route.ts`):
+  - `GET /api/emails` — accepts optional `?engagementId=`, `?clientId=`, `?template=`, `?limit=` (default 100, clamped 1–500) query params, returns `{ emails: [...] }` sorted newest-first with `client` and `engagement` relations included (select only id/name/email/engagementType/taxYear to keep payload lean)
+  - `POST /api/emails` — accepts `{ firmId?, template, engagementId?, clientId?, toEmail?, toName?, fromName?, status?, payload: {...} }`, resolves firm/engagement/client in parallel via Promise.all, falls back through body.firmId → engagement.firmId → client.firmId → first firm in DB, builds subject/body via the matching template generator, persists EmailLog row with status "sent", returns `{ email }` with 201
+  - POST is template-agnostic — switches on the `template` field to call the right generator with sane defaults, so the same endpoint powers future "send welcome" / "send extraction-complete" buttons
+- **4. PBC send route update** (`src/app/api/engagements/[id]/send/route.ts`):
+  - Refactored `body.via || 'email'` into a `sendVia` const so it can be reused
+  - After the existing workflow/activity updates, when `sendVia === 'email'`, builds a `pbcRequestEmail` template using `engagement.client.name`, `engagement.engagementType`, `engagement.taxYear`, and `engagement.deadline ?? new Date()`, then creates an EmailLog row linked to the engagement + client
+  - Portal/SMS dispatches (`sendVia !== 'email'`) skip the email log so the simulation stays accurate
+- **5. SentEmailsPanel component** (new file `src/components/engagement/sent-emails-panel.tsx`, ~430 lines):
+  - Fetches `GET /api/emails?engagementId={id}` on mount + manual refresh
+  - Header card: teal-tinted Mail icon, title/subtitle, Refresh button (with spin animation while loading), primary teal "Send Reminder" button (POSTs `deadline_reminder` template via /api/emails with payload derived from engagement.deadline → daysLeft)
+  - Mini-stat row: 4 tiles (Total / Delivered / Opened / Failed) with color-coded values
+  - EmailCard component: clickable header with template-colored icon (9×9 rounded-lg), truncated subject, "To: name · email" line, line-clamped preview when collapsed, template badge (color-coded per design spec: pbc_request=blue, deadline_reminder=amber, document_received=teal, extraction_complete=violet, welcome=emerald), status badge (sent=slate, delivered=teal, opened=emerald, failed=red), relative timestamp ("x days ago"), chevron icon
+  - Expanded state: separator + muted bg panel showing From/To/Sent headers and full email body via `<pre className="whitespace-pre-wrap font-sans">` (preserves line breaks without looking like code)
+  - Color classes are static Tailwind strings (no dynamic class names) so the JIT compiler picks them all up; includes dark: variants for every badge
+  - Loading skeleton (4 cards with animated pulse), empty state (Inbox icon + "Send Deadline Reminder" CTA)
+  - Uses date-fns `format`/`formatDistanceToNow`/`differenceInDays`, sonner toast, lucide-react icons (Mail, Send, Clock, CheckCircle2, AlertTriangle, FileText, Sparkles, Bell, ChevronDown/Right, RefreshCw, Inbox, PartyPopper, Loader2, CalendarClock)
+- **6. Engagement detail view** (`src/components/views/engagement-detail-view.tsx`):
+  - Imported `SentEmailsPanel` from `@/components/engagement/sent-emails-panel`
+  - Added `'emails'` to the `TAB_VALUES` const (now 6 tabs: pbc, documents, extraction, workflow, messages, emails)
+  - Added a 6th `<TabsTrigger value="emails">` with the already-imported Mail icon + "Emails" label
+  - Added a matching `<TabsContent value="emails">` rendering `<SentEmailsPanel engagementId={data.id} engagement={{ clientName, engagementType, taxYear, deadline }} />` — the engagement metadata powers the "Send Reminder" button (computes daysLeft from the deadline)
+- **7. Seed updates** (`prisma/seed.ts`):
+  - Imported all 5 template generators from `../src/lib/email-templates`
+  - Added `db.emailLog.deleteMany()` to the cleanup block
+  - Captured each created engagement (id/firmId/engagementType/taxYear/deadline/status/progress + client id/name/email) into a new `createdEngagements` array as the loop runs
+  - After the engagement loop, seeded 36 EmailLog records with realistic variety:
+    - 3 welcome emails for the first 3 clients (sentAt = 14 days ago)
+    - 11 pbc_request emails (one per engagement where status !== 'created', sentAt = 7 days ago, status rotates through sent/delivered/opened)
+    - 8 deadline_reminder emails (for engagements in collecting/processing/review/pbc_sent with progress < 90, sentAt = 2 days ago, status=delivered, daysLeft computed from real deadline)
+    - 7 document_received emails (for engagements with progress ≥ 40, sentAt = 5 days ago, status=opened, references a W-2 file)
+    - 7 extraction_complete emails (paired with document_received, sentAt = 5 days + 2 minutes ago, status=delivered, 10 fields at 97% confidence)
+  - Updated final stats log to include `emailLogs: emailLogCount`
+- **8. Verification**:
+  - `bun run db:push` → database in sync
+  - `bun run db:seed` → "✅ Seed complete: { firm: 1, team: 6, clients: 12, engagements: 12, emailLogs: 36 }"
+  - Verified via direct Prisma query: 36 total email logs, by template (pbc_request=11, deadline_reminder=8, document_received=7, extraction_complete=7, welcome=3), by status (delivered=20, opened=13, sent=3), sample email correctly linked to firm/client/engagement
+  - `bun run lint` → 0 errors, 0 warnings (clean)
+  - `npx tsc --noEmit --skipLibCheck` → zero new errors in any of the touched files (emails route, send route, sent-emails-panel, email-templates, engagement-detail-view); only pre-existing errors remain in seed.ts (the `users`/`teamMembers`/`clients` arrays are `never[]` because they lack type annotations — unrelated to this task) and unrelated files (auth.ts, stripe.ts, examples/, skills/, ai/extract route)
+  - `curl -I http://localhost:3000/api/emails` → 401 (middleware correctly protects the new route, same as all other /api routes)
+  - dev.log: multiple "✓ Compiled in Xms" entries after each change, no "⨯"/"Failed to compile"/"Module not found" entries for any of the new/modified files; the only ⨯ in the log is the pre-existing EADDRINUSE from a second dev server start attempt
+
+Stage Summary:
+- Email notification simulation is end-to-end functional:
+  - `EmailLog` Prisma model tracks every simulated outbound email with template/status/recipient metadata
+  - 5 reusable template generators in `src/lib/email-templates.ts` produce realistic, professional email content
+  - `GET/POST /api/emails` provides a clean REST surface (list with filters, create with template auto-resolution)
+  - The existing PBC send flow now auto-logs a `pbc_request` email when dispatched via the email channel
+  - A polished `SentEmailsPanel` renders in the new 6th "Emails" tab of the engagement detail view, with expandable email cards, color-coded template + status badges, mini-stat row, and a "Send Reminder" CTA that creates a `deadline_reminder` email in real time
+  - Seed script populates 36 sample emails across all 5 templates and 3 statuses so the panel has rich demo data on first load
+- Design system respected: teal primary color (no indigo/blue primary), Lucide icons throughout, `rounded-xl` cards, color-coded template badges per spec (pbc_request=blue, deadline_reminder=amber, document_received=teal, extraction_complete=violet, welcome=emerald), dark-mode-friendly styling, sonner toast feedback
+- All files compile cleanly, lint passes, dev server hot-reloads without errors
+- Future enhancement: wire the `document_received` and `extraction_complete` templates into the document upload + AI extract API routes so emails are auto-logged when those events fire (currently only PBC send and manual reminder are wired)
+
+---
+Task ID: POLISH-2
+Agent: Client Detail Polish
+Task: Polish client detail view — remove redundancy, improve engagement layout, enrich activity timeline
+
+Work Log:
+- Read worklog.md and client-detail-view.tsx (1,632 lines) to understand structure, design system (teal primary, rounded-xl cards, shadcn/ui), and existing components (InfoCardsRow, OverviewTab, EngagementRowCard, ActivityTab, ActivityList).
+- Inspected types.ts (Client.metadata for industry) and constants.ts (CLIENT_TYPES, COUNTRIES, ENGAGEMENT_TYPES) to confirm available fields and seed data shape.
+- Added 3 new constants/helpers near ENGAGEMENT_TYPE_COLORS:
+  * `ENGAGEMENT_STATUS_BORDER` — left-border accent color per status (blue=pbc_sent, amber=collecting, violet=processing, emerald=done, etc.)
+  * `ACTIVITY_TITLE_MAP` — friendly title per activity type (upload→"Document uploaded", classify→"Document classified", etc.)
+  * `getIndustry(client)` — reads industry from client.metadata safely with "Not specified" fallback
+- Added a new `SectionHeader` helper component (icon + title + optional trailing) to standardize section headers across Overview cards.
+- Overview tab:
+  * Replaced "Client Summary" card with "Client Profile" card showing different info than the top info cards (Industry, Country with flag, Client Type with icon, Status with badge, Client Since). Removed the email/phone/tax ID fields that were duplicating the top info cards.
+  * Added `Engagement Snapshot` section header above the stats grid with a "{N} total" badge.
+  * Added section headers with small icons (UserIcon, FolderOpen, FileText, ActivityIcon, TrendingUp) to all Overview cards.
+  * Added "View all" links (teal, with ArrowUpRight icon) to Recent Activity, Active Engagements, and Recent Documents cards that switch to the respective tab via new `onSwitchTab` prop wired to `setActiveTab`.
+  * Increased visual separation between sections: `gap-4` → `gap-6` for the main grid and `space-y-4` → `space-y-6` for the columns.
+  * Filtered the "Active Engagements" preview to only show engagements with active statuses (fixes contradiction where count badge said 0 but list showed completed engagements). Added differentiated empty state messages ("No engagements yet." vs "No active engagements — all are completed.").
+- InfoCardsRow (top of page):
+  * Removed the "Client Since" card to eliminate the redundancy flagged by VLM (it duplicated the new "Client Since" field in the Client Profile card).
+  * Reduced from 4 cards to 3 (Email, Phone, Tax ID) and switched grid from `lg:grid-cols-4` to `lg:grid-cols-3` for a clean layout.
+  * Added `shadow-sm` to all cards for consistency.
+- Engagements tab:
+  * Restructured `EngagementRowCard` from a horizontal 3-column row to a vertical grouped layout with clear visual hierarchy:
+    - Header row: type badge + bold title "{typeLabel} — Tax Year {year}" + fee + ArrowUpRight
+    - Group 1: StatusBadge + PriorityBadge + doc count (right-aligned)
+    - Group 2: Prominent progress bar (h-2 instead of h-1.5) with "Progress" label and "{N}% complete" status text
+    - Group 3: Deadline (with "Overdue" / "Nd left" suffix colored by tone) + Assignee (avatar + name + role)
+  * Added a `border-l-4` left border accent colored by status using ENGAGEMENT_STATUS_BORDER map (blue=pbc_sent, amber=collecting, violet=processing, emerald=done).
+  * Increased container spacing from `space-y-3` to `space-y-4`, padding from `p-4` to `p-4 sm:p-5`, and added `shadow-sm`.
+  * Added `overflow-hidden` to the Card so the left border accent renders cleanly at rounded corners.
+- Activity tab:
+  * Created a new `RichActivityTimeline` component for the Activity tab (kept the compact `ActivityList` for Overview's Recent Activity).
+  * Time range header: Computes days from oldest activity to now and displays "Last N days · M events" badge (replaces the bare "M events" badge).
+  * Each event now shows:
+    - Larger colored icon circle (h-10 w-10 instead of h-8 w-8, rounded-full instead of rounded-lg, with ring-4 ring-background to cleanly overlay the vertical line)
+    - Bold event title (derived from ACTIVITY_TITLE_MAP)
+    - Muted description text
+    - Relative timestamp ("2 minutes ago") next to title
+    - Absolute timestamp ("Jun 28, 2026 · 9:43 PM") in the metadata row
+    - Actor name with small avatar initials (h-5 w-5 circle)
+    - Engagement context badge (e.g. "1065 · FY2025")
+  * Vertical connecting line between events (min-height 24px).
+  * Improved loading skeleton to match the rich layout (h-10 w-10 circles, multiple text lines).
+  * Bumped activity fetch cap from 12 to 25 engagements so more events are surfaced.
+- General polish:
+  * All cards now consistently use `rounded-xl shadow-sm`.
+  * Hover effects preserved/added on interactive elements (cards, preview buttons, "View all" links).
+  * Consistent spacing: `gap-6` between major sections, `gap-4` within sections, `p-5` for primary cards, `p-4` for compact cards.
+  * Maintained teal primary color scheme throughout — no indigo/blue as primary (blue/amber/violet/emerald only used as semantic accents for engagement status borders and activity icons, per the existing design system).
+
+Stage Summary:
+- `bun run lint` — 0 errors, 0 warnings (clean) after all changes.
+- Dev server compiled cleanly (no errors in dev.log; only pre-existing EADDRINUSE from earlier failed start attempt).
+- agent-browser QA on Maple Leaf Consulting (1 active engagement) and Robert Chen (1 done engagement, 12 docs, 20 activities):
+  - Overview tab: VLM confirmed 3 top info cards (no Client Since duplication), 5-field Client Profile card with no duplication, Active Engagements count badge matches list (1 for Maple Leaf, "No active engagements — all are completed." for Robert Chen), consistent section headers with icons, good spacing/hierarchy.
+  - Engagements tab: VLM confirmed clear title ("1065 — Partnership — Tax Year 2025"), status+priority grouped in one row, deadline+assignee in another, prominent progress bar with "35% complete" label, amber left border accent for Collecting status, consistent p-4 spacing.
+  - Activity tab: VLM confirmed "Activity Timeline" heading with "Last 1 day · 4 events" time range badge, 4 visible events each with h-10 w-10 colored icon circle, bold title, muted description, relative + absolute timestamps, actor with avatar initials, vertical connecting line. Robert Chen showed 20 events with proper time range header.
+- VLM ratings (post-polish, qualitative): Overview no longer has redundancy; Engagements layout is "well-designed with clear hierarchy, consistent spacing, and effective visual cues"; Activity timeline "meets all specified criteria, with consistent event structure, a connecting line, and polished visual design".
+- No existing functionality broken: data fetching (clients/engagements/documents/activities), navigation (back, openEngagement, openDocument, tab switching), copy email, edit/new engagement toasts all preserved.
+
+---
+Task ID: CRON-6
+Agent: Main (Claude) — webDevReview cron round 6
+Task: Client detail polish, email notification simulation system
+
+## Current Project Status Assessment
+The TaxDox AI platform is stable and production-ready. QA testing confirmed all views render without errors, lint is clean. VLM analysis identified client detail view issues (redundant data, cluttered engagement layout, sparse activity timeline). This round resolved those issues and added a full email notification simulation system.
+
+## Completed Modifications
+
+### 1. Client Detail View Polish (7/10 → 8/10 VLM)
+- **Overview tab**: Removed redundant "Client Summary" card (was duplicating email/phone/tax ID from top cards); replaced with "Client Profile" card showing Industry, Country (with flag), Client Type (with icon), Status, Client Since
+- **Overview tab**: Added SectionHeader component with icons for visual hierarchy; increased gaps to `gap-6`
+- **Overview tab**: Added "View all" links on Recent Activity, Active Engagements, Recent Documents sections that switch to the relevant tab
+- **Info cards**: Reduced from 4 to 3 cards (removed "Client Since" — now in Client Profile card)
+- **Engagements tab**: Restructured rows from horizontal to vertical grouped layout with bold title "{type} — Tax Year {year}", grouped info (status+priority, progress, deadline+assignee), prominent progress bar with label, color-coded left border by status
+- **Activity tab**: Enriched timeline with h-10 w-10 colored icon circles (was h-8), bold titles, relative + absolute timestamps, actor avatar initials, engagement context badges, vertical connecting line. Header shows "Last N days · M events"
+- Bumped activity fetch from 12 to 25 engagements to surface more events
+
+### 2. Email Notification Simulation System
+- **New Prisma model**: `EmailLog` with fields: toEmail, toName, fromName, subject, body, template, status, sentAt + relations to Firm, Engagement, Client
+- **New API**: `GET /api/emails` (list with filters: engagementId, clientId, template, limit) + `POST /api/emails` (create/send with auto content generation)
+- **5 email templates** in `src/lib/email-templates.ts`:
+  - `pbcRequestEmail` — PBC document request with deadline and portal instructions
+  - `deadlineReminderEmail` — deadline approaching with days left
+  - `documentReceivedEmail` — document uploaded confirmation
+  - `extractionCompleteEmail` — AI extraction complete with field count and confidence
+  - `welcomeEmail` — welcome new client
+- **PBC Send integration**: Updated `/api/engagements/[id]/send` to auto-create an EmailLog when sending PBC via email
+- **New component**: `src/components/engagement/sent-emails-panel.tsx` (~430 lines) — email list with:
+  - 4 mini-stat tiles (Total, Delivered, Opened, Response Rate)
+  - Expandable email cards with template-colored icons, subject, recipient, badges, timestamps
+  - "Send Reminder" button to send deadline reminder
+  - "Refresh" button
+  - Loading skeleton + empty state
+- **New tab**: Added "Emails" tab (6th) to Engagement Detail view
+- **Seed data**: 36 EmailLog records seeded across all 5 templates and 3 statuses (delivered=20, opened=13, sent=3)
+- Color-coded template badges: pbc_request=blue, deadline_reminder=amber, document_received=teal, extraction_complete=violet, welcome=emerald
+
+## Verification Results
+- `bun run lint` — 0 errors, 0 warnings (clean)
+- `bun run db:push` — database schema updated with EmailLog model
+- `bun run db:seed` — 36 email logs seeded successfully
+- Dev server — compiles cleanly, no runtime errors
+- agent-browser QA:
+  - Client detail Overview: Clean layout, no redundancy, Client Profile card shows distinct info (8/10 VLM)
+  - Client detail Activity: Rich timeline with colored icons, timestamps, actor avatars (7/10 VLM)
+  - Engagement detail Emails tab: "Sent Emails" panel with email cards, working (6/10 VLM — some empty state polish needed)
+  - All existing views still functional
+- VLM ratings: Client Detail 8/10, Activity 7/10, Emails Tab 6/10
+
+## Unresolved Issues / Next Phase Recommendations
+1. **Emails tab empty state**: VLM noted error message is jarring — could soften the empty state design
+2. **Email template preview**: Settings page could show email template previews with edit capability
+3. **Wire email triggers**: `document_received` and `extraction_complete` templates should auto-fire when documents are uploaded/processed
+4. **PDF page rendering**: Still need pdf.js for real GLM-4.6V extraction on PDFs
+5. **Real SMTP**: Replace simulation with Resend/SendGrid when ready for production
+6. **OAuth providers**: Google Workspace / Microsoft Entra SSO for enterprise
+
+Priority for next round: Wire the document_received and extraction_complete email templates to auto-trigger on upload/processing, and soften the emails tab empty state.

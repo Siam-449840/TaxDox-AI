@@ -33,6 +33,7 @@ model Firm {
   auditLogs   AuditLog[]
   teamMembers TeamMember[]
   subscriptions SubscriptionEvent[]
+  emails      EmailLog[]
 }
 
 model User {
@@ -138,6 +139,7 @@ model Client {
   engagements Engagement[]
   documents   Document[]
   messages    Message[]
+  emails      EmailLog[]
 }
 
 model Engagement {
@@ -164,6 +166,7 @@ model Engagement {
   workflows  Workflow[]
   messages   Message[]
   activities Activity[]
+  emails     EmailLog[]
 }
 
 // ─── PBC Lists ─────────────────────────────────────────────────
@@ -323,4 +326,29 @@ model AuditLog {
   createdAt    DateTime @default(now())
 
   @@index([firmId])
+}
+
+// ─── Email Logs (simulated outbound email) ─────────────────────
+
+model EmailLog {
+  id           String   @id @default(cuid())
+  firmId       String
+  firm         Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  engagementId String?
+  engagement   Engagement? @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  clientId     String?
+  client       Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  toEmail      String
+  toName       String
+  fromName     String   @default("Meridian CPA Group")
+  subject      String
+  body         String
+  template     String   // pbc_request, deadline_reminder, document_received, welcome, extraction_complete
+  status       String   @default("sent") // sent/delivered/opened/failed
+  sentAt       DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([firmId])
+  @@index([engagementId])
+  @@index([clientId])
 }

@@ -6,6 +6,13 @@ import { nanoid } from 'nanoid'
 import bcrypt from 'bcryptjs'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
+import {
+  pbcRequestEmail,
+  deadlineReminderEmail,
+  documentReceivedEmail,
+  extractionCompleteEmail,
+  welcomeEmail,
+} from '../src/lib/email-templates'
 
 const db = new PrismaClient()
 const DEMO_PASSWORD = await bcrypt.hash('TaxDox2025!', 12)
@@ -285,6 +292,7 @@ async function main() {
   console.log('🌱 Seeding TaxDox AI database...')
 
   // Clean
+  await db.emailLog.deleteMany()
   await db.subscriptionEvent.deleteMany()
   await db.auditLog.deleteMany()
   await db.activity.deleteMany()
@@ -376,6 +384,20 @@ async function main() {
   }
 
   // Engagements with PBC lists & documents
+  const createdEngagements: {
+    engagement: {
+      id: string
+      firmId: string
+      engagementType: string
+      taxYear: number
+      deadline: Date
+      status: string
+      progress: number
+    }
+    client: { id: string; name: string; email: string }
+    config: (typeof ENGAGEMENTS)[number]
+  }[] = []
+
   for (const e of ENGAGEMENTS) {
     const client = clients[e.clientIdx]
     const assignedUser = users[e.assignedIdx] || users[0]
@@ -405,6 +427,21 @@ async function main() {
         sentAt: e.status !== 'created' ? new Date(Date.now() - 7 * 86400000) : null,
         sentVia: 'email',
       },
+    })
+
+    // Track this engagement so we can seed EmailLog records below.
+    createdEngagements.push({
+      engagement: {
+        id: engagement.id,
+        firmId: engagement.firmId,
+        engagementType: engagement.engagementType,
+        taxYear: engagement.taxYear,
+        deadline: engagement.deadline ?? new Date(e.deadline),
+        status: engagement.status,
+        progress: engagement.progress,
+      },
+      client: { id: client.id, name: client.name, email: client.email },
+      config: e,
     })
 
     // PBC Items
@@ -550,6 +587,137 @@ async function main() {
     }
   }
 
+  // ── Email Logs (simulated outbound emails) ──────────────────────
+  // For every engagement where the PBC was already sent, create the
+  // matching pbc_request email plus, for select engagements, a few
+  // deadline_reminder / document_received / extraction_complete emails
+  // so the Sent Emails panel has rich demo data on first load.
+  console.log('📧 Seeding EmailLog records...')
+
+  // Status rotation that makes the simulated inbox feel realistic.
+  const STATUS_CYCLE = ['sent', 'delivered', 'opened', 'opened', 'delivered'] as const
+
+  // Welcome email for the first 3 clients (most-recent signups).
+  for (let i = 0; i < Math.min(3, clients.length); i++) {
+    const c = clients[i]
+    const w = welcomeEmail(c.name, firm.name)
+    await db.emailLog.create({
+      data: {
+        firmId: firm.id,
+        engagementId: null,
+        clientId: c.id,
+        toEmail: c.email,
+        toName: c.name,
+        fromName: firm.name,
+        subject: w.subject,
+        body: w.body,
+        template: w.template,
+        status: 'opened',
+        sentAt: new Date(Date.now() - 14 * 86400000 - i * 3600000),
+      },
+    })
+  }
+
+  let emailIdx = 0
+  for (const item of createdEngagements) {
+    const { engagement: eng, client: c, config: e } = item
+
+    // PBC request — only when the engagement has already passed the "created" stage.
+    if (e.status !== 'created') {
+      const pbc = pbcRequestEmail(c.name, eng.engagementType, eng.taxYear, eng.deadline)
+      await db.emailLog.create({
+        data: {
+          firmId: firm.id,
+          engagementId: eng.id,
+          clientId: c.id,
+          toEmail: c.email,
+          toName: c.name,
+          fromName: firm.name,
+          subject: pbc.subject,
+          body: pbc.body,
+          template: pbc.template,
+          status: STATUS_CYCLE[emailIdx % STATUS_CYCLE.length],
+          sentAt: new Date(Date.now() - 7 * 86400000 - emailIdx * 600000),
+        },
+      })
+      emailIdx++
+    }
+
+    // Deadline reminder — for engagements whose deadline is approaching
+    // (status in collecting/processing/review and progress < 90).
+    if (
+      ['collecting', 'processing', 'review', 'pbc_sent'].includes(e.status) &&
+      e.progress < 90
+    ) {
+      const daysLeft = Math.max(1, Math.round((eng.deadline.getTime() - Date.now()) / 86400000))
+      const reminder = deadlineReminderEmail(
+        c.name,
+        eng.engagementType,
+        eng.taxYear,
+        daysLeft,
+        eng.deadline
+      )
+      await db.emailLog.create({
+        data: {
+          firmId: firm.id,
+          engagementId: eng.id,
+          clientId: c.id,
+          toEmail: c.email,
+          toName: c.name,
+          fromName: firm.name,
+          subject: reminder.subject,
+          body: reminder.body,
+          template: reminder.template,
+          status: 'delivered',
+          sentAt: new Date(Date.now() - 2 * 86400000 - emailIdx * 600000),
+        },
+      })
+      emailIdx++
+    }
+
+    // Document received + extraction complete — for engagements with at
+    // least one processed document.
+    if (e.progress >= 40) {
+      const docType = 'W-2'
+      const filename = `W-2_${c.name.replace(/\s/g, '')}_${eng.taxYear}.pdf`
+      const received = documentReceivedEmail(c.name, docType, filename)
+      await db.emailLog.create({
+        data: {
+          firmId: firm.id,
+          engagementId: eng.id,
+          clientId: c.id,
+          toEmail: c.email,
+          toName: c.name,
+          fromName: firm.name,
+          subject: received.subject,
+          body: received.body,
+          template: received.template,
+          status: 'opened',
+          sentAt: new Date(Date.now() - 5 * 86400000 - emailIdx * 600000),
+        },
+      })
+      emailIdx++
+
+      const extraction = extractionCompleteEmail(c.name, docType, 10, 0.97)
+      await db.emailLog.create({
+        data: {
+          firmId: firm.id,
+          engagementId: eng.id,
+          clientId: c.id,
+          toEmail: c.email,
+          toName: c.name,
+          fromName: firm.name,
+          subject: extraction.subject,
+          body: extraction.body,
+          template: extraction.template,
+          status: 'delivered',
+          sentAt: new Date(Date.now() - 5 * 86400000 + 120000 - emailIdx * 600000),
+        },
+      })
+      emailIdx++
+    }
+  }
+
   // PBC Templates
   await db.pbcTemplate.create({
     data: {
@@ -607,11 +775,13 @@ async function main() {
     },
   })
 
+  const emailLogCount = await db.emailLog.count()
   const stats = {
     firm: 1,
     team: teamMembers.length,
     clients: clients.length,
     engagements: ENGAGEMENTS.length,
+    emailLogs: emailLogCount,
   }
   console.log('✅ Seed complete:', stats)
 }

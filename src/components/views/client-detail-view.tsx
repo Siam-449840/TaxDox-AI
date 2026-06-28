@@ -157,6 +157,34 @@ const ACTIVE_ENGAGEMENT_STATUSES = [
   'filing',
 ]
 
+/* Subtle left-border accent per engagement status (spec). */
+const ENGAGEMENT_STATUS_BORDER: Record<string, string> = {
+  created: 'border-l-slate-300 dark:border-l-slate-600',
+  pbc_sent: 'border-l-blue-400 dark:border-l-blue-500',
+  collecting: 'border-l-amber-400 dark:border-l-amber-500',
+  processing: 'border-l-violet-400 dark:border-l-violet-500',
+  review: 'border-l-cyan-400 dark:border-l-cyan-500',
+  filing: 'border-l-teal-400 dark:border-l-teal-500',
+  done: 'border-l-emerald-400 dark:border-l-emerald-500',
+}
+
+/* Friendly title per activity type for the rich timeline. */
+const ACTIVITY_TITLE_MAP: Record<string, string> = {
+  upload: 'Document uploaded',
+  classify: 'Document classified',
+  extract: 'Data extracted',
+  verify: 'Field verified',
+  send: 'PBC list sent',
+  message: 'Message posted',
+  status_change: 'Status updated',
+}
+
+/** Read industry from client metadata safely. */
+function getIndustry(client: Client): string {
+  const meta = client.metadata as { industry?: string } | null
+  return meta?.industry?.trim() || 'Not specified'
+}
+
 /* Activity type → color/icon mapping (per spec). */
 const ACTIVITY_STYLE_MAP: Record<
   string,
@@ -399,7 +427,7 @@ export function ClientDetailView() {
   }, [clientId])
 
   // Fetch engagement detail records (in parallel) so we can collect their
-  // activity timelines. We cap to the first 12 engagements to stay reasonable.
+  // activity timelines. We look at every engagement to make the timeline rich.
   const fetchActivities = useCallback(async () => {
     if (!engagements.length) {
       setActivities([])
@@ -407,7 +435,7 @@ export function ClientDetailView() {
     }
     setActivitiesLoading(true)
     try {
-      const targets = engagements.slice(0, 12)
+      const targets = engagements.slice(0, 25)
       const settled = await Promise.allSettled(
         targets.map((e) =>
           fetch(`/api/engagements/${e.id}`).then((r) =>
@@ -585,6 +613,7 @@ export function ClientDetailView() {
             activitiesLoading={activitiesLoading}
             onOpenEngagement={(id) => openEngagement(id)}
             onOpenDocument={(id) => openDocument(id)}
+            onSwitchTab={(t) => setActiveTab(t)}
           />
         </TabsContent>
 
@@ -808,21 +837,14 @@ function InfoCardsRow({
         </span>
       ),
     },
-    {
-      icon: <Calendar className="h-4 w-4 text-primary" />,
-      label: 'Client Since',
-      value: client.createdAt
-        ? format(new Date(client.createdAt), 'MMM d, yyyy')
-        : '—',
-    },
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {cards.map((c) => (
         <Card
           key={c.label}
-          className="flex items-start gap-3 rounded-xl p-4 transition-colors hover:bg-muted/20"
+          className="flex items-start gap-3 rounded-xl p-4 shadow-sm transition-colors hover:bg-muted/20"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             {c.icon}
@@ -858,6 +880,7 @@ function OverviewTab({
   activitiesLoading,
   onOpenEngagement,
   onOpenDocument,
+  onSwitchTab,
 }: {
   client: Client
   totalEngagements: number
@@ -870,114 +893,128 @@ function OverviewTab({
   activitiesLoading: boolean
   onOpenEngagement: (id: string) => void
   onOpenDocument: (id: string) => void
+  onSwitchTab: (tab: TabValue) => void
 }) {
   const recentDocs = documents.slice(0, 4)
   const typeDef = getTypeDef(client.clientType)
   const countryDef = getCountryDef(client.country)
   const TypeIcon = TYPE_ICON[client.clientType]
+  const industry = getIndustry(client)
+  const activeEngagementsList = engagements.filter((e) =>
+    ACTIVE_ENGAGEMENT_STATUSES.includes(e.status)
+  )
+  const activeEngagementsCount = activeEngagementsList.length
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      {/* Left: client summary */}
-      <div className="space-y-4 lg:col-span-2">
-        <Card className="rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold">Client Summary</h3>
-            <Badge variant="outline" className="gap-1.5">
-              <TypeIcon className="h-3 w-3" />
-              {typeDef.label}
-            </Badge>
-          </div>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* Left: client profile + stats + recent activity */}
+      <div className="space-y-6 lg:col-span-2">
+        {/* ── Client Profile (different info than the top info cards) ── */}
+        <Card className="rounded-xl p-5 shadow-sm">
+          <SectionHeader
+            icon={<UserIcon className="h-4 w-4" />}
+            title="Client Profile"
+          />
           <Separator className="my-4" />
           <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
             <DetailField
-              icon={<UserIcon className="h-4 w-4" />}
-              label="Full Name"
-              value={client.name}
+              icon={<Building2 className="h-4 w-4" />}
+              label="Industry"
+              value={industry}
             />
             <DetailField
-              icon={<Mail className="h-4 w-4" />}
-              label="Email"
-              value={client.email || '—'}
-            />
-            <DetailField
-              icon={<Phone className="h-4 w-4" />}
-              label="Phone"
-              value={client.phone || '—'}
-            />
-            <DetailField
-              icon={<CreditCard className="h-4 w-4" />}
-              label="Tax ID"
+              icon={<HomeIcon className="h-4 w-4" />}
+              label="Country"
               value={
-                <span className="font-mono tabular-nums">
-                  {formatTaxId(client.taxId, client.clientType)}
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden className="text-base leading-none">
+                    {countryDef.flag}
+                  </span>
+                  {countryDef.label}
                 </span>
               }
+            />
+            <DetailField
+              icon={<TypeIcon className="h-4 w-4" />}
+              label="Client Type"
+              value={
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden>{typeDef.icon}</span>
+                  {typeDef.label}
+                </span>
+              }
+            />
+            <DetailField
+              icon={<CircleDot className="h-4 w-4" />}
+              label="Status"
+              value={<StatusBadge status={client.status} size="sm" />}
             />
             <DetailField
               icon={<Calendar className="h-4 w-4" />}
               label="Client Since"
               value={
                 client.createdAt
-                  ? `${format(new Date(client.createdAt), 'MMM d, yyyy')} · ${formatDistanceToNow(
-                      new Date(client.createdAt),
-                      { addSuffix: true }
-                    )}`
+                  ? `Client since ${format(new Date(client.createdAt), 'MMM d, yyyy')}`
                   : '—'
-              }
-            />
-            <DetailField
-              icon={<Building2 className="h-4 w-4" />}
-              label="Country"
-              value={
-                <span className="inline-flex items-center gap-1.5">
-                  <span aria-hidden>{countryDef.flag}</span>
-                  {countryDef.label} ({countryDef.code})
-                </span>
               }
             />
           </dl>
         </Card>
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatTile
-            icon={<FolderOpen className="h-4 w-4" />}
-            label="Engagements"
-            value={totalEngagements}
-            accent="bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
+        {/* ── Stats grid ── */}
+        <div>
+          <SectionHeader
+            icon={<TrendingUp className="h-4 w-4" />}
+            title="Engagement Snapshot"
+            trailing={
+              <Badge variant="secondary" className="px-2 py-0 text-[10px]">
+                {totalEngagements} total
+              </Badge>
+            }
           />
-          <StatTile
-            icon={<FileText className="h-4 w-4" />}
-            label="Documents"
-            value={totalDocuments}
-            accent="bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-          />
-          <StatTile
-            icon={<Clock className="h-4 w-4" />}
-            label="Active Eng."
-            value={activeEngagements}
-            accent="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-          />
-          <StatTile
-            icon={<DollarSign className="h-4 w-4" />}
-            label="Total Fees"
-            value={formatFee(totalFees)}
-            accent="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-          />
+          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile
+              icon={<FolderOpen className="h-4 w-4" />}
+              label="Engagements"
+              value={totalEngagements}
+              accent="bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
+            />
+            <StatTile
+              icon={<FileText className="h-4 w-4" />}
+              label="Documents"
+              value={totalDocuments}
+              accent="bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+            />
+            <StatTile
+              icon={<Clock className="h-4 w-4" />}
+              label="Active Eng."
+              value={activeEngagements}
+              accent="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+            />
+            <StatTile
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Total Fees"
+              value={formatFee(totalFees)}
+              accent="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+            />
+          </div>
         </div>
 
-        {/* Recent activity */}
-        <Card className="rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ActivityIcon className="h-4 w-4 text-primary" />
-              <h3 className="text-base font-semibold">Recent Activity</h3>
-            </div>
-            <Badge variant="outline" className="text-[11px]">
-              Last 5
-            </Badge>
-          </div>
+        {/* ── Recent activity ── */}
+        <Card className="rounded-xl p-5 shadow-sm">
+          <SectionHeader
+            icon={<ActivityIcon className="h-4 w-4" />}
+            title="Recent Activity"
+            trailing={
+              <button
+                onClick={() => onSwitchTab('activity')}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+              >
+                View all
+                <ArrowUpRight className="h-3 w-3" />
+              </button>
+            }
+          />
           <Separator className="my-4" />
           {activitiesLoading ? (
             <div className="space-y-3">
@@ -1008,24 +1045,39 @@ function OverviewTab({
       </div>
 
       {/* Right: snapshot of engagements + documents */}
-      <div className="space-y-4">
-        <Card className="rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Active Engagements</h3>
-            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
-              {engagements.filter((e) =>
-                ACTIVE_ENGAGEMENT_STATUSES.includes(e.status)
-              ).length}
-            </Badge>
-          </div>
+      <div className="space-y-6">
+        {/* ── Active Engagements preview ── */}
+        <Card className="rounded-xl p-5 shadow-sm">
+          <SectionHeader
+            icon={<FolderOpen className="h-4 w-4" />}
+            title="Active Engagements"
+            trailing={
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                  {activeEngagementsCount}
+                </Badge>
+                {totalEngagements > 0 && (
+                  <button
+                    onClick={() => onSwitchTab('engagements')}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+                  >
+                    View all
+                    <ArrowUpRight className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            }
+          />
           <Separator className="my-3" />
-          {engagements.length === 0 ? (
+          {activeEngagementsList.length === 0 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
-              No engagements yet.
+              {engagements.length === 0
+                ? 'No engagements yet.'
+                : 'No active engagements — all are completed.'}
             </div>
           ) : (
             <div className="space-y-2">
-              {engagements.slice(0, 4).map((e) => (
+              {activeEngagementsList.slice(0, 4).map((e) => (
                 <button
                   key={e.id}
                   onClick={() => onOpenEngagement(e.id)}
@@ -1055,13 +1107,28 @@ function OverviewTab({
           )}
         </Card>
 
-        <Card className="rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Recent Documents</h3>
-            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
-              {totalDocuments}
-            </Badge>
-          </div>
+        {/* ── Recent documents preview ── */}
+        <Card className="rounded-xl p-5 shadow-sm">
+          <SectionHeader
+            icon={<FileText className="h-4 w-4" />}
+            title="Recent Documents"
+            trailing={
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                  {totalDocuments}
+                </Badge>
+                {totalDocuments > 0 && (
+                  <button
+                    onClick={() => onSwitchTab('documents')}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+                  >
+                    View all
+                    <ArrowUpRight className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            }
+          />
           <Separator className="my-3" />
           {totalDocuments === 0 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
@@ -1131,6 +1198,31 @@ function DetailField({
   )
 }
 
+/* Small section header used to introduce a card / region. */
+function SectionHeader({
+  icon,
+  title,
+  trailing,
+}: {
+  icon?: React.ReactNode
+  title: string
+  trailing?: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        {icon && (
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            {icon}
+          </span>
+        )}
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+      </div>
+      {trailing}
+    </div>
+  )
+}
+
 function StatTile({
   icon,
   label,
@@ -1191,7 +1283,7 @@ function EngagementsTab({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {engagements.map((e) => (
         <EngagementRowCard
           key={e.id}
@@ -1213,15 +1305,21 @@ function EngagementRowCard({
   const deadline = getDeadlineState(engagement.deadline)
   const docCount = engagement._count?.documents ?? 0
   const assignedTo = engagement.assignedTo
+  const progress = engagement.progress ?? 0
+  const typeLabel = engagementTypeLabel(engagement.engagementType)
 
   return (
     <Card
-      className="cursor-pointer rounded-xl p-0 transition-all hover:shadow-md hover:border-primary/40"
+      className={cn(
+        'cursor-pointer overflow-hidden rounded-xl p-0 shadow-sm transition-all hover:shadow-md hover:border-primary/40',
+        'border-l-4',
+        ENGAGEMENT_STATUS_BORDER[engagement.status] || 'border-l-slate-300 dark:border-l-slate-600'
+      )}
       onClick={onClick}
     >
-      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
-        {/* Left: type + year + status */}
-        <div className="flex shrink-0 items-center gap-3 sm:w-56">
+      <div className="flex flex-col gap-4 p-4 sm:p-5">
+        {/* Header: type badge + title + fee + chevron */}
+        <div className="flex items-start gap-3">
           <Badge
             variant="outline"
             className={cn(
@@ -1232,32 +1330,48 @@ function EngagementRowCard({
           >
             {engagement.engagementType}
           </Badge>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">FY{engagement.taxYear}</p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {engagementTypeLabel(engagement.engagementType)}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold leading-tight">
+              {typeLabel} — Tax Year {engagement.taxYear}
+            </p>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              FY{engagement.taxYear} engagement
             </p>
           </div>
+          <div className="flex shrink-0 items-center gap-1 text-sm font-semibold tabular-nums">
+            <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+            {formatFee(engagement.fee ?? 0)}
+          </div>
+          <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         </div>
 
-        {/* Middle: status + priority + progress */}
-        <div className="flex flex-1 flex-wrap items-center gap-4">
+        {/* Group 1: status + priority + doc count */}
+        <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={engagement.status} size="md" />
           <PriorityBadge priority={engagement.priority as Priority} />
-          <div className="flex min-w-[140px] flex-1 items-center gap-2">
-            <Progress
-              value={engagement.progress ?? 0}
-              className="h-1.5 flex-1"
-            />
-            <span className="w-9 text-right text-xs font-semibold tabular-nums text-muted-foreground">
-              {engagement.progress ?? 0}%
-            </span>
-          </div>
+          <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <FileText className="h-3 w-3" />
+            <span className="font-medium tabular-nums">{docCount}</span>
+            {docCount === 1 ? 'doc' : 'docs'}
+          </span>
         </div>
 
-        {/* Right: deadline, docs, assignee, fee */}
-        <div className="flex shrink-0 flex-wrap items-center gap-4 border-t pt-3 text-sm sm:border-t-0 sm:pt-0">
-          <div className="flex items-center gap-1.5">
+        {/* Group 2: prominent progress with label */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium uppercase tracking-wide text-muted-foreground">
+              Progress
+            </span>
+            <span className="font-semibold tabular-nums text-foreground">
+              {progress}% complete
+            </span>
+          </div>
+          <Progress value={progress} className="h-2" />
+        </div>
+
+        {/* Group 3: deadline + assignee */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+          <div className="inline-flex items-center gap-1.5">
             <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
             {deadline ? (
               <span
@@ -1271,18 +1385,14 @@ function EngagementRowCard({
                 )}
               >
                 {format(deadline.date, 'MMM d, yyyy')}
+                {deadline.tone === 'red' && ' · Overdue'}
+                {deadline.tone === 'amber' && ` · ${deadline.days}d left`}
               </span>
             ) : (
               <span className="text-xs text-muted-foreground">No deadline</span>
             )}
           </div>
-
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <FileText className="h-3.5 w-3.5" />
-            <span className="font-medium tabular-nums">{docCount}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
+          <div className="inline-flex items-center gap-1.5">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
               {getInitials(assignedTo?.name)}
             </div>
@@ -1297,13 +1407,6 @@ function EngagementRowCard({
               )}
             </div>
           </div>
-
-          <div className="flex items-center gap-1 text-sm font-semibold tabular-nums">
-            <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-            {formatFee(engagement.fee ?? 0)}
-          </div>
-
-          <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         </div>
       </div>
     </Card>
@@ -1483,14 +1586,22 @@ function ActivityTab({
 }) {
   if (loading) {
     return (
-      <Card className="rounded-xl p-5">
-        <div className="space-y-3">
+      <Card className="rounded-xl p-5 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-7 w-7 rounded-lg" />
+            <Skeleton className="h-4 w-40" />
+          </div>
+          <Skeleton className="h-5 w-28 rounded-full" />
+        </div>
+        <div className="space-y-5">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex gap-3">
-              <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />
-              <div className="flex-1 space-y-1.5">
-                <Skeleton className="h-3.5 w-3/4" />
-                <Skeleton className="h-3 w-1/3" />
+            <div key={i} className="flex gap-4">
+              <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+              <div className="flex-1 space-y-2 pt-1">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-1/2" />
               </div>
             </div>
           ))}
@@ -1501,7 +1612,7 @@ function ActivityTab({
 
   if (activities.length === 0) {
     return (
-      <Card className="rounded-xl">
+      <Card className="rounded-xl shadow-sm">
         <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <ActivityIcon className="h-7 w-7" />
@@ -1509,7 +1620,7 @@ function ActivityTab({
           <h3 className="mt-4 text-lg font-semibold">No activity yet</h3>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">
             Once this client&apos;s engagements start collecting documents and
-            AI processing, a timeline will appear here.
+            AI processing, a rich timeline will appear here.
           </p>
         </div>
       </Card>
@@ -1517,23 +1628,129 @@ function ActivityTab({
   }
 
   return (
-    <Card className="rounded-xl p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ActivityIcon className="h-4 w-4 text-primary" />
-          <h3 className="text-base font-semibold">Activity Timeline</h3>
-        </div>
-        <Badge variant="outline" className="text-[11px]">
-          {activities.length} {activities.length === 1 ? 'event' : 'events'}
-        </Badge>
-      </div>
-      <ActivityList activities={activities} showEngagement />
+    <Card className="rounded-xl p-5 shadow-sm">
+      <RichActivityTimeline activities={activities} />
     </Card>
   )
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- *  Activity list (used in Overview + Activity tab)
+ *  Rich activity timeline (used in Activity tab)
+ * ────────────────────────────────────────────────────────────────────────── */
+
+function RichActivityTimeline({
+  activities,
+}: {
+  activities: ActivityRow[]
+}) {
+  // Compute the time range from the oldest activity to now (min 1 day).
+  const oldest = activities.length
+    ? new Date(activities[activities.length - 1].createdAt)
+    : null
+  const daysRange = oldest
+    ? Math.max(
+        1,
+        Math.ceil(
+          (Date.now() - oldest.getTime()) / (1000 * 60 * 60 * 24)
+        )
+      )
+    : 30
+
+  return (
+    <>
+      <div className="mb-5 flex items-center justify-between gap-2">
+        <SectionHeader
+          icon={<ActivityIcon className="h-4 w-4" />}
+          title="Activity Timeline"
+        />
+        <Badge variant="outline" className="text-[11px] tabular-nums">
+          Last {daysRange} {daysRange === 1 ? 'day' : 'days'} ·{' '}
+          {activities.length} {activities.length === 1 ? 'event' : 'events'}
+        </Badge>
+      </div>
+      <ScrollArea className="max-h-[640px] pr-3">
+        <ol className="relative">
+          {activities.map((a, i) => {
+            const cfg = ACTIVITY_STYLE_MAP[a.type] ?? DEFAULT_ACTIVITY_STYLE
+            const Icon = cfg.icon
+            const title = ACTIVITY_TITLE_MAP[a.type] ?? 'Activity'
+            const isLast = i === activities.length - 1
+            const date = new Date(a.createdAt)
+            const dateValid = isValid(date)
+            return (
+              <li key={a.id} className="flex gap-4">
+                <div className="flex flex-col items-center">
+                  <div
+                    className={cn(
+                      'flex h-10 w-10 items-center justify-center rounded-full ring-4 ring-background',
+                      cfg.surface
+                    )}
+                  >
+                    <Icon className={cn('h-5 w-5', cfg.iconColor)} />
+                  </div>
+                  {!isLast && (
+                    <div
+                      className={cn('mt-0.5 w-px flex-1', cfg.line)}
+                      style={{ minHeight: 24 }}
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 pb-5">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <p className="text-sm font-semibold leading-snug">
+                      {title}
+                    </p>
+                    {dateValid && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {formatDistanceToNow(date, { addSuffix: true })}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
+                    {a.description}
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-foreground/70">
+                        {getInitials(a.actor)}
+                      </span>
+                      <span className="font-medium text-foreground/80">
+                        {a.actor}
+                      </span>
+                    </span>
+                    {dateValid && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="tabular-nums">
+                          {format(date, 'MMM d, yyyy · h:mm a')}
+                        </span>
+                      </>
+                    )}
+                    {a.engagement && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <Badge
+                          variant="outline"
+                          className="px-1.5 py-0 text-[10px] font-semibold ring-1 ring-inset"
+                        >
+                          {a.engagement.engagementType} · FY
+                          {a.engagement.taxYear}
+                        </Badge>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      </ScrollArea>
+    </>
+  )
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ *  Compact activity list (used in Overview's Recent Activity card)
  * ────────────────────────────────────────────────────────────────────────── */
 
 function ActivityList({

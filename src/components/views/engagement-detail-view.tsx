@@ -71,6 +71,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { SentEmailsPanel } from '@/components/engagement/sent-emails-panel'
 import type {
   Engagement,
   PbcItem,
@@ -112,7 +113,7 @@ type EngagementDetail = Engagement & {
 
 type DocFilterKey = 'all' | 'processing' | 'processed' | 'reviewed'
 
-const TAB_VALUES = ['pbc', 'documents', 'extraction', 'workflow', 'messages'] as const
+const TAB_VALUES = ['pbc', 'documents', 'extraction', 'workflow', 'messages', 'emails'] as const
 type TabValue = (typeof TAB_VALUES)[number]
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -580,6 +581,9 @@ export function EngagementDetailView() {
                   </Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="emails" className="gap-1.5">
+                <Mail className="h-4 w-4" /> Emails
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -646,6 +650,19 @@ export function EngagementDetailView() {
               onSuggest={handleSuggestReply}
               busySend={actionBusy['send-msg']}
               busySuggest={actionBusy['suggest']}
+            />
+          </TabsContent>
+
+          {/* ── Sent Emails ──────────────────────────────────────────── */}
+          <TabsContent value="emails" className="mt-4">
+            <SentEmailsPanel
+              engagementId={data.id}
+              engagement={{
+                clientName: data.client.name,
+                engagementType: data.engagementType,
+                taxYear: data.taxYear,
+                deadline: data.deadline,
+              }}
             />
           </TabsContent>
         </Tabs>
