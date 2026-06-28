@@ -46,7 +46,7 @@ import {
   Legend,
 } from 'recharts'
 import { cn } from '@/lib/utils'
-import { formatDistanceToNow, format } from 'date-fns'
+import { formatDistanceToNow, format, differenceInCalendarDays } from 'date-fns'
 
 interface DashboardData {
   stats: {
@@ -532,6 +532,16 @@ export function DashboardView() {
             ))}
           </div>
         </Card>
+
+        {/* ─── Deadline Timeline (spans 2 of 3 columns) ─── */}
+        <DeadlineTimelineCard
+          deadlines={data.upcomingDeadlines}
+          onOpen={openEngagement}
+          onViewCalendar={() => navigate('calendar')}
+        />
+
+        {/* ─── Deadline Health (companion, 1 of 3 columns) ─── */}
+        <DeadlineHealthCard deadlines={data.upcomingDeadlines} />
       </div>
 
       {/* Charts row */}
@@ -824,5 +834,393 @@ export function DashboardView() {
         </Card>
       </div>
     </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Deadline Timeline Widget
+//
+// Renders the next N upcoming deadlines as color-coded dots on a
+// horizontal timeline. Dot size scales with the number of deadlines
+// falling on the same day; hover reveals a tooltip with client,
+// engagement type, due date, and days remaining. A red warning banner
+// appears at the top when any deadline is already overdue.
+// ─────────────────────────────────────────────────────────────────
+
+interface DeadlineItem {
+  id: string
+  clientName: string
+  engagementType: string
+  deadline: string
+  priority: string
+  progress: number
+  daysLeft: number
+}
+
+const PRIORITY_STYLES: Record<
+  string,
+  { dot: string; ring: string; shadow: string; label: string }
+> = {
+  high: {
+    dot: 'bg-red-500',
+    ring: 'ring-red-200 dark:ring-red-950/60',
+    shadow: 'shadow-red-500/40',
+    label: 'High',
+  },
+  medium: {
+    dot: 'bg-amber-500',
+    ring: 'ring-amber-200 dark:ring-amber-950/60',
+    shadow: 'shadow-amber-500/40',
+    label: 'Medium',
+  },
+  low: {
+    dot: 'bg-slate-400',
+    ring: 'ring-slate-200 dark:ring-slate-800',
+    shadow: 'shadow-slate-500/30',
+    label: 'Low',
+  },
+}
+
+function dotSizeClass(count: number): string {
+  if (count >= 3) return 'h-7 w-7'
+  if (count === 2) return 'h-6 w-6'
+  return 'h-5 w-5'
+}
+
+function DeadlineTimelineCard({
+  deadlines,
+  onOpen,
+  onViewCalendar,
+}: {
+  deadlines: DeadlineItem[]
+  onOpen: (id: string) => void
+  onViewCalendar: () => void
+}) {
+  // Empty state — no deadlines to plot.
+  if (deadlines.length === 0) {
+    return (
+      <Card className="lg:col-span-2 p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <CalendarClock className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold">Upcoming Deadline Timeline</h2>
+              <p className="text-xs text-muted-foreground">No deadlines to display</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <CalendarClock className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium">All caught up</p>
+          <p className="text-xs text-muted-foreground">
+            No upcoming deadlines in the next 14 days.
+          </p>
+        </div>
+      </Card>
+    )
+  }
+
+  // Sort ascending by deadline date so the closest is on the left.
+  const sorted = [...deadlines].sort(
+    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  )
+
+  // Compute the date range and clamp to avoid divide-by-zero.
+  const times = sorted.map((d) => new Date(d.deadline).getTime())
+  const minTime = Math.min(...times)
+  const maxTime = Math.max(...times)
+  const range = Math.max(1, maxTime - minTime)
+
+  // Count deadlines per day so dots can scale up when several fall on
+  // the same day, and track each item's index within its day to allow
+  // vertical stacking.
+  const dayCounts = new Map<string, number>()
+  const dayIndex = new Map<string, number>()
+  for (const d of sorted) {
+    const key = format(new Date(d.deadline), 'yyyy-MM-dd')
+    dayCounts.set(key, (dayCounts.get(key) || 0) + 1)
+  }
+
+  const overdueCount = sorted.filter((d) => d.daysLeft < 0).length
+
+  // Pre-compute each dot's position, size, and vertical offset.
+  const positioned = sorted.map((d) => {
+    const t = new Date(d.deadline).getTime()
+    const pct = ((t - minTime) / range) * 100
+    const key = format(new Date(d.deadline), 'yyyy-MM-dd')
+    const count = dayCounts.get(key) || 1
+    const idx = dayIndex.get(key) || 0
+    dayIndex.set(key, idx + 1)
+    // When several dots land on the same day, spread them vertically
+    // across the timeline band so they don't fully overlap.
+    const verticalOffset =
+      count > 1 ? (idx - (count - 1) / 2) * 26 : 0
+    return { ...d, pct, count, verticalOffset }
+  })
+
+  // "Today" marker — only render if today falls inside the visible range.
+  const nowTime = Date.now()
+  const todayPct = ((nowTime - minTime) / range) * 100
+  const showToday = todayPct >= 0 && todayPct <= 100
+
+  return (
+    <Card className="lg:col-span-2 p-5 shadow-sm">
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <CalendarClock className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold">Upcoming Deadline Timeline</h2>
+            <p className="text-xs text-muted-foreground">
+              Next {sorted.length} deadline{sorted.length === 1 ? '' : 's'} ·
+              click a dot to open
+            </p>
+          </div>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onViewCalendar} className="text-xs">
+          Calendar
+          <ArrowRight className="ml-1 h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {/* Overdue warning banner */}
+      {overdueCount > 0 && (
+        <div
+          role="alert"
+          className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0 animate-pulse" />
+          <span>
+            <strong className="font-semibold">{overdueCount}</strong>{' '}
+            {overdueCount === 1 ? 'deadline is' : 'deadlines are'} overdue!
+          </span>
+          <span className="ml-auto hidden text-xs text-red-700/80 dark:text-red-300/80 sm:inline">
+            Send reminders now →
+          </span>
+        </div>
+      )}
+
+      {/* Timeline canvas */}
+      <div className="relative overflow-x-auto pb-2">
+        <div className="relative h-36 min-w-[460px]">
+          {/* The horizontal axis line */}
+          <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gradient-to-r from-transparent via-border to-transparent" />
+
+          {/* "Today" vertical marker */}
+          {showToday && (
+            <div
+              className="pointer-events-none absolute top-1/2 z-10 h-28 -translate-y-1/2"
+              style={{ left: `${todayPct}%` }}
+            >
+              <div className="relative flex h-full -translate-x-1/2 flex-col items-center">
+                <span className="mb-1 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary-foreground shadow-sm">
+                  Today
+                </span>
+                <div className="w-px flex-1 bg-primary/30" />
+              </div>
+            </div>
+          )}
+
+          {/* Deadline dots */}
+          {positioned.map((d) => {
+            const style = PRIORITY_STYLES[d.priority] || PRIORITY_STYLES.low
+            const size = dotSizeClass(d.count)
+            const isOverdue = d.daysLeft < 0
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => onOpen(d.id)}
+                className="group absolute top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 focus:outline-none"
+                style={{
+                  left: `${d.pct}%`,
+                  marginTop: `${d.verticalOffset}px`,
+                }}
+                aria-label={`${d.clientName} — ${d.engagementType}, ${d.daysLeft < 0 ? `${Math.abs(d.daysLeft)} days overdue` : `${d.daysLeft} days left`}`}
+              >
+                {/* The dot */}
+                <span
+                  className={cn(
+                    'block rounded-full ring-4 transition-all duration-200 group-hover:scale-125 group-hover:shadow-lg',
+                    style.dot,
+                    style.ring,
+                    style.shadow,
+                    size,
+                    isOverdue && 'animate-pulse ring-red-300/60 dark:ring-red-900/80'
+                  )}
+                />
+                {/* Tooltip on hover */}
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden -translate-x-1/2 group-hover:block">
+                  <span className="block min-w-[200px] rounded-lg border bg-popover p-2.5 text-left shadow-xl">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-xs font-semibold">
+                        {d.clientName}
+                      </span>
+                      <PriorityBadge priority={d.priority as 'high' | 'medium' | 'low'} />
+                    </span>
+                    <span className="mt-1 block text-[11px] text-muted-foreground">
+                      {d.engagementType} ·{' '}
+                      {format(new Date(d.deadline), 'MMM d, yyyy')}
+                    </span>
+                    <span
+                      className={cn(
+                        'mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums',
+                        isOverdue || d.daysLeft <= 3
+                          ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
+                          : d.daysLeft <= 7
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                            : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      <CalendarClock className="h-3 w-3" />
+                      {isOverdue
+                        ? `${Math.abs(d.daysLeft)}d overdue`
+                        : `${d.daysLeft}d left`}
+                    </span>
+                    <span className="mt-1.5 block text-[10px] text-muted-foreground">
+                      {d.progress}% complete ·{' '}
+                      {differenceInCalendarDays(
+                        new Date(d.deadline),
+                        new Date()
+                      )}{' '}
+                      days from today
+                    </span>
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+          High priority
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+          Medium priority
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+          Low priority
+        </span>
+        <span className="ml-auto hidden text-[10px] italic sm:inline">
+          Dot size scales with deadlines per day
+        </span>
+      </div>
+    </Card>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Deadline Health Card — small companion to the timeline that
+// summarizes counts (total, overdue, next-up) so users get the
+// headline numbers at a glance.
+// ─────────────────────────────────────────────────────────────────
+
+function DeadlineHealthCard({ deadlines }: { deadlines: DeadlineItem[] }) {
+  const total = deadlines.length
+  const overdue = deadlines.filter((d) => d.daysLeft < 0).length
+  const soon = deadlines.filter((d) => d.daysLeft >= 0 && d.daysLeft <= 3).length
+  const next = [...deadlines].sort(
+    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  )[0]
+
+  return (
+    <Card className="p-5 shadow-sm">
+      <div className="mb-3 flex items-center gap-2.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Target className="h-4 w-4" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Deadline Health</h2>
+          <p className="text-xs text-muted-foreground">Snapshot of upcoming work</p>
+        </div>
+      </div>
+
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+            <CalendarClock className="h-3.5 w-3.5" /> Total upcoming
+          </span>
+          <span className="text-sm font-bold tabular-nums">{total}</span>
+        </div>
+
+        <div
+          className={cn(
+            'flex items-center justify-between rounded-lg border px-3 py-2',
+            overdue > 0
+              ? 'border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/40'
+              : 'border-border/60 bg-muted/30'
+          )}
+        >
+          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+            <AlertTriangle
+              className={cn(
+                'h-3.5 w-3.5',
+                overdue > 0 && 'text-red-500 dark:text-red-400'
+              )}
+            />
+            Overdue
+          </span>
+          <span
+            className={cn(
+              'text-sm font-bold tabular-nums',
+              overdue > 0 && 'text-red-600 dark:text-red-400'
+            )}
+          >
+            {overdue}
+          </span>
+        </div>
+
+        <div
+          className={cn(
+            'flex items-center justify-between rounded-lg border px-3 py-2',
+            soon > 0
+              ? 'border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/40'
+              : 'border-border/60 bg-muted/30'
+          )}
+        >
+          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock
+              className={cn(
+                'h-3.5 w-3.5',
+                soon > 0 && 'text-amber-500 dark:text-amber-400'
+              )}
+            />
+            Due ≤ 3 days
+          </span>
+          <span
+            className={cn(
+              'text-sm font-bold tabular-nums',
+              soon > 0 && 'text-amber-600 dark:text-amber-400'
+            )}
+          >
+            {soon}
+          </span>
+        </div>
+      </div>
+
+      {next && (
+        <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-primary/80">
+            Next up
+          </p>
+          <p className="mt-1 truncate text-sm font-semibold">{next.clientName}</p>
+          <p className="text-xs text-muted-foreground">
+            {next.engagementType} · {format(new Date(next.deadline), 'MMM d')}
+          </p>
+        </div>
+      )}
+    </Card>
   )
 }

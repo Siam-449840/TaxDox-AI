@@ -120,6 +120,21 @@ export async function POST(req: NextRequest) {
   // Build the content via the template generators.
   let content: { subject: string; body: string; template: EmailTemplate }
   switch (template) {
+    case 'custom':
+      // Custom email — use the subject/body provided in the request body
+      // directly. Falls back to placeholder text if not supplied.
+      content = {
+        subject:
+          typeof body.subject === 'string' && body.subject.trim().length > 0
+            ? body.subject.trim()
+            : '(no subject)',
+        body:
+          typeof body.body === 'string' && body.body.trim().length > 0
+            ? body.body.trim()
+            : '',
+        template: 'custom',
+      }
+      break
     case 'deadline_reminder':
       content = deadlineReminderEmail(clientName, engagementType, taxYear, daysLeft, deadline)
       break

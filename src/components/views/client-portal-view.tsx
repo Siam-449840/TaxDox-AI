@@ -22,6 +22,8 @@ import {
   MessageSquare,
   ShieldCheck,
   Paperclip,
+  HelpCircle,
+  Circle,
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { PriorityBadge } from '@/components/shared/priority-badge'
@@ -38,6 +40,12 @@ import {
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import { toast } from 'sonner'
 import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -535,6 +543,15 @@ export function ClientPortalView() {
         hasEngagement={!!detail}
       />
 
+      {/* ── Progress tracker ───────────────────────────────────────────── */}
+      <ProgressTracker
+        progress={displayProgress}
+        docsRequested={pbcTotal}
+        docsUploaded={pbcCompleted}
+        loading={loadingDetail}
+        hasEngagement={!!detail}
+      />
+
       {/* ── Tabs ─────────────────────────────────────────────────────────── */}
       <Tabs
         value={activeTab}
@@ -674,6 +691,9 @@ export function ClientPortalView() {
               </div>
             )}
           </section>
+
+          {/* ── FAQ / Help section ───────────────────────────────────── */}
+          <FaqSection />
         </TabsContent>
 
         {/* ── Messages tab ───────────────────────────────────────────────── */}
@@ -820,6 +840,263 @@ function WelcomeCard({
         )}
       </div>
     </Card>
+  )
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ *  Progress tracker — horizontal stepper
+ * ────────────────────────────────────────────────────────────────────────── */
+
+interface ProgressStep {
+  key: string
+  label: string
+  icon: typeof FileText
+}
+
+const PROGRESS_STEPS: ProgressStep[] = [
+  { key: 'requested', label: 'Documents Requested', icon: FileText },
+  { key: 'uploaded', label: 'Documents Uploaded', icon: Upload },
+  { key: 'processing', label: 'AI Processing', icon: Sparkles },
+  { key: 'review', label: 'Review', icon: FileCheck2 },
+  { key: 'complete', label: 'Complete', icon: CheckCircle2 },
+]
+
+function progressStepIndex(progress: number): number {
+  if (progress >= 100) return 4 // Complete
+  if (progress >= 80) return 3 // Review
+  if (progress >= 50) return 2 // Processing
+  if (progress >= 20) return 1 // Uploaded
+  return 0 // Requested
+}
+
+function ProgressTracker({
+  progress,
+  docsRequested,
+  docsUploaded,
+  loading,
+  hasEngagement,
+}: {
+  progress: number
+  docsRequested: number
+  docsUploaded: number
+  loading: boolean
+  hasEngagement: boolean
+}) {
+  if (loading) {
+    return (
+      <Card className="mt-4 rounded-2xl p-5">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="mt-4 h-16 w-full" />
+      </Card>
+    )
+  }
+
+  if (!hasEngagement) {
+    return null
+  }
+
+  const currentIndex = progressStepIndex(progress)
+
+  return (
+    <Card className="mt-4 rounded-2xl border-slate-200/80 p-5 dark:border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <RotateCw className="h-4 w-4" />
+          </span>
+          <h2 className="text-sm font-semibold text-foreground">
+            Your progress
+          </h2>
+        </div>
+        <span className="text-xs font-medium text-muted-foreground tabular-nums">
+          {progress}% complete
+        </span>
+      </div>
+
+      {/* Horizontal stepper — stacks vertically on small screens */}
+      <ol className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-0">
+        {PROGRESS_STEPS.map((step, idx) => {
+          const status: 'completed' | 'current' | 'pending' =
+            idx < currentIndex
+              ? 'completed'
+              : idx === currentIndex
+                ? 'current'
+                : 'pending'
+          const StepIcon = step.icon
+          const isLast = idx === PROGRESS_STEPS.length - 1
+          return (
+            <li
+              key={step.key}
+              className="flex flex-1 flex-row items-start gap-3 sm:flex-col sm:items-center sm:gap-2"
+            >
+              {/* Circle + connecting line wrapper */}
+              <div className="flex flex-row items-center gap-3 sm:flex-col sm:items-center sm:gap-0">
+                <div className="relative flex items-center justify-center">
+                  {status === 'completed' ? (
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                      <CheckCircle2 className="h-5 w-5" />
+                    </span>
+                  ) : status === 'current' ? (
+                    <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary ring-2 ring-primary/40">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/30" />
+                      <StepIcon className="relative h-4 w-4" />
+                    </span>
+                  ) : (
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+                      <Circle className="h-4 w-4" />
+                    </span>
+                  )}
+                </div>
+                {/* Connecting line — horizontal on sm+, hidden on mobile */}
+                {!isLast && (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'hidden h-0.5 flex-1 sm:block',
+                      idx < currentIndex
+                        ? 'bg-primary'
+                        : 'bg-slate-200 dark:bg-slate-700'
+                    )}
+                  />
+                )}
+              </div>
+
+              {/* Label + status text */}
+              <div className="min-w-0 flex-1 sm:mt-2 sm:text-center">
+                <p
+                  className={cn(
+                    'text-xs font-semibold leading-tight',
+                    status === 'pending'
+                      ? 'text-muted-foreground'
+                      : 'text-foreground'
+                  )}
+                >
+                  {step.label}
+                </p>
+                <p
+                  className={cn(
+                    'mt-0.5 text-[10px] font-medium uppercase tracking-wide',
+                    status === 'completed'
+                      ? 'text-primary'
+                      : status === 'current'
+                        ? 'text-primary/80'
+                        : 'text-muted-foreground/70'
+                  )}
+                >
+                  {status === 'completed'
+                    ? 'Done'
+                    : status === 'current'
+                      ? 'In progress'
+                      : 'Pending'}
+                </p>
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+
+      {/* Document count summary */}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+        <p className="text-xs text-muted-foreground">
+          {docsRequested === 0 ? (
+            <span>No documents requested yet.</span>
+          ) : (
+            <span>
+              <span className="font-semibold text-foreground tabular-nums">
+                {docsUploaded}
+              </span>{' '}
+              of{' '}
+              <span className="font-semibold text-foreground tabular-nums">
+                {docsRequested}
+              </span>{' '}
+              document{docsRequested === 1 ? '' : 's'} uploaded
+            </span>
+          )}
+        </p>
+        <p className="text-[11px] font-medium text-primary">
+          {progress >= 100
+            ? 'All set — your accountant will be in touch'
+            : docsUploaded === docsRequested && docsRequested > 0
+              ? 'Great work! Your accountant will review next'
+              : docsRequested > 0
+                ? 'Upload remaining documents to keep things moving'
+                : 'Awaiting your document request list'}
+        </p>
+      </div>
+    </Card>
+  )
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ *  FAQ / Help section
+ * ────────────────────────────────────────────────────────────────────────── */
+
+const FAQ_ITEMS: { question: string; answer: string }[] = [
+  {
+    question: 'What file formats are supported?',
+    answer:
+      "We support PDF, JPEG, PNG, TIFF, and WebP images. For best results, use clear, high-resolution scans or photos.",
+  },
+  {
+    question: 'How do I know if my document was received?',
+    answer:
+      "Uploaded documents appear in the 'Uploaded Documents' section above with a status indicator. You'll also receive a confirmation email.",
+  },
+  {
+    question: "What if I'm missing a requested document?",
+    answer:
+      "If you don't have a requested document, message your accountant using the Messages tab. They can mark it as not applicable.",
+  },
+  {
+    question: 'Is my data secure?',
+    answer:
+      'Yes. We use bank-grade AES-256 encryption, SOC 2 Type II compliance, and TLS 1.3 for all data transmission. Your documents are never shared with third parties.',
+  },
+]
+
+function FaqSection() {
+  return (
+    <section className="mt-2">
+      <Card className="rounded-2xl border-slate-200/80 p-5 dark:border-slate-800">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <HelpCircle className="h-4 w-4" />
+          </span>
+          <h2 className="text-sm font-semibold text-foreground">Need Help?</h2>
+        </div>
+        <p className="mt-1 pl-9 text-xs text-muted-foreground">
+          Common questions about uploading documents and the preparation process.
+        </p>
+
+        <Accordion
+          type="single"
+          collapsible
+          defaultValue="faq-0"
+          className="mt-3"
+        >
+          {FAQ_ITEMS.map((item, idx) => (
+            <AccordionItem
+              key={idx}
+              value={`faq-${idx}`}
+              className="border-slate-100 last:border-b-0 dark:border-slate-800"
+            >
+              <AccordionTrigger className="py-3.5 text-left text-sm font-medium text-foreground hover:no-underline data-[state=open]:text-primary">
+                {item.question}
+              </AccordionTrigger>
+              <AccordionContent className="text-xs leading-relaxed text-muted-foreground">
+                {item.answer}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+
+        {/* Trust strip */}
+        <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50/60 px-3 py-2 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+          Bank-grade encryption · SOC 2 Type II · TLS 1.3 in transit
+        </div>
+      </Card>
+    </section>
   )
 }
 

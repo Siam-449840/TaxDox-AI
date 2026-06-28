@@ -5,6 +5,9 @@ import { getToken } from 'next-auth/jwt'
 const PUBLIC_API_ROUTES = [
   '/api/auth',
   '/api/stripe/webhook',
+  // Cron endpoints authenticate via their own API key (?key=...),
+  // not user sessions, so they must bypass NextAuth.
+  '/api/cron',
 ]
 
 export async function middleware(req: NextRequest) {

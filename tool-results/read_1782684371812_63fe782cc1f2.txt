@@ -1,0 +1,1276 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+     4→     4→import {
+     5→     5→  Upload,
+     6→     6→  Camera,
+     7→     7→  FileText,
+     8→     8→  Mail,
+     9→     9→  Lock,
+    10→    10→  Send,
+    11→    11→  CheckCircle2,
+    12→    12→  Clock,
+    13→    13→  Loader2,
+    14→    14→  Image as ImageIcon,
+    15→    15→  Folder,
+    16→    16→  AlertCircle,
+    17→    17→  FileCheck2,
+    18→    18→  RotateCw,
+    19→    19→  CalendarClock,
+    20→    20→  Sparkles,
+    21→    21→  Inbox,
+    22→    22→  MessageSquare,
+    23→    23→  ShieldCheck,
+    24→    24→  Paperclip,
+    25→    25→} from 'lucide-react'
+    26→    26→import { useAppStore } from '@/lib/store'
+    27→    27→import { PriorityBadge } from '@/components/shared/priority-badge'
+    28→    28→import { Card } from '@/components/ui/card'
+    29→    29→import { Button } from '@/components/ui/button'
+    30→    30→import { Badge } from '@/components/ui/badge'
+    31→    31→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    32→    32→import {
+    33→    33→  Select,
+    34→    34→  SelectContent,
+    35→    35→  SelectItem,
+    36→    36→  SelectTrigger,
+    37→    37→  SelectValue,
+    38→    38→} from '@/components/ui/select'
+    39→    39→import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+    40→    40→import { Skeleton } from '@/components/ui/skeleton'
+    41→    41→import { toast } from 'sonner'
+    42→    42→import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
+    43→    43→import { cn } from '@/lib/utils'
+    44→    44→import {
+    45→    45→  DOCUMENT_CATEGORIES,
+    46→    46→  DOCUMENT_TYPE_MAP,
+    47→    47→  ENGAGEMENT_TYPES,
+    48→    48→} from '@/lib/constants'
+    49→    49→import type {
+    50→    50→  Client,
+    51→    51→  Engagement,
+    52→    52→  PbcItem,
+    53→    53→  TaxDocument,
+    54→    54→  Message,
+    55→    55→  Priority,
+    56→    56→} from '@/lib/types'
+    57→    57→
+    58→    58→/* ────────────────────────────────────────────────────────────────────────────
+    59→    59→ *  Local types
+    60→    60→ * ────────────────────────────────────────────────────────────────────────── */
+    61→    61→
+    62→    62→interface EngagementListItem extends Engagement {
+    63→    63→  client?: Client
+    64→    64→  pbcList?: {
+    65→    65→    id: string
+    66→    66→    name: string
+    67→    67→    items: PbcItem[]
+    68→    68→  } | null
+    69→    69→  documents?: { id: string; status: string; documentType?: string }[]
+    70→    70→}
+    71→    71→
+    72→    72→interface EngagementDetail extends Omit<Engagement, 'client' | 'assignedTo' | 'pbcList' | 'documents'> {
+    73→    73→  client: NonNullable<Engagement['client']>
+    74→    74→  assignedTo?: {
+    75→    75→    id: string
+    76→    76→    name: string
+    77→    77→    role?: string
+    78→    78→    email?: string
+    79→    79→  } | null
+    80→    80→  pbcList?: {
+    81→    81→    id: string
+    82→    82→    name: string
+    83→    83→    sentAt?: string | null
+    84→    84→    sentVia?: string | null
+    85→    85→    items: PbcItem[]
+    86→    86→  } | null
+    87→    87→  documents?: TaxDocument[]
+    88→    88→  messages?: Message[]
+    89→    89→}
+    90→    90→
+    91→    91→/* ────────────────────────────────────────────────────────────────────────────
+    92→    92→ *  Helpers
+    93→    93→ * ────────────────────────────────────────────────────────────────────────── */
+    94→    94→
+    95→    95→function initials(name?: string | null): string {
+    96→    96→  if (!name) return '?'
+    97→    97→  return name
+    98→    98→    .split(' ')
+    99→    99→    .filter(Boolean)
+   100→   100→    .slice(0, 2)
+   101→   101→    .map((n) => n[0]?.toUpperCase())
+   102→   102→    .join('')
+   103→   103→}
+   104→   104→
+   105→   105→function engagementTypeLabel(type: string): string {
+   106→   106→  return ENGAGEMENT_TYPES.find((t) => t.value === type)?.label ?? type
+   107→   107→}
+   108→   108→
+   109→   109→function engagementShortLabel(type: string): string {
+   110→   110→  const def = ENGAGEMENT_TYPES.find((t) => t.value === type)
+   111→   111→  return def ? `${def.value} ${def.entity}` : type
+   112→   112→}
+   113→   113→
+   114→   114→function categoryMeta(categoryId: string) {
+   115→   115→  return (
+   116→   116→    DOCUMENT_CATEGORIES.find((c) => c.id === categoryId) ||
+   117→   117→    DOCUMENT_CATEGORIES[DOCUMENT_CATEGORIES.length - 1]
+   118→   118→  )
+   119→   119→}
+   120→   120→
+   121→   121→function categoryIcon(categoryId: string) {
+   122→   122→  return categoryMeta(categoryId).icon
+   123→   123→}
+   124→   124→
+   125→   125→function categorySurfaceClass(categoryId: string): string {
+   126→   126→  const color = categoryMeta(categoryId).color
+   127→   127→  const map: Record<string, string> = {
+   128→   128→    emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400',
+   129→   129→    amber: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
+   130→   130→    violet: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400',
+   131→   131→    cyan: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-400',
+   132→   132→    blue: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400',
+   133→   133→    orange: 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400',
+   134→   134→    slate: 'bg-slate-50 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300',
+   135→   135→  }
+   136→   136→  return map[color] || map.slate
+   137→   137→}
+   138→   138→
+   139→   139→function formatFileSize(bytes: number): string {
+   140→   140→  if (!bytes) return '—'
+   141→   141→  if (bytes < 1024) return `${bytes} B`
+   142→   142→  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+   143→   143→  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+   144→   144→}
+   145→   145→
+   146→   146→function progressColorClass(value: number): string {
+   147→   147→  if (value >= 100) return 'bg-emerald-500'
+   148→   148→  if (value >= 75) return 'bg-primary'
+   149→   149→  if (value >= 50) return 'bg-amber-500'
+   150→   150→  if (value > 0) return 'bg-orange-500'
+   151→   151→  return 'bg-slate-400'
+   152→   152→}
+   153→   153→
+   154→   154→function deadlineState(deadline?: string | null): {
+   155→   155→  label: string
+   156→   156→  tone: 'danger' | 'warning' | 'ok'
+   157→   157→} {
+   158→   158→  if (!deadline) return { label: 'No deadline', tone: 'ok' }
+   159→   159→  const d = new Date(deadline)
+   160→   160→  const days = differenceInDays(d, new Date())
+   161→   161→  if (days < 0) return { label: `${Math.abs(days)}d overdue`, tone: 'danger' }
+   162→   162→  if (days === 0) return { label: 'Due today', tone: 'danger' }
+   163→   163→  if (days <= 7) return { label: `${days}d remaining`, tone: 'warning' }
+   164→   164→  return { label: `${days}d remaining`, tone: 'ok' }
+   165→   165→}
+   166→   166→
+   167→   167→function docStatusVisual(status: string): {
+   168→   168→  icon: typeof CheckCircle2
+   169→   169→  label: string
+   170→   170→  tone: 'ok' | 'pending' | 'processing'
+   171→   171→} {
+   172→   172→  if (status === 'reviewed' || status === 'processed' || status === 'extracted') {
+   173→   173→    return { icon: CheckCircle2, label: 'Reviewed', tone: 'ok' }
+   174→   174→  }
+   175→   175→  if (status === 'processing') {
+   176→   176→    return { icon: RotateCw, label: 'Processing', tone: 'processing' }
+   177→   177→  }
+   178→   178→  return { icon: Clock, label: 'Pending review', tone: 'pending' }
+   179→   179→}
+   180→   180→
+   181→   181→function simulateFilename(documentType?: string): string {
+   182→   182→  const base = documentType?.replace(/[^a-zA-Z0-9]/g, '_') || 'document'
+   183→   183→  const stamp = Date.now().toString().slice(-6)
+   184→   184→  return `${base}_${stamp}.pdf`
+   185→   185→}
+   186→   186→
+   187→   187→/* ────────────────────────────────────────────────────────────────────────────
+   188→   188→ *  Main view
+   189→   189→ * ────────────────────────────────────────────────────────────────────────── */
+   190→   190→
+   191→   191→export function ClientPortalView() {
+   192→   192→  const navigate = useAppStore((s) => s.navigate)
+   193→   193→
+   194→   194→  const [clients, setClients] = useState<Client[]>([])
+   195→   195→  const [engagements, setEngagements] = useState<EngagementListItem[]>([])
+   196→   196→  const [selectedClientId, setSelectedClientId] = useState<string>('')
+   197→   197→  const [detail, setDetail] = useState<EngagementDetail | null>(null)
+   198→   198→  const [localMessages, setLocalMessages] = useState<Message[]>([])
+   199→   199→  const [hiddenPbcItemIds, setHiddenPbcItemIds] = useState<Set<string>>(new Set())
+   200→   200→  const [optimisticDocs, setOptimisticDocs] = useState<TaxDocument[]>([])
+   201→   201→
+   202→   202→  const [loadingLists, setLoadingLists] = useState(true)
+   203→   203→  const [loadingDetail, setLoadingDetail] = useState(false)
+   204→   204→  const [uploadingPbcId, setUploadingPbcId] = useState<string | null>(null)
+   205→   205→  const [quickUploading, setQuickUploading] = useState(false)
+   206→   206→  const [activeTab, setActiveTab] = useState<'documents' | 'messages'>('documents')
+   207→   207→
+   208→   208→  const cameraInputRef = useRef<HTMLInputElement>(null)
+   209→   209→  const quickFileInputRef = useRef<HTMLInputElement>(null)
+   210→   210→
+   211→   211→  /* ── Fetch clients + engagements ──────────────────────────────────────── */
+   212→   212→  const fetchLists = useCallback(async () => {
+   213→   213→    setLoadingLists(true)
+   214→   214→    try {
+   215→   215→      const [clientsRes, engRes] = await Promise.all([
+   216→   216→        fetch('/api/clients'),
+   217→   217→        fetch('/api/engagements'),
+   218→   218→      ])
+   219→   219→      const clientsJson = await clientsRes.json()
+   220→   220→      const engJson = await engRes.json()
+   221→   221→      const clientList: Client[] = clientsJson.clients || []
+   222→   222→      const engList: EngagementListItem[] = engJson.engagements || []
+   223→   223→      setClients(clientList)
+   224→   224→      setEngagements(engList)
+   225→   225→
+   226→   226→      // Pick initial client: prefer the client of an engagement with status
+   227→   227→      // 'collecting' or 'pbc_sent' so the portal has interesting data.
+   228→   228→      if (!selectedClientId && clientList.length > 0) {
+   229→   229→        const preferred = engList.find(
+   230→   230→          (e) => e.status === 'collecting' || e.status === 'pbc_sent'
+   231→   231→        )
+   232→   232→        const firstId = preferred?.clientId || engList[0]?.clientId || clientList[0].id
+   233→   233→        setSelectedClientId(firstId)
+   234→   234→      }
+   235→   235→    } catch {
+   236→   236→      toast.error('Failed to load portal data')
+   237→   237→    } finally {
+   238→   238→      setLoadingLists(false)
+   239→   239→    }
+   240→   240→     
+   241→   241→  }, [])
+   242→   242→
+   243→   243→  useEffect(() => {
+   244→   244→    fetchLists()
+   245→   245→  }, [fetchLists])
+   246→   246→
+   247→   247→  /* ── Pick the best engagement for the selected client ─────────────────── */
+   248→   248→  const selectedEngagement = useMemo<EngagementListItem | undefined>(() => {
+   249→   249→    if (!selectedClientId) return undefined
+   250→   250→    const forClient = engagements.filter((e) => e.clientId === selectedClientId)
+   251→   251→    if (forClient.length === 0) return undefined
+   252→   252→    const ranked = [...forClient].sort((a, b) => {
+   253→   253→      const score = (e: EngagementListItem) => {
+   254→   254→        if (e.status === 'collecting') return 5
+   255→   255→        if (e.status === 'pbc_sent') return 4
+   256→   256→        if (e.status === 'processing') return 3
+   257→   257→        if (e.status === 'review') return 2
+   258→   258→        if (e.status === 'filing') return 1
+   259→   259→        return 0
+   260→   260→      }
+   261→   261→      return score(b) - score(a)
+   262→   262→    })
+   263→   263→    return ranked[0]
+   264→   264→  }, [selectedClientId, engagements])
+   265→   265→
+   266→   266→  /* ── Fetch engagement detail (with messages, pbc items, documents) ────── */
+   267→   267→  const fetchDetail = useCallback(async () => {
+   268→   268→    if (!selectedEngagement) {
+   269→   269→      setDetail(null)
+   270→   270→      setLocalMessages([])
+   271→   271→      setHiddenPbcItemIds(new Set())
+   272→   272→      setOptimisticDocs([])
+   273→   273→      return
+   274→   274→    }
+   275→   275→    setLoadingDetail(true)
+   276→   276→    setHiddenPbcItemIds(new Set())
+   277→   277→    setOptimisticDocs([])
+   278→   278→    try {
+   279→   279→      const res = await fetch(`/api/engagements/${selectedEngagement.id}`)
+   280→   280→      if (!res.ok) throw new Error('Failed to load engagement')
+   281→   281→      const json = await res.json()
+   282→   282→      const engagement = json.engagement as EngagementDetail
+   283→   283→      setDetail(engagement)
+   284→   284→      setLocalMessages(engagement.messages || [])
+   285→   285→    } catch {
+   286→   286→      toast.error('Failed to load your documents')
+   287→   287→      setDetail(null)
+   288→   288→    } finally {
+   289→   289→      setLoadingDetail(false)
+   290→   290→    }
+   291→   291→  }, [selectedEngagement])
+   292→   292→
+   293→   293→  useEffect(() => {
+   294→   294→    fetchDetail()
+   295→   295→  }, [fetchDetail])
+   296→   296→
+   297→   297→  /* ── Derived data ─────────────────────────────────────────────────────── */
+   298→   298→  const client = useMemo<Client | undefined>(
+   299→   299→    () => clients.find((c) => c.id === selectedClientId),
+   300→   300→    [clients, selectedClientId]
+   301→   301→  )
+   302→   302→
+   303→   303→  const allPbcItems = detail?.pbcList?.items || []
+   304→   304→  const pendingPbcItems = useMemo(
+   305→   305→    () =>
+   306→   306→      allPbcItems
+   307→   307→        .filter((i) => i.status === 'pending' && !hiddenPbcItemIds.has(i.id))
+   308→   308→        .sort((a, b) => {
+   309→   309→          const prioRank: Record<Priority, number> = { high: 0, medium: 1, low: 2 }
+   310→   310→          return (
+   311→   311→            (prioRank[a.priority] ?? 3) - (prioRank[b.priority] ?? 3) ||
+   312→   312→            a.orderIndex - b.orderIndex
+   313→   313→          )
+   314→   314→        }),
+   315→   315→    [allPbcItems, hiddenPbcItemIds]
+   316→   316→  )
+   317→   317→
+   318→   318→  const uploadedDocuments = useMemo<TaxDocument[]>(() => {
+   319→   319→    const fromApi = detail?.documents || []
+   320→   320→    // Merge optimistic docs that aren't already in the API list
+   321→   321→    const apiIds = new Set(fromApi.map((d) => d.id))
+   322→   322→    const merged = [...fromApi, ...optimisticDocs.filter((d) => !apiIds.has(d.id))]
+   323→   323→    return merged.sort(
+   324→   324→      (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+   325→   325→    )
+   326→   326→  }, [detail, optimisticDocs])
+   327→   327→
+   328→   328→  const pbcTotal = allPbcItems.length
+   329→   329→  const pbcCompleted = allPbcItems.filter((i) =>
+   330→   330→    ['uploaded', 'processing', 'extracted', 'reviewed'].includes(i.status)
+   331→   331→  ).length
+   332→   332→  const pbcPercent =
+   333→   333→    pbcTotal === 0 ? 0 : Math.round((pbcCompleted / pbcTotal) * 100)
+   334→   334→
+   335→   335→  const displayProgress = detail?.progress ?? pbcPercent
+   336→   336→
+   337→   337→  /* ── Upload a document for a specific PBC item ────────────────────────── */
+   338→   338→  const uploadForPbcItem = useCallback(
+   339→   339→    async (item: PbcItem) => {
+   340→   340→      if (!detail || !client) return
+   341→   341→      setUploadingPbcId(item.id)
+   342→   342→      const filename = simulateFilename(item.documentType)
+   343→   343→      try {
+   344→   344→        const res = await fetch('/api/documents', {
+   345→   345→          method: 'POST',
+   346→   346→          headers: { 'Content-Type': 'application/json' },
+   347→   347→          body: JSON.stringify({
+   348→   348→            clientId: client.id,
+   349→   349→            engagementId: detail.id,
+   350→   350→            pbcItemId: item.id,
+   351→   351→            originalFilename: filename,
+   352→   352→            storedFilename: `uploads/${Date.now()}-${filename}`,
+   353→   353→            fileSize: Math.floor(120_000 + Math.random() * 1_800_000),
+   354→   354→            mimeType: 'application/pdf',
+   355→   355→            uploadedBy: 'client',
+   356→   356→          }),
+   357→   357→        })
+   358→   358→        if (!res.ok) throw new Error('Upload failed')
+   359→   359→        const json = await res.json()
+   360→   360→        const newDoc = json.document as TaxDocument
+   361→   361→
+   362→   362→        // Optimistic updates
+   363→   363→        setOptimisticDocs((prev) => [newDoc, ...prev])
+   364→   364→        setHiddenPbcItemIds((prev) => new Set(prev).add(item.id))
+   365→   365→
+   366→   366→        toast.success(`Uploaded ${filename}`, {
+   367→   367→          description: 'Your accountant has been notified.',
+   368→   368→        })
+   369→   369→
+   370→   370→        // Refetch detail in the background to reconcile state
+   371→   371→        fetchDetail()
+   372→   372→      } catch {
+   373→   373→        toast.error('Upload failed. Please try again.')
+   374→   374→      } finally {
+   375→   375→        setUploadingPbcId(null)
+   376→   376→      }
+   377→   377→    },
+   378→   378→    [detail, client, fetchDetail]
+   379→   379→  )
+   380→   380→
+   381→   381→  /* ── Quick upload (drag-drop / file picker / camera) ──────────────────── */
+   382→   382→  const handleQuickUpload = useCallback(
+   383→   383→    async (files: FileList | null) => {
+   384→   384→      if (!files || files.length === 0 || !detail || !client) return
+   385→   385→      setQuickUploading(true)
+   386→   386→      let success = 0
+   387→   387→      for (const file of Array.from(files)) {
+   388→   388→        // Try to match a pending PBC item by document type, else upload "unlinked"
+   389→   389→        const matchedPbc = pendingPbcItems.find((i) => {
+   390→   390→          const def = DOCUMENT_TYPE_MAP[i.documentType]
+   391→   391→          return def && file.name.toLowerCase().includes(i.documentType.toLowerCase())
+   392→   392→        })
+   393→   393→        try {
+   394→   394→          const res = await fetch('/api/documents', {
+   395→   395→            method: 'POST',
+   396→   396→            headers: { 'Content-Type': 'application/json' },
+   397→   397→            body: JSON.stringify({
+   398→   398→              clientId: client.id,
+   399→   399→              engagementId: detail.id,
+   400→   400→              pbcItemId: matchedPbc?.id || null,
+   401→   401→              originalFilename: file.name,
+   402→   402→              storedFilename: `uploads/${Date.now()}-${file.name}`,
+   403→   403→              fileSize: file.size || Math.floor(50_000 + Math.random() * 2_000_000),
+   404→   404→              mimeType: file.type || 'application/octet-stream',
+   405→   405→              uploadedBy: 'client',
+   406→   406→            }),
+   407→   407→          })
+   408→   408→          if (!res.ok) throw new Error('Upload failed')
+   409→   409→          const json = await res.json()
+   410→   410→          const newDoc = json.document as TaxDocument
+   411→   411→          setOptimisticDocs((prev) => [newDoc, ...prev])
+   412→   412→          if (matchedPbc) {
+   413→   413→            setHiddenPbcItemIds((prev) => new Set(prev).add(matchedPbc.id))
+   414→   414→          }
+   415→   415→          success++
+   416→   416→        } catch {
+   417→   417→          /* continue with next file */
+   418→   418→        }
+   419→   419→      }
+   420→   420→      setQuickUploading(false)
+   421→   421→      if (success > 0) {
+   422→   422→        toast.success(
+   423→   423→          `Uploaded ${success} ${success === 1 ? 'document' : 'documents'}`,
+   424→   424→          { description: 'Your accountant has been notified.' }
+   425→   425→        )
+   426→   426→        fetchDetail()
+   427→   427→      } else {
+   428→   428→        toast.error('Upload failed. Please try again.')
+   429→   429→      }
+   430→   430→    },
+   431→   431→    [detail, client, pendingPbcItems, fetchDetail]
+   432→   432→  )
+   433→   433→
+   434→   434→  /* ── Send a message (local-only since there's no messages POST API) ───── */
+   435→   435→  const sendMessage = useCallback(
+   436→   436→    (content: string) => {
+   437→   437→      const trimmed = content.trim()
+   438→   438→      if (!trimmed || !detail) return
+   439→   439→      const msg: Message = {
+   440→   440→        id: `local-${Date.now()}`,
+   441→   441→        engagementId: detail.id,
+   442→   442→        clientId: detail.clientId,
+   443→   443→        fromType: 'client',
+   444→   444→        content: trimmed,
+   445→   445→        read: true,
+   446→   446→        createdAt: new Date().toISOString(),
+   447→   447→      }
+   448→   448→      setLocalMessages((prev) => [...prev, msg])
+   449→   449→      toast.success('Message sent', {
+   450→   450→        description: 'Your accountant typically responds within 2 hours.',
+   451→   451→      })
+   452→   452→    },
+   453→   453→    [detail]
+   454→   454→  )
+   455→   455→
+   456→   456→  /* ── Loading skeleton ─────────────────────────────────────────────────── */
+   457→   457→  if (loadingLists) {
+   458→   458→    return <PortalSkeleton />
+   459→   459→  }
+   460→   460→
+   461→   461→  /* ── No clients ───────────────────────────────────────────────────────── */
+   462→   462→  if (clients.length === 0) {
+   463→   463→    return (
+   464→   464→      <div className="mx-auto max-w-2xl px-4 py-10">
+   465→   465→        <Card className="items-center gap-3 p-10 text-center">
+   466→   466→          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+   467→   467→            <Inbox className="h-6 w-6 text-muted-foreground" />
+   468→   468→          </div>
+   469→   469→          <h3 className="text-base font-semibold">No portal access yet</h3>
+   470→   470→          <p className="max-w-sm text-sm text-muted-foreground">
+   471→   471→            Your accountant hasn&apos;t shared any document requests with you. Once
+   472→   472→            they do, you&apos;ll see them here.
+   473→   473→          </p>
+   474→   474→          <Button variant="outline" size="sm" onClick={() => navigate('dashboard')}>
+   475→   475→            Back to dashboard
+   476→   476→          </Button>
+   477→   477→        </Card>
+   478→   478→      </div>
+   479→   479→    )
+   480→   480→  }
+   481→   481→
+   482→   482→  const dlState = deadlineState(detail?.deadline)
+   483→   483→
+   484→   484→  return (
+   485→   485→    <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
+   486→   486→      {/* ── Client selector ─────────────────────────────────────────────── */}
+   487→   487→      <div className="mb-5 flex items-center justify-between gap-3">
+   488→   488→        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+   489→   489→          <Lock className="h-3.5 w-3.5 text-primary" />
+   490→   490→          Secure client portal
+   491→   491→        </div>
+   492→   492→        <div className="flex items-center gap-2">
+   493→   493→          <span className="hidden text-xs text-muted-foreground sm:inline">
+   494→   494→            Viewing as
+   495→   495→          </span>
+   496→   496→          <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+   497→   497→            <SelectTrigger
+   498→   498→              size="sm"
+   499→   499→              className="h-8 min-w-[10rem] max-w-[16rem] gap-1.5 rounded-full border-slate-200 bg-white text-xs font-medium shadow-none dark:border-slate-700 dark:bg-slate-900"
+   500→   500→            >
+   501→   501→              <Avatar className="h-5 w-5">
+   502→   502→                <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
+   503→   503→                  {initials(client?.name)}
+   504→   504→                </AvatarFallback>
+   505→   505→              </Avatar>
+   506→   506→              <SelectValue placeholder="Select client" />
+   507→   507→            </SelectTrigger>
+   508→   508→            <SelectContent>
+   509→   509→              {clients.map((c) => (
+   510→   510→                <SelectItem key={c.id} value={c.id}>
+   511→   511→                  <span className="flex items-center gap-2">
+   512→   512→                    <Avatar className="h-5 w-5">
+   513→   513→                      <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
+   514→   514→                        {initials(c.name)}
+   515→   515→                      </AvatarFallback>
+   516→   516→                    </Avatar>
+   517→   517→                    <span className="truncate">{c.name}</span>
+   518→   518→                  </span>
+   519→   519→                </SelectItem>
+   520→   520→              ))}
+   521→   521→            </SelectContent>
+   522→   522→          </Select>
+   523→   523→        </div>
+   524→   524→      </div>
+   525→   525→
+   526→   526→      {/* ── Welcome header + progress card ──────────────────────────────── */}
+   527→   527→      <WelcomeCard
+   528→   528→        clientName={client?.name || 'there'}
+   529→   529→        engagementType={detail?.engagementType}
+   530→   530→        taxYear={detail?.taxYear}
+   531→   531→        progress={displayProgress}
+   532→   532→        deadline={detail?.deadline}
+   533→   533→        dlState={dlState}
+   534→   534→        loading={loadingDetail}
+   535→   535→        hasEngagement={!!detail}
+   536→   536→      />
+   537→   537→
+   538→   538→      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
+   539→   539→      <Tabs
+   540→   540→        value={activeTab}
+   541→   541→        onValueChange={(v) => setActiveTab(v as 'documents' | 'messages')}
+   542→   542→        className="mt-6"
+   543→   543→      >
+   544→   544→        <TabsList className="grid w-full grid-cols-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/60">
+   545→   545→          <TabsTrigger
+   546→   546→            value="documents"
+   547→   547→            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-900"
+   548→   548→          >
+   549→   549→            <FileText className="h-4 w-4" />
+   550→   550→            My Documents
+   551→   551→            {pendingPbcItems.length > 0 && (
+   552→   552→              <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+   553→   553→                {pendingPbcItems.length}
+   554→   554→              </span>
+   555→   555→            )}
+   556→   556→          </TabsTrigger>
+   557→   557→          <TabsTrigger
+   558→   558→            value="messages"
+   559→   559→            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-900"
+   560→   560→          >
+   561→   561→            <MessageSquare className="h-4 w-4" />
+   562→   562→            Messages
+   563→   563→          </TabsTrigger>
+   564→   564→        </TabsList>
+   565→   565→
+   566→   566→        {/* ── Documents tab ──────────────────────────────────────────────── */}
+   567→   567→        <TabsContent value="documents" className="mt-5 space-y-6">
+   568→   568→          {/* Quick Upload */}
+   569→   569→          <QuickUploadCard
+   570→   570→            uploading={quickUploading}
+   571→   571→            onPickFiles={() => quickFileInputRef.current?.click()}
+   572→   572→            onPickCamera={() => cameraInputRef.current?.click()}
+   573→   573→            onPickFilesIcon={() => quickFileInputRef.current?.click()}
+   574→   574→            onDropFiles={handleQuickUpload}
+   575→   575→            onEmail={() =>
+   576→   576→              toast.info('Email upload', {
+   577→   577→                description:
+   578→   578→                  'Forward documents to portal@meridiancpa.com — they will appear here automatically.',
+   579→   579→              })
+   580→   580→            }
+   581→   581→          />
+   582→   582→          <input
+   583→   583→            ref={quickFileInputRef}
+   584→   584→            type="file"
+   585→   585→            multiple
+   586→   586→            className="hidden"
+   587→   587→            onChange={(e) => {
+   588→   588→              handleQuickUpload(e.target.files)
+   589→   589→              e.target.value = ''
+   590→   590→            }}
+   591→   591→          />
+   592→   592→          <input
+   593→   593→            ref={cameraInputRef}
+   594→   594→            type="file"
+   595→   595→            accept="image/*"
+   596→   596→            capture="environment"
+   597→   597→            className="hidden"
+   598→   598→            onChange={(e) => {
+   599→   599→              handleQuickUpload(e.target.files)
+   600→   600→              e.target.value = ''
+   601→   601→            }}
+   602→   602→          />
+   603→   603→
+   604→   604→          {/* Pending PBC items */}
+   605→   605→          <section>
+   606→   606→            <SectionHeader
+   607→   607→              icon={AlertCircle}
+   608→   608→              title={`Documents you need to provide (${pendingPbcItems.length} pending)`}
+   609→   609→              subtitle="Your accountant has requested the following documents."
+   610→   610→            />
+   611→   611→            {loadingDetail ? (
+   612→   612→              <div className="space-y-3">
+   613→   613→                {[0, 1, 2].map((i) => (
+   614→   614→                  <Skeleton key={i} className="h-24 w-full rounded-xl" />
+   615→   615→                ))}
+   616→   616→              </div>
+   617→   617→            ) : pendingPbcItems.length === 0 ? (
+   618→   618→              <Card className="items-center gap-2 p-6 text-center">
+   619→   619→                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40">
+   620→   620→                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+   621→   621→                </div>
+   622→   622→                <p className="text-sm font-semibold text-foreground">
+   623→   623→                  All requested documents uploaded
+   624→   624→                </p>
+   625→   625→                <p className="text-xs text-muted-foreground">
+   626→   626→                  Nice work! Your accountant will review them shortly.
+   627→   627→                </p>
+   628→   628→              </Card>
+   629→   629→            ) : (
+   630→   630→              <div className="space-y-3">
+   631→   631→                {pendingPbcItems.map((item) => (
+   632→   632→                  <PendingPbcCard
+   633→   633→                    key={item.id}
+   634→   634→                    item={item}
+   635→   635→                    uploading={uploadingPbcId === item.id}
+   636→   636→                    onUpload={() => uploadForPbcItem(item)}
+   637→   637→                  />
+   638→   638→                ))}
+   639→   639→              </div>
+   640→   640→            )}
+   641→   641→          </section>
+   642→   642→
+   643→   643→          {/* Uploaded documents */}
+   644→   644→          <section>
+   645→   645→            <SectionHeader
+   646→   646→              icon={FileCheck2}
+   647→   647→              title={`Uploaded documents (${uploadedDocuments.length})`}
+   648→   648→              subtitle="Documents you've shared with your accountant."
+   649→   649→            />
+   650→   650→            {loadingDetail ? (
+   651→   651→              <div className="space-y-3">
+   652→   652→                {[0, 1, 2].map((i) => (
+   653→   653→                  <Skeleton key={i} className="h-20 w-full rounded-xl" />
+   654→   654→                ))}
+   655→   655→              </div>
+   656→   656→            ) : uploadedDocuments.length === 0 ? (
+   657→   657→              <Card className="items-center gap-2 p-6 text-center">
+   658→   658→                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+   659→   659→                  <Inbox className="h-5 w-5 text-muted-foreground" />
+   660→   660→                </div>
+   661→   661→                <p className="text-sm font-medium text-muted-foreground">
+   662→   662→                  No documents uploaded yet
+   663→   663→                </p>
+   664→   664→                <p className="text-xs text-muted-foreground">
+   665→   665→                  Use the upload area above or pick a pending document to get
+   666→   666→                  started.
+   667→   667→                </p>
+   668→   668→              </Card>
+   669→   669→            ) : (
+   670→   670→              <div className="space-y-2.5">
+   671→   671→                {uploadedDocuments.map((doc) => (
+   672→   672→                  <UploadedDocRow key={doc.id} doc={doc} />
+   673→   673→                ))}
+   674→   674→              </div>
+   675→   675→            )}
+   676→   676→          </section>
+   677→   677→        </TabsContent>
+   678→   678→
+   679→   679→        {/* ── Messages tab ───────────────────────────────────────────────── */}
+   680→   680→        <TabsContent value="messages" className="mt-5">
+   681→   681→          <MessagesPanel
+   682→   682→            messages={localMessages}
+   683→   683→            accountantName={detail?.assignedTo?.name || 'Your accountant'}
+   684→   684→            accountantRole={detail?.assignedTo?.role}
+   685→   685→            clientName={client?.name || 'You'}
+   686→   686→            onSend={sendMessage}
+   687→   687→            loading={loadingDetail}
+   688→   688→          />
+   689→   689→        </TabsContent>
+   690→   690→      </Tabs>
+   691→   691→
+   692→   692→      {/* ── Security footer ─────────────────────────────────────────────── */}
+   693→   693→      <div className="mt-8 flex flex-col items-center gap-2 border-t border-slate-100 pt-6 text-center dark:border-slate-800">
+   694→   694→        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+   695→   695→          <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   696→   696→          Bank-grade encryption
+   697→   697→        </div>
+   698→   698→        <p className="text-[11px] text-muted-foreground">
+   699→   699→          AES-256 · SOC 2 Type II compliant · TLS 1.3 in transit
+   700→   700→        </p>
+   701→   701→      </div>
+   702→   702→    </div>
+   703→   703→  )
+   704→   704→}
+   705→   705→
+   706→   706→/* ────────────────────────────────────────────────────────────────────────────
+   707→   707→ *  Sub-components
+   708→   708→ * ────────────────────────────────────────────────────────────────────────── */
+   709→   709→
+   710→   710→function PortalSkeleton() {
+   711→   711→  return (
+   712→   712→    <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
+   713→   713→      <div className="mb-5 flex justify-end">
+   714→   714→        <Skeleton className="h-8 w-48 rounded-full" />
+   715→   715→      </div>
+   716→   716→      <Skeleton className="h-44 w-full rounded-2xl" />
+   717→   717→      <div className="mt-6">
+   718→   718→        <Skeleton className="h-10 w-full rounded-xl" />
+   719→   719→      </div>
+   720→   720→      <div className="mt-5 space-y-3">
+   721→   721→        <Skeleton className="h-24 w-full rounded-xl" />
+   722→   722→        <Skeleton className="h-24 w-full rounded-xl" />
+   723→   723→        <Skeleton className="h-24 w-full rounded-xl" />
+   724→   724→      </div>
+   725→   725→    </div>
+   726→   726→  )
+   727→   727→}
+   728→   728→
+   729→   729→function WelcomeCard({
+   730→   730→  clientName,
+   731→   731→  engagementType,
+   732→   732→  taxYear,
+   733→   733→  progress,
+   734→   734→  deadline,
+   735→   735→  dlState,
+   736→   736→  loading,
+   737→   737→  hasEngagement,
+   738→   738→}: {
+   739→   739→  clientName: string
+   740→   740→  engagementType?: string
+   741→   741→  taxYear?: number
+   742→   742→  progress: number
+   743→   743→  deadline?: string | null
+   744→   744→  dlState: { label: string; tone: 'danger' | 'warning' | 'ok' }
+   745→   745→  loading: boolean
+   746→   746→  hasEngagement: boolean
+   747→   747→}) {
+   748→   748→  const firstName = clientName.split(' ')[0] || clientName
+   749→   749→  const toneClass =
+   750→   750→    dlState.tone === 'danger'
+   751→   751→      ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+   752→   752→      : dlState.tone === 'warning'
+   753→   753→        ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+   754→   754→        : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+   755→   755→
+   756→   756→  return (
+   757→   757→    <Card className="overflow-hidden rounded-2xl border-0 bg-gradient-to-br from-primary to-teal-700 p-0 text-white shadow-lg shadow-primary/20">
+   758→   758→      <div className="relative px-5 py-5 sm:px-6 sm:py-6">
+   759→   759→        {/* Decorative sparkle */}
+   760→   760→        <Sparkles className="absolute right-4 top-4 h-5 w-5 text-white/25" />
+   761→   761→
+   762→   762→        <p className="text-sm font-medium text-white/80">
+   763→   763→          Welcome back, {firstName} 👋
+   764→   764→        </p>
+   765→   765→        <h1 className="mt-1 text-xl font-bold tracking-tight sm:text-2xl">
+   766→   766→          {hasEngagement
+   767→   767→            ? `Your ${engagementType ? engagementShortLabel(engagementType) : ''} return`
+   768→   768→            : 'No active engagement'}
+   769→   769→        </h1>
+   770→   770→
+   771→   771→        {loading ? (
+   772→   772→          <div className="mt-4 space-y-3">
+   773→   773→            <Skeleton className="h-3 w-40 bg-white/20" />
+   774→   774→            <Skeleton className="h-3 w-full bg-white/20" />
+   775→   775→          </div>
+   776→   776→        ) : hasEngagement ? (
+   777→   777→          <>
+   778→   778→            <div className="mt-4 flex items-center justify-between text-xs text-white/85">
+   779→   779→              <span className="font-medium">
+   780→   780→                Tax document preparation progress
+   781→   781→              </span>
+   782→   782→              <span className="text-base font-bold text-white">{progress}%</span>
+   783→   783→            </div>
+   784→   784→            <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/20">
+   785→   785→              <div
+   786→   786→                className={cn(
+   787→   787→                  'h-full rounded-full transition-[width] duration-700 ease-out',
+   788→   788→                  progressColorClass(progress)
+   789→   789→                )}
+   790→   790→                style={{ width: `${progress}%` }}
+   791→   791→              />
+   792→   792→            </div>
+   793→   793→
+   794→   794→            <div className="mt-4 flex flex-wrap items-center gap-2">
+   795→   795→              {engagementType && (
+   796→   796→                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+   797→   797→                  <FileText className="h-3 w-3" />
+   798→   798→                  {engagementTypeLabel(engagementType)}
+   799→   799→                  {taxYear ? ` · ${taxYear}` : ''}
+   800→   800→                </span>
+   801→   801→              )}
+   802→   802→              {deadline && (
+   803→   803→                <span
+   804→   804→                  className={cn(
+   805→   805→                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium backdrop-blur-sm',
+   806→   806→                    toneClass
+   807→   807→                  )}
+   808→   808→                >
+   809→   809→                  <CalendarClock className="h-3 w-3" />
+   810→   810→                  {format(new Date(deadline), 'MMM d, yyyy')} · {dlState.label}
+   811→   811→                </span>
+   812→   812→              )}
+   813→   813→            </div>
+   814→   814→          </>
+   815→   815→        ) : (
+   816→   816→          <p className="mt-3 text-sm text-white/80">
+   817→   817→            Your accountant hasn&apos;t started a document request for you yet.
+   818→   818→            Check back soon.
+   819→   819→          </p>
+   820→   820→        )}
+   821→   821→      </div>
+   822→   822→    </Card>
+   823→   823→  )
+   824→   824→}
+   825→   825→
+   826→   826→function SectionHeader({
+   827→   827→  icon: Icon,
+   828→   828→  title,
+   829→   829→  subtitle,
+   830→   830→}: {
+   831→   831→  icon: typeof FileText
+   832→   832→  title: string
+   833→   833→  subtitle?: string
+   834→   834→}) {
+   835→   835→  return (
+   836→   836→    <div className="mb-3">
+   837→   837→      <div className="flex items-center gap-2">
+   838→   838→        <Icon className="h-4 w-4 text-primary" />
+   839→   839→        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+   840→   840→      </div>
+   841→   841→      {subtitle && (
+   842→   842→        <p className="mt-0.5 pl-6 text-xs text-muted-foreground">{subtitle}</p>
+   843→   843→      )}
+   844→   844→    </div>
+   845→   845→  )
+   846→   846→}
+   847→   847→
+   848→   848→function PendingPbcCard({
+   849→   849→  item,
+   850→   850→  uploading,
+   851→   851→  onUpload,
+   852→   852→}: {
+   853→   853→  item: PbcItem
+   854→   854→  uploading: boolean
+   855→   855→  onUpload: () => void
+   856→   856→}) {
+   857→   857→  const Icon = categoryIcon(item.category)
+   858→   858→  const docTypeDef = DOCUMENT_TYPE_MAP[item.documentType]
+   859→   859→  return (
+   860→   860→    <Card className="gap-0 rounded-xl p-4 transition-shadow hover:shadow-md">
+   861→   861→      <div className="flex items-start gap-3">
+   862→   862→        <div
+   863→   863→          className={cn(
+   864→   864→            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl',
+   865→   865→            categorySurfaceClass(item.category)
+   866→   866→          )}
+   867→   867→        >
+   868→   868→          {createElement(Icon, { className: 'h-5 w-5' })}
+   869→   869→        </div>
+   870→   870→        <div className="min-w-0 flex-1">
+   871→   871→          <div className="flex items-start justify-between gap-2">
+   872→   872→            <div className="min-w-0">
+   873→   873→              <p className="text-sm font-semibold text-foreground">
+   874→   874→                {docTypeDef?.label || item.documentType}
+   875→   875→              </p>
+   876→   876→              <p className="mt-0.5 text-xs text-muted-foreground">
+   877→   877→                {item.description}
+   878→   878→              </p>
+   879→   879→            </div>
+   880→   880→            <PriorityBadge priority={item.priority} />
+   881→   881→          </div>
+   882→   882→          <div className="mt-2 flex items-center gap-2">
+   883→   883→            {item.required ? (
+   884→   884→              <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-400">
+   885→   885→                Required
+   886→   886→              </span>
+   887→   887→            ) : (
+   888→   888→              <span className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+   889→   889→                Optional
+   890→   890→              </span>
+   891→   891→            )}
+   892→   892→            <span className="text-[10px] text-muted-foreground">
+   893→   893→              Format: {item.expectedFormat.toUpperCase()}
+   894→   894→            </span>
+   895→   895→          </div>
+   896→   896→          <Button
+   897→   897→            onClick={onUpload}
+   898→   898→            disabled={uploading}
+   899→   899→            size="sm"
+   900→   900→            className="mt-3 h-9 w-full min-w-[110px] gap-1.5 rounded-lg text-xs font-semibold sm:w-auto"
+   901→   901→          >
+   902→   902→            {uploading ? (
+   903→   903→              <>
+   904→   904→                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+   905→   905→                Uploading…
+   906→   906→              </>
+   907→   907→            ) : (
+   908→   908→              <>
+   909→   909→                <Upload className="h-3.5 w-3.5" />
+   910→   910→                Upload
+   911→   911→              </>
+   912→   912→            )}
+   913→   913→          </Button>
+   914→   914→        </div>
+   915→   915→      </div>
+   916→   916→    </Card>
+   917→   917→  )
+   918→   918→}
+   919→   919→
+   920→   920→function UploadedDocRow({ doc }: { doc: TaxDocument }) {
+   921→   921→  const visual = docStatusVisual(doc.status)
+   922→   922→  const Icon = visual.icon
+   923→   923→  const docTypeDef = doc.documentType
+   924→   924→    ? DOCUMENT_TYPE_MAP[doc.documentType]
+   925→   925→    : undefined
+   926→   926→  const category = docTypeDef?.category || 'other'
+   927→   927→  const CatIcon = categoryIcon(category)
+   928→   928→  return (
+   929→   929→    <Card className="gap-0 rounded-xl p-3.5">
+   930→   930→      <div className="flex items-center gap-3">
+   931→   931→        <div
+   932→   932→          className={cn(
+   933→   933→            'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+   934→   934→            categorySurfaceClass(category)
+   935→   935→          )}
+   936→   936→        >
+   937→   937→          {createElement(CatIcon, { className: 'h-4.5 w-4.5' })}
+   938→   938→        </div>
+   939→   939→        <div className="min-w-0 flex-1">
+   940→   940→          <p className="truncate text-sm font-medium text-foreground">
+   941→   941→            {doc.originalFilename}
+   942→   942→          </p>
+   943→   943→          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+   944→   944→            {docTypeDef?.label || doc.documentType || 'Document'} ·{' '}
+   945→   945→            {format(new Date(doc.uploadedAt), 'MMM d, yyyy')}
+   946→   946→          </p>
+   947→   947→        </div>
+   948→   948→        <div className="flex flex-col items-end gap-1">
+   949→   949→          <span
+   950→   950→            className={cn(
+   951→   951→              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+   952→   952→              visual.tone === 'ok' &&
+   953→   953→                'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400',
+   954→   954→              visual.tone === 'processing' &&
+   955→   955→                'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400',
+   956→   956→              visual.tone === 'pending' &&
+   957→   957→                'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+   958→   958→            )}
+   959→   959→          >
+   960→   960→            <Icon
+   961→   961→              className={cn(
+   962→   962→                'h-3 w-3',
+   963→   963→                visual.tone === 'processing' && 'animate-spin'
+   964→   964→              )}
+   965→   965→            />
+   966→   966→            {visual.label}
+   967→   967→          </span>
+   968→   968→          <span className="text-[10px] text-muted-foreground">
+   969→   969→            {formatDistanceToNow(new Date(doc.uploadedAt), { addSuffix: true })}
+   970→   970→          </span>
+   971→   971→        </div>
+   972→   972→      </div>
+   973→   973→    </Card>
+   974→   974→  )
+   975→   975→}
+   976→   976→
+   977→   977→function QuickUploadCard({
+   978→   978→  uploading,
+   979→   979→  onPickFiles,
+   980→   980→  onPickCamera,
+   981→   981→  onPickFilesIcon,
+   982→   982→  onDropFiles,
+   983→   983→  onEmail,
+   984→   984→}: {
+   985→   985→  uploading: boolean
+   986→   986→  onPickFiles: () => void
+   987→   987→  onPickCamera: () => void
+   988→   988→  onPickFilesIcon: () => void
+   989→   989→  onDropFiles: (files: FileList | null) => void
+   990→   990→  onEmail: () => void
+   991→   991→}) {
+   992→   992→  const [dragOver, setDragOver] = useState(false)
+   993→   993→
+   994→   994→  return (
+   995→   995→    <Card className="gap-3 rounded-2xl border-dashed border-2 border-slate-200 bg-slate-50/50 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+   996→   996→      <button
+   997→   997→        type="button"
+   998→   998→        onClick={onPickFiles}
+   999→   999→        onDragOver={(e) => {
+  1000→  1000→          e.preventDefault()
+  1001→  1001→          setDragOver(true)
+  1002→  1002→        }}
+  1003→  1003→        onDragLeave={() => setDragOver(false)}
+  1004→  1004→        onDrop={(e) => {
+  1005→  1005→          e.preventDefault()
+  1006→  1006→          setDragOver(false)
+  1007→  1007→          onDropFiles(e.dataTransfer.files)
+  1008→  1008→        }}
+  1009→  1009→        className={cn(
+  1010→  1010→          'flex w-full flex-col items-center justify-center gap-2 rounded-xl px-4 py-6 text-center transition-colors',
+  1011→  1011→          dragOver
+  1012→  1012→            ? 'bg-primary/5 ring-2 ring-primary/40'
+  1013→  1013→            : 'hover:bg-slate-100 dark:hover:bg-slate-800/60'
+  1014→  1014→        )}
+  1015→  1015→      >
+  1016→  1016→        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+  1017→  1017→          {uploading ? (
+  1018→  1018→            <Loader2 className="h-5 w-5 animate-spin" />
+  1019→  1019→          ) : (
+  1020→  1020→            <Upload className="h-5 w-5" />
+  1021→  1021→          )}
+  1022→  1022→        </div>
+  1023→  1023→        <p className="text-sm font-semibold text-foreground">
+  1024→  1024→          {uploading ? 'Uploading…' : 'Drag & drop files here, or click to browse'}
+  1025→  1025→        </p>
+  1026→  1026→        <p className="text-[11px] text-muted-foreground">
+  1027→  1027→          PDF, JPG, PNG · up to 25MB each · multiple files supported
+  1028→  1028→        </p>
+  1029→  1029→      </button>
+  1030→  1030→
+  1031→  1031→      <div className="grid grid-cols-4 gap-2">
+  1032→  1032→        <QuickActionButton
+  1033→  1033→          icon={Camera}
+  1034→  1034→          label="Camera"
+  1035→  1035→          onClick={onPickCamera}
+  1036→  1036→          disabled={uploading}
+  1037→  1037→        />
+  1038→  1038→        <QuickActionButton
+  1039→  1039→          icon={ImageIcon}
+  1040→  1040→          label="Photos"
+  1041→  1041→          onClick={onPickFiles}
+  1042→  1042→          disabled={uploading}
+  1043→  1043→        />
+  1044→  1044→        <QuickActionButton
+  1045→  1045→          icon={Folder}
+  1046→  1046→          label="Files"
+  1047→  1047→          onClick={onPickFilesIcon}
+  1048→  1048→          disabled={uploading}
+  1049→  1049→        />
+  1050→  1050→        <QuickActionButton
+  1051→  1051→          icon={Mail}
+  1052→  1052→          label="Email"
+  1053→  1053→          onClick={onEmail}
+  1054→  1054→          disabled={uploading}
+  1055→  1055→        />
+  1056→  1056→      </div>
+  1057→  1057→    </Card>
+  1058→  1058→  )
+  1059→  1059→}
+  1060→  1060→
+  1061→  1061→function QuickActionButton({
+  1062→  1062→  icon: Icon,
+  1063→  1063→  label,
+  1064→  1064→  onClick,
+  1065→  1065→  disabled,
+  1066→  1066→}: {
+  1067→  1067→  icon: typeof Upload
+  1068→  1068→  label: string
+  1069→  1069→  onClick: () => void
+  1070→  1070→  disabled?: boolean
+  1071→  1071→}) {
+  1072→  1072→  return (
+  1073→  1073→    <button
+  1074→  1074→      type="button"
+  1075→  1075→      onClick={onClick}
+  1076→  1076→      disabled={disabled}
+  1077→  1077→      className={cn(
+  1078→  1078→        'flex min-h-[64px] flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-3 text-xs font-medium text-slate-700 transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary',
+  1079→  1079→        'dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary/50 dark:hover:bg-primary/10',
+  1080→  1080→        disabled && 'opacity-50'
+  1081→  1081→      )}
+  1082→  1082→    >
+  1083→  1083→      <Icon className="h-4 w-4" />
+  1084→  1084→      {label}
+  1085→  1085→    </button>
+  1086→  1086→  )
+  1087→  1087→}
+  1088→  1088→
+  1089→  1089→function MessagesPanel({
+  1090→  1090→  messages,
+  1091→  1091→  accountantName,
+  1092→  1092→  accountantRole,
+  1093→  1093→  clientName,
+  1094→  1094→  onSend,
+  1095→  1095→  loading,
+  1096→  1096→}: {
+  1097→  1097→  messages: Message[]
+  1098→  1098→  accountantName: string
+  1099→  1099→  accountantRole?: string
+  1100→  1100→  clientName: string
+  1101→  1101→  onSend: (content: string) => void
+  1102→  1102→  loading: boolean
+  1103→  1103→}) {
+  1104→  1104→  const [draft, setDraft] = useState('')
+  1105→  1105→  const scrollRef = useRef<HTMLDivElement>(null)
+  1106→  1106→
+  1107→  1107→  useEffect(() => {
+  1108→  1108→    if (scrollRef.current) {
+  1109→  1109→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  1110→  1110→    }
+  1111→  1111→  }, [messages])
+  1112→  1112→
+  1113→  1113→  const handleSend = () => {
+  1114→  1114→    if (!draft.trim()) return
+  1115→  1115→    onSend(draft)
+  1116→  1116→    setDraft('')
+  1117→  1117→  }
+  1118→  1118→
+  1119→  1119→  return (
+  1120→  1120→    <Card className="flex h-[600px] max-h-[70vh] flex-col gap-0 overflow-hidden rounded-2xl p-0">
+  1121→  1121→      {/* Header */}
+  1122→  1122→      <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+  1123→  1123→        <Avatar className="h-9 w-9">
+  1124→  1124→          <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+  1125→  1125→            {initials(accountantName)}
+  1126→  1126→          </AvatarFallback>
+  1127→  1127→        </Avatar>
+  1128→  1128→        <div className="min-w-0 flex-1">
+  1129→  1129→          <p className="truncate text-sm font-semibold text-foreground">
+  1130→  1130→            {accountantName}
+  1131→  1131→          </p>
+  1132→  1132→          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+  1133→  1133→            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+  1134→  1134→            {accountantRole || 'Your accountant'} · Online
+  1135→  1135→          </p>
+  1136→  1136→        </div>
+  1137→  1137→        <Badge
+  1138→  1138→          variant="secondary"
+  1139→  1139→          className="rounded-full bg-slate-100 text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+  1140→  1140→        >
+  1141→  1141→          <Clock className="h-3 w-3" />
+  1142→  1142→          ~2h reply
+  1143→  1143→        </Badge>
+  1144→  1144→      </div>
+  1145→  1145→
+  1146→  1146→      {/* Info note */}
+  1147→  1147→      <div className="flex items-center gap-2 bg-primary/5 px-4 py-2 text-[11px] text-primary/80 dark:text-primary/70">
+  1148→  1148→        <Sparkles className="h-3 w-3 shrink-0" />
+  1149→  1149→        Your accountant typically responds within 2 hours during business hours.
+  1150→  1150→      </div>
+  1151→  1151→
+  1152→  1152→      {/* Messages list */}
+  1153→  1153→      <div
+  1154→  1154→        ref={scrollRef}
+  1155→  1155→        className="flex-1 space-y-3 overflow-y-auto bg-slate-50/40 px-4 py-4 dark:bg-slate-900/30"
+  1156→  1156→      >
+  1157→  1157→        {loading ? (
+  1158→  1158→          <div className="space-y-3">
+  1159→  1159→            <Skeleton className="ml-auto h-12 w-2/3 rounded-2xl" />
+  1160→  1160→            <Skeleton className="h-12 w-2/3 rounded-2xl" />
+  1161→  1161→            <Skeleton className="ml-auto h-12 w-1/2 rounded-2xl" />
+  1162→  1162→          </div>
+  1163→  1163→        ) : messages.length === 0 ? (
+  1164→  1164→          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+  1165→  1165→            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+  1166→  1166→              <MessageSquare className="h-5 w-5 text-muted-foreground" />
+  1167→  1167→            </div>
+  1168→  1168→            <p className="text-sm font-medium text-foreground">
+  1169→  1169→              No messages yet
+  1170→  1170→            </p>
+  1171→  1171→            <p className="max-w-[16rem] text-xs text-muted-foreground">
+  1172→  1172→              Have a question about your documents? Start the conversation below.
+  1173→  1173→            </p>
+  1174→  1174→          </div>
+  1175→  1175→        ) : (
+  1176→  1176→          messages.map((m) => (
+  1177→  1177→            <MessageBubble
+  1178→  1178→              key={m.id}
+  1179→  1179→              message={m}
+  1180→  1180→              accountantName={accountantName}
+  1181→  1181→              clientName={clientName}
+  1182→  1182→            />
+  1183→  1183→          ))
+  1184→  1184→        )}
+  1185→  1185→      </div>
+  1186→  1186→
+  1187→  1187→      {/* Input */}
+  1188→  1188→      <div className="border-t border-slate-100 p-3 dark:border-slate-800">
+  1189→  1189→        <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-700 dark:bg-slate-900">
+  1190→  1190→          <Button
+  1191→  1191→            variant="ghost"
+  1192→  1192→            size="icon"
+  1193→  1193→            className="h-9 w-9 shrink-0 text-muted-foreground"
+  1194→  1194→            onClick={() => toast.info('Attachments coming soon')}
+  1195→  1195→            aria-label="Attach file"
+  1196→  1196→          >
+  1197→  1197→            <Paperclip className="h-4 w-4" />
+  1198→  1198→          </Button>
+  1199→  1199→          <textarea
+  1200→  1200→            value={draft}
+  1201→  1201→            onChange={(e) => setDraft(e.target.value)}
+  1202→  1202→            onKeyDown={(e) => {
+  1203→  1203→              if (e.key === 'Enter' && !e.shiftKey) {
+  1204→  1204→                e.preventDefault()
+  1205→  1205→                handleSend()
+  1206→  1206→              }
+  1207→  1207→            }}
+  1208→  1208→            placeholder="Type a message…"
+  1209→  1209→            rows={1}
+  1210→  1210→            className="max-h-28 min-h-[24px] flex-1 resize-none bg-transparent px-1 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+  1211→  1211→          />
+  1212→  1212→          <Button
+  1213→  1213→            onClick={handleSend}
+  1214→  1214→            disabled={!draft.trim()}
+  1215→  1215→            size="icon"
+  1216→  1216→            className="h-9 w-9 shrink-0 rounded-xl"
+  1217→  1217→            aria-label="Send message"
+  1218→  1218→          >
+  1219→  1219→            <Send className="h-4 w-4" />
+  1220→  1220→          </Button>
+  1221→  1221→        </div>
+  1222→  1222→      </div>
+  1223→  1223→    </Card>
+  1224→  1224→  )
+  1225→  1225→}
+  1226→  1226→
+  1227→  1227→function MessageBubble({
+  1228→  1228→  message,
+  1229→  1229→  accountantName,
+  1230→  1230→  clientName,
+  1231→  1231→}: {
+  1232→  1232→  message: Message
+  1233→  1233→  accountantName: string
+  1234→  1234→  clientName: string
+  1235→  1235→}) {
+  1236→  1236→  const fromClient = message.fromType === 'client'
+  1237→  1237→  const fromAI = message.fromType === 'ai'
+  1238→  1238→  const time = format(new Date(message.createdAt), 'h:mm a')
+  1239→  1239→
+  1240→  1240→  if (fromClient) {
+  1241→  1241→    return (
+  1242→  1242→      <div className="flex flex-col items-end gap-1">
+  1243→  1243→        <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-sm text-primary-foreground shadow-sm">
+  1244→  1244→          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+  1245→  1245→        </div>
+  1246→  1246→        <span className="px-1 text-[10px] text-muted-foreground">{time}</span>
+  1247→  1247→      </div>
+  1248→  1248→    )
+  1249→  1249→  }
+  1250→  1250→
+  1251→  1251→  return (
+  1252→  1252→    <div className="flex flex-col items-start gap-1">
+  1253→  1253→      <div className="flex items-end gap-2">
+  1254→  1254→        <Avatar className="h-7 w-7 shrink-0">
+  1255→  1255→          <AvatarFallback
+  1256→  1256→            className={cn(
+  1257→  1257→              'text-[10px] font-semibold',
+  1258→  1258→              fromAI
+  1259→  1259→                ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400'
+  1260→  1260→                : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+  1261→  1261→            )}
+  1262→  1262→          >
+  1263→  1263→            {fromAI ? 'AI' : initials(accountantName)}
+  1264→  1264→          </AvatarFallback>
+  1265→  1265→        </Avatar>
+  1266→  1266→        <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-white px-3.5 py-2 text-sm text-foreground shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700">
+  1267→  1267→          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+  1268→  1268→        </div>
+  1269→  1269→      </div>
+  1270→  1270→      <span className="px-9 text-[10px] text-muted-foreground">
+  1271→  1271→        {fromAI ? 'AI Assistant' : accountantName} · {time}
+  1272→  1272→      </span>
+  1273→  1273→    </div>
+  1274→  1274→  )
+  1275→  1275→}
+  1276→  1276→

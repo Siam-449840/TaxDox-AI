@@ -9,6 +9,7 @@ export type EmailTemplate =
   | 'document_received'
   | 'extraction_complete'
   | 'welcome'
+  | 'custom'
 
 export interface EmailContent {
   subject: string
@@ -250,6 +251,7 @@ export const EMAIL_TEMPLATE_COLORS: Record<EmailTemplate, string> = {
   document_received: 'teal',
   extraction_complete: 'violet',
   welcome: 'emerald',
+  custom: 'slate',
 }
 
 /**
@@ -261,4 +263,5 @@ export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplate, string> = {
   document_received: 'Document Received',
   extraction_complete: 'Extraction Complete',
   welcome: 'Welcome',
+  custom: 'Custom',
 }

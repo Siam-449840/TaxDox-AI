@@ -659,6 +659,8 @@ export function EngagementDetailView() {
               engagementId={data.id}
               engagement={{
                 clientName: data.client.name,
+                clientEmail: data.client.email,
+                clientId: data.client.id,
                 engagementType: data.engagementType,
                 taxYear: data.taxYear,
                 deadline: data.deadline,

@@ -31,6 +31,8 @@ import {
   FileText,
   Sparkles,
   Gift,
+  CalendarClock,
+  Send,
 } from 'lucide-react'
 import {
   pbcRequestEmail,
@@ -439,6 +441,7 @@ function GeneralSection({
     subscriptionTier: firm.subscriptionTier,
     country: firm.country,
   })
+  const [runningReminders, setRunningReminders] = useState(false)
 
   const tierLabel = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)?.name || firm.subscriptionTier
   const tierInfo = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)
@@ -447,6 +450,46 @@ function GeneralSection({
     setFirm((f) => ({ ...f, ...form }))
     setEditing(false)
     toast.success('Firm settings updated (cosmetic)')
+  }
+
+  // Trigger the cron-style reminder sweep manually. The default API
+  // key is exposed to the client as NEXT_PUBLIC_CRON_API_KEY so the
+  // button works in development without server-side configuration;
+  // fall back to the same default key the cron route uses.
+  const handleRunReminders = async () => {
+    setRunningReminders(true)
+    try {
+      const cronKey =
+        process.env.NEXT_PUBLIC_CRON_API_KEY || 'taxdox-cron-key'
+      const res = await fetch(
+        `/api/cron/reminders?key=${encodeURIComponent(cronKey)}`
+      )
+      if (!res.ok) {
+        throw new Error(`Request failed (${res.status})`)
+      }
+      const data = await res.json()
+      const sent = data.processed ?? 0
+      const skipped = data.skipped ?? 0
+      toast.success(
+        `Reminder check complete — ${sent} sent${
+          skipped > 0 ? `, ${skipped} skipped` : ''
+        }`,
+        {
+          description:
+            sent > 0
+              ? 'Deadline reminders queued for delivery.'
+              : 'No new reminders were due.',
+        }
+      )
+    } catch (err) {
+      console.error('Reminder check failed:', err)
+      toast.error('Failed to run reminder check', {
+        description:
+          'Check the console — the cron endpoint may be unreachable.',
+      })
+    } finally {
+      setRunningReminders(false)
+    }
   }
 
   return (
@@ -603,6 +646,64 @@ function GeneralSection({
           </CardContent>
         </Card>
       </div>
+
+      {/* Automation */}
+      <Card>
+        <CardHeader className="border-b">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Zap className="h-4 w-4" />
+                </span>
+                Automation
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Run scheduled workflows on demand. These normally run on a
+                fixed cron schedule.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                <CalendarClock className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Deadline Reminder Sweep</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Scans engagements due within the next 14 days and sends a
+                  deadline reminder to each client who hasn't received one
+                  in the last 3 days.
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
+                  <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                    <Clock className="h-3 w-3" /> Window: 14 days
+                  </Badge>
+                  <Badge variant="outline" className="gap-1 border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
+                    <Send className="h-3 w-3" /> Cooldown: 3 days
+                  </Badge>
+                </div>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleRunReminders}
+              disabled={runningReminders}
+              className="shrink-0"
+            >
+              {runningReminders ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Zap className="h-4 w-4" />
+              )}
+              Run Reminder Check
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
