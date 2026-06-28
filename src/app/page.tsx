@@ -11,6 +11,7 @@ import { EngagementsView } from '@/components/views/engagements-view'
 import { EngagementDetailView } from '@/components/views/engagement-detail-view'
 import { DocumentsView } from '@/components/views/documents-view'
 import { DocumentDetailView } from '@/components/views/document-detail-view'
+import { ClientDetailView } from '@/components/views/client-detail-view'
 import { ReportsView } from '@/components/views/reports-view'
 import { CalendarView } from '@/components/views/calendar-view'
 import { TaxRulesView } from '@/components/views/tax-rules-view'
@@ -68,6 +69,7 @@ function HomeContent() {
         {currentView === 'engagement-detail' && <EngagementDetailView />}
         {currentView === 'documents' && <DocumentsView />}
         {currentView === 'document-detail' && <DocumentDetailView />}
+        {currentView === 'client-detail' && <ClientDetailView />}
         {currentView === 'reports' && <ReportsView />}
         {currentView === 'calendar' && <CalendarView />}
         {currentView === 'tax-rules' && <TaxRulesView />}

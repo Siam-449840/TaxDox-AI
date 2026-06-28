@@ -1,0 +1,903 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useMemo, useState } from 'react'
+     4→import {
+     5→  Users,
+     6→  UserCheck,
+     7→  Building2,
+     8→  User as UserIcon,
+     9→  Plus,
+    10→  Search,
+    11→  Filter,
+    12→  MoreHorizontal,
+    13→  Eye,
+    14→  Pencil,
+    15→  FilePlus2,
+    16→  Mail,
+    17→  Phone,
+    18→  Hash,
+    19→  Globe,
+    20→  X,
+    21→  Loader2,
+    22→  ArrowUpDown,
+    23→} from 'lucide-react'
+    24→import { useAppStore } from '@/lib/store'
+    25→import { StatCard } from '@/components/shared/stat-card'
+    26→import { StatusBadge } from '@/components/shared/status-badge'
+    27→import { CLIENT_TYPES, COUNTRIES } from '@/lib/constants'
+    28→import { Card } from '@/components/ui/card'
+    29→import { Button } from '@/components/ui/button'
+    30→import { Input } from '@/components/ui/input'
+    31→import { Badge } from '@/components/ui/badge'
+    32→import {
+    33→  Table,
+    34→  TableBody,
+    35→  TableCell,
+    36→  TableHead,
+    37→  TableHeader,
+    38→  TableRow,
+    39→} from '@/components/ui/table'
+    40→import {
+    41→  Dialog,
+    42→  DialogContent,
+    43→  DialogHeader,
+    44→  DialogTitle,
+    45→  DialogFooter,
+    46→  DialogDescription,
+    47→} from '@/components/ui/dialog'
+    48→import {
+    49→  Select,
+    50→  SelectContent,
+    51→  SelectItem,
+    52→  SelectTrigger,
+    53→  SelectValue,
+    54→} from '@/components/ui/select'
+    55→import {
+    56→  DropdownMenu,
+    57→  DropdownMenuContent,
+    58→  DropdownMenuItem,
+    59→  DropdownMenuTrigger,
+    60→  DropdownMenuSeparator,
+    61→} from '@/components/ui/dropdown-menu'
+    62→import { Label } from '@/components/ui/label'
+    63→import { toast } from 'sonner'
+    64→import { cn } from '@/lib/utils'
+    65→import type { ClientType } from '@/lib/types'
+    66→
+    67→// ─── Types ──────────────────────────────────────────────────────
+    68→
+    69→interface ClientRow {
+    70→  id: string
+    71→  firmId: string
+    72→  name: string
+    73→  email: string
+    74→  phone?: string | null
+    75→  taxId?: string | null
+    76→  clientType: ClientType
+    77→  status: string
+    78→  country: string
+    79→  createdAt: string
+    80→  updatedAt: string
+    81→  _count?: { engagements: number; documents: number }
+    82→}
+    83→
+    84→interface ClientFormState {
+    85→  name: string
+    86→  email: string
+    87→  phone: string
+    88→  taxId: string
+    89→  clientType: ClientType
+    90→  country: string
+    91→  status: string
+    92→}
+    93→
+    94→// ─── Constants ──────────────────────────────────────────────────
+    95→
+    96→const TYPE_AVATAR_COLORS: Record<ClientType, string> = {
+    97→  individual: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+    98→  business: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300',
+    99→  trust: 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300',
+   100→  nonprofit: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',
+   101→}
+   102→
+   103→const TYPE_BADGE_COLORS: Record<ClientType, string> = {
+   104→  individual: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+   105→  business: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-900',
+   106→  trust: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900',
+   107→  nonprofit: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
+   108→}
+   109→
+   110→const STATUS_FILTERS = [
+   111→  { value: 'all', label: 'All Status' },
+   112→  { value: 'active', label: 'Active' },
+   113→  { value: 'inactive', label: 'Inactive' },
+   114→  { value: 'prospect', label: 'Prospect' },
+   115→] as const
+   116→
+   117→const TYPE_FILTERS = [
+   118→  { value: 'all', label: 'All Types' },
+   119→  ...CLIENT_TYPES.map((t) => ({ value: t.value, label: t.label })),
+   120→] as const
+   121→
+   122→const EMPTY_FORM: ClientFormState = {
+   123→  name: '',
+   124→  email: '',
+   125→  phone: '',
+   126→  taxId: '',
+   127→  clientType: 'individual',
+   128→  country: 'US',
+   129→  status: 'active',
+   130→}
+   131→
+   132→// ─── Helpers ────────────────────────────────────────────────────
+   133→
+   134→function getInitials(name: string): string {
+   135→  const parts = name.trim().split(/\s+/).filter(Boolean)
+   136→  if (parts.length === 0) return '?'
+   137→  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+   138→  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+   139→}
+   140→
+   141→function getTypeDef(value: string) {
+   142→  return CLIENT_TYPES.find((t) => t.value === value) || CLIENT_TYPES[0]
+   143→}
+   144→
+   145→function getCountryDef(code: string) {
+   146→  return COUNTRIES.find((c) => c.code === code) || COUNTRIES[0]
+   147→}
+   148→
+   149→/** Format tax ID for display — keeps existing mask, otherwise masks last 4. */
+   150→function formatTaxId(taxId: string | null | undefined, type: ClientType): string {
+   151→  if (!taxId) return '—'
+   152→  // Already masked (from seed) — pass through
+   153→  if (taxId.includes('*')) return taxId
+   154→  // SSN: 9 digits → xxx-xx-1234
+   155→  if (type === 'individual' && /^\d{9}$/.test(taxId)) {
+   156→    return `***-**-${taxId.slice(-4)}`
+   157→  }
+   158→  // EIN: 9 digits → xx-xxx1234
+   159→  if (type !== 'individual' && /^\d{9}$/.test(taxId)) {
+   160→    return `**-***${taxId.slice(-4)}`
+   161→  }
+   162→  // Anything else: show last 4 only
+   163→  if (taxId.length > 4) return `••••${taxId.slice(-4)}`
+   164→  return taxId
+   165→}
+   166→
+   167→// ─── Component ──────────────────────────────────────────────────
+   168→
+   169→export function ClientsView() {
+   170→  const navigate = useAppStore((s) => s.navigate)
+   171→
+   172→  const [clients, setClients] = useState<ClientRow[]>([])
+   173→  const [loading, setLoading] = useState(true)
+   174→  const [submitting, setSubmitting] = useState(false)
+   175→
+   176→  // Filters
+   177→  const [search, setSearch] = useState('')
+   178→  const [typeFilter, setTypeFilter] = useState<string>('all')
+   179→  const [statusFilter, setStatusFilter] = useState<string>('all')
+   180→
+   181→  // Dialog state
+   182→  const [dialogOpen, setDialogOpen] = useState(false)
+   183→  const [editingId, setEditingId] = useState<string | null>(null)
+   184→  const [form, setForm] = useState<ClientFormState>(EMPTY_FORM)
+   185→  const [errors, setErrors] = useState<Partial<Record<keyof ClientFormState, string>>>({})
+   186→
+   187→  // ─── Fetch clients ───────────────────────────────────────────
+   188→  useEffect(() => {
+   189→    void loadClients()
+   190→  }, [])
+   191→
+   192→  async function loadClients() {
+   193→    setLoading(true)
+   194→    try {
+   195→      const res = await fetch('/api/clients')
+   196→      if (!res.ok) throw new Error('Failed to load clients')
+   197→      const data = await res.json()
+   198→      setClients(data.clients || [])
+   199→    } catch (err) {
+   200→      console.error(err)
+   201→      toast.error('Failed to load clients', {
+   202→        description: 'Please try again in a moment.',
+   203→      })
+   204→    } finally {
+   205→      setLoading(false)
+   206→    }
+   207→  }
+   208→
+   209→  // ─── Derived stats ───────────────────────────────────────────
+   210→  const stats = useMemo(() => {
+   211→    const total = clients.length
+   212→    const active = clients.filter((c) => c.status === 'active').length
+   213→    const business = clients.filter((c) => c.clientType === 'business').length
+   214→    const individual = clients.filter((c) => c.clientType === 'individual').length
+   215→    return { total, active, business, individual }
+   216→  }, [clients])
+   217→
+   218→  // ─── Filtered clients (client-side filter on top of API data) ─
+   219→  const filteredClients = useMemo(() => {
+   220→    const q = search.trim().toLowerCase()
+   221→    return clients.filter((c) => {
+   222→      if (q && !c.name.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) {
+   223→        return false
+   224→      }
+   225→      if (typeFilter !== 'all' && c.clientType !== typeFilter) return false
+   226→      if (statusFilter !== 'all' && c.status !== statusFilter) return false
+   227→      return true
+   228→    })
+   229→  }, [clients, search, typeFilter, statusFilter])
+   230→
+   231→  const firmId = clients[0]?.firmId
+   232→
+   233→  // ─── Dialog handlers ─────────────────────────────────────────
+   234→  function openCreate() {
+   235→    setEditingId(null)
+   236→    setForm(EMPTY_FORM)
+   237→    setErrors({})
+   238→    setDialogOpen(true)
+   239→  }
+   240→
+   241→  function openEdit(client: ClientRow) {
+   242→    setEditingId(client.id)
+   243→    setForm({
+   244→      name: client.name,
+   245→      email: client.email,
+   246→      phone: client.phone ?? '',
+   247→      taxId: client.taxId ?? '',
+   248→      clientType: client.clientType,
+   249→      country: client.country,
+   250→      status: client.status,
+   251→    })
+   252→    setErrors({})
+   253→    setDialogOpen(true)
+   254→  }
+   255→
+   256→  function validate(): boolean {
+   257→    const e: Partial<Record<keyof ClientFormState, string>> = {}
+   258→    if (!form.name.trim()) e.name = 'Name is required'
+   259→    if (!form.email.trim()) e.email = 'Email is required'
+   260→    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Invalid email'
+   261→    setErrors(e)
+   262→    return Object.keys(e).length === 0
+   263→  }
+   264→
+   265→  async function handleSubmit(e: React.FormEvent) {
+   266→    e.preventDefault()
+   267→    if (!validate()) return
+   268→    setSubmitting(true)
+   269→    try {
+   270→      if (editingId) {
+   271→        // PATCH not implemented in API; show optimistic note
+   272→        toast.info('Edit coming soon', {
+   273→          description: 'Client editing API endpoint is not wired yet.',
+   274→        })
+   275→        setDialogOpen(false)
+   276→      } else {
+   277→        const payload = {
+   278→          firmId: firmId || 'firm-1-placeholder',
+   279→          name: form.name.trim(),
+   280→          email: form.email.trim(),
+   281→          phone: form.phone.trim() || null,
+   282→          taxId: form.taxId.trim() || null,
+   283→          clientType: form.clientType,
+   284→          country: form.country,
+   285→          status: form.status,
+   286→        }
+   287→        const res = await fetch('/api/clients', {
+   288→          method: 'POST',
+   289→          headers: { 'Content-Type': 'application/json' },
+   290→          body: JSON.stringify(payload),
+   291→        })
+   292→        if (!res.ok) {
+   293→          const errBody = await res.json().catch(() => ({}))
+   294→          throw new Error(errBody?.error || `HTTP ${res.status}`)
+   295→        }
+   296→        const data = await res.json()
+   297→        setClients((prev) => [data.client, ...prev])
+   298→        toast.success('Client added', {
+   299→          description: `${data.client.name} has been added to your client list.`,
+   300→        })
+   301→        setDialogOpen(false)
+   302→      }
+   303→    } catch (err) {
+   304→      const msg = err instanceof Error ? err.message : 'Unknown error'
+   305→      toast.error('Failed to save client', { description: msg })
+   306→    } finally {
+   307→      setSubmitting(false)
+   308→    }
+   309→  }
+   310→
+   311→  function handleRowClick(client: ClientRow) {
+   312→    // No dedicated client detail view yet — toast for now.
+   313→    toast(`Client details coming soon`, {
+   314→      description: `${client.name} · ${client.email}`,
+   315→    })
+   316→  }
+   317→
+   318→  // ─── Loading skeleton ────────────────────────────────────────
+   319→  if (loading) {
+   320→    return (
+   321→      <div className="space-y-6 p-4 lg:p-6">
+   322→        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   323→          <div className="space-y-2">
+   324→            <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
+   325→            <div className="h-4 w-72 animate-pulse rounded bg-muted" />
+   326→          </div>
+   327→          <div className="h-9 w-32 animate-pulse rounded-md bg-muted" />
+   328→        </div>
+   329→        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+   330→          {Array.from({ length: 4 }).map((_, i) => (
+   331→            <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
+   332→          ))}
+   333→        </div>
+   334→        <Card className="overflow-hidden">
+   335→          <div className="space-y-3 p-4">
+   336→            {Array.from({ length: 8 }).map((_, i) => (
+   337→              <div key={i} className="h-12 animate-pulse rounded-md bg-muted/60" />
+   338→            ))}
+   339→          </div>
+   340→        </Card>
+   341→      </div>
+   342→    )
+   343→  }
+   344→
+   345→  // ─── Main render ─────────────────────────────────────────────
+   346→  return (
+   347→    <div className="space-y-6 p-4 lg:p-6">
+   348→      {/* Header */}
+   349→      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+   350→        <div>
+   351→          <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
+   352→          <p className="mt-1 text-sm text-muted-foreground">
+   353→            Manage your client roster, contact details, and engagement history.
+   354→          </p>
+   355→        </div>
+   356→        <div className="flex items-center gap-2">
+   357→          <Button variant="outline" size="sm" onClick={() => void loadClients()}>
+   358→            <ArrowUpDown className="mr-1.5 h-4 w-4" />
+   359→            Refresh
+   360→          </Button>
+   361→          <Button size="sm" onClick={openCreate} className="ml-1 shadow-sm">
+   362→            <Plus className="mr-1.5 h-4 w-4" />
+   363→            Add Client
+   364→          </Button>
+   365→        </div>
+   366→      </div>
+   367→
+   368→      {/* Stats Row */}
+   369→      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+   370→        <StatCard
+   371→          label="Total Clients"
+   372→          value={stats.total}
+   373→          icon={Users}
+   374→          accent="primary"
+   375→          trend={{ value: 8, label: 'vs last quarter' }}
+   376→          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
+   377→        />
+   378→        <StatCard
+   379→          label="Active Clients"
+   380→          value={stats.active}
+   381→          icon={UserCheck}
+   382→          accent="success"
+   383→          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
+   384→        />
+   385→        <StatCard
+   386→          label="Business Clients"
+   387→          value={stats.business}
+   388→          icon={Building2}
+   389→          accent="info"
+   390→          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
+   391→        />
+   392→        <StatCard
+   393→          label="Individual Clients"
+   394→          value={stats.individual}
+   395→          icon={UserIcon}
+   396→          accent="warning"
+   397→          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
+   398→        />
+   399→      </div>
+   400→
+   401→      {/* Filters + Table Card */}
+   402→      <Card className="overflow-hidden">
+   403→        {/* Filter Bar */}
+   404→        <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between">
+   405→          <div className="relative flex-1 lg:max-w-sm">
+   406→            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   407→            <Input
+   408→              placeholder="Search by name or email…"
+   409→              value={search}
+   410→              onChange={(e) => setSearch(e.target.value)}
+   411→              className="pl-9"
+   412→            />
+   413→            {search && (
+   414→              <button
+   415→                onClick={() => setSearch('')}
+   416→                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+   417→                aria-label="Clear search"
+   418→              >
+   419→                <X className="h-3.5 w-3.5" />
+   420→              </button>
+   421→            )}
+   422→          </div>
+   423→
+   424→          <div className="flex flex-wrap items-center gap-2">
+   425→            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+   426→              <Filter className="h-3.5 w-3.5" />
+   427→              <span className="hidden sm:inline">Filters:</span>
+   428→            </div>
+   429→            <Select value={typeFilter} onValueChange={setTypeFilter}>
+   430→              <SelectTrigger size="sm" className="h-8 w-[140px]">
+   431→                <SelectValue placeholder="Type" />
+   432→              </SelectTrigger>
+   433→              <SelectContent>
+   434→                {TYPE_FILTERS.map((t) => (
+   435→                  <SelectItem key={t.value} value={t.value}>
+   436→                    {t.value !== 'all' && (
+   437→                      <span className="mr-1">{getTypeDef(t.value).icon}</span>
+   438→                    )}
+   439→                    {t.label}
+   440→                  </SelectItem>
+   441→                ))}
+   442→              </SelectContent>
+   443→            </Select>
+   444→
+   445→            <Select value={statusFilter} onValueChange={setStatusFilter}>
+   446→              <SelectTrigger size="sm" className="h-8 w-[140px]">
+   447→                <SelectValue placeholder="Status" />
+   448→              </SelectTrigger>
+   449→              <SelectContent>
+   450→                {STATUS_FILTERS.map((s) => (
+   451→                  <SelectItem key={s.value} value={s.value}>
+   452→                    {s.label}
+   453→                  </SelectItem>
+   454→                ))}
+   455→              </SelectContent>
+   456→            </Select>
+   457→
+   458→            {(typeFilter !== 'all' || statusFilter !== 'all' || search) && (
+   459→              <Button
+   460→                variant="ghost"
+   461→                size="sm"
+   462→                className="h-8 px-2 text-xs"
+   463→                onClick={() => {
+   464→                  setTypeFilter('all')
+   465→                  setStatusFilter('all')
+   466→                  setSearch('')
+   467→                }}
+   468→              >
+   469→                <X className="mr-1 h-3.5 w-3.5" />
+   470→                Clear
+   471→              </Button>
+   472→            )}
+   473→          </div>
+   474→        </div>
+   475→
+   476→        {/* Results count */}
+   477→        <div className="flex items-center justify-between px-4 py-2 text-xs text-muted-foreground">
+   478→          <span>
+   479→            Showing <span className="font-semibold text-foreground">{filteredClients.length}</span>{' '}
+   480→            of <span className="font-semibold text-foreground">{clients.length}</span> clients
+   481→          </span>
+   482→        </div>
+   483→
+   484→        {/* Table */}
+   485→        {filteredClients.length === 0 ? (
+   486→          <EmptyState
+   487→            hasClients={clients.length > 0}
+   488→            onAdd={openCreate}
+   489→            onClear={() => {
+   490→              setSearch('')
+   491→              setTypeFilter('all')
+   492→              setStatusFilter('all')
+   493→            }}
+   494→          />
+   495→        ) : (
+   496→          <div className="max-h-[calc(100vh-22rem)] overflow-y-auto">
+   497→            <Table>
+   498→              <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
+   499→                <TableRow className="hover:bg-transparent">
+   500→                  <TableHead className="min-w-[260px] pl-4">Client</TableHead>
+   501→                  <TableHead className="min-w-[140px]">Type</TableHead>
+   502→                  <TableHead className="min-w-[130px]">Tax ID</TableHead>
+   503→                  <TableHead className="min-w-[110px] text-center">Engagements</TableHead>
+   504→                  <TableHead className="min-w-[110px] text-center">Documents</TableHead>
+   505→                  <TableHead className="min-w-[120px]">Status</TableHead>
+   506→                  <TableHead className="min-w-[110px]">Country</TableHead>
+   507→                  <TableHead className="w-[60px] text-right pr-4">Actions</TableHead>
+   508→                </TableRow>
+   509→              </TableHeader>
+   510→              <TableBody>
+   511→                {filteredClients.map((client) => {
+   512→                  const typeDef = getTypeDef(client.clientType)
+   513→                  const countryDef = getCountryDef(client.country)
+   514→                  const engagementCount = client._count?.engagements ?? 0
+   515→                  const documentCount = client._count?.documents ?? 0
+   516→                  return (
+   517→                    <TableRow
+   518→                      key={client.id}
+   519→                      className="cursor-pointer transition-colors hover:bg-muted/30"
+   520→                      onClick={() => handleRowClick(client)}
+   521→                    >
+   522→                      {/* Client cell */}
+   523→                      <TableCell className="pl-4">
+   524→                        <div className="flex items-center gap-3">
+   525→                          <div
+   526→                            className={cn(
+   527→                              'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+   528→                              TYPE_AVATAR_COLORS[client.clientType]
+   529→                            )}
+   530→                          >
+   531→                            {getInitials(client.name)}
+   532→                          </div>
+   533→                          <div className="min-w-0">
+   534→                            <p className="truncate text-sm font-semibold leading-tight">
+   535→                              {client.name}
+   536→                            </p>
+   537→                            <p className="truncate text-xs text-muted-foreground">
+   538→                              {client.email}
+   539→                            </p>
+   540→                          </div>
+   541→                        </div>
+   542→                      </TableCell>
+   543→
+   544→                      {/* Type */}
+   545→                      <TableCell>
+   546→                        <span
+   547→                          className={cn(
+   548→                            'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium',
+   549→                            TYPE_BADGE_COLORS[client.clientType]
+   550→                          )}
+   551→                        >
+   552→                          <span aria-hidden>{typeDef.icon}</span>
+   553→                          {typeDef.label}
+   554→                        </span>
+   555→                      </TableCell>
+   556→
+   557→                      {/* Tax ID */}
+   558→                      <TableCell>
+   559→                        <span className="font-mono text-xs text-muted-foreground">
+   560→                          {formatTaxId(client.taxId, client.clientType)}
+   561→                        </span>
+   562→                      </TableCell>
+   563→
+   564→                      {/* Engagements */}
+   565→                      <TableCell className="text-center">
+   566→                        <Badge
+   567→                          variant="secondary"
+   568→                          className={cn(
+   569→                            'tabular-nums',
+   570→                            engagementCount === 0 && 'bg-muted text-muted-foreground'
+   571→                          )}
+   572→                        >
+   573→                          {engagementCount}
+   574→                        </Badge>
+   575→                      </TableCell>
+   576→
+   577→                      {/* Documents */}
+   578→                      <TableCell className="text-center">
+   579→                        <Badge
+   580→                          variant="secondary"
+   581→                          className={cn(
+   582→                            'tabular-nums',
+   583→                            documentCount === 0 && 'bg-muted text-muted-foreground'
+   584→                          )}
+   585→                        >
+   586→                          {documentCount}
+   587→                        </Badge>
+   588→                      </TableCell>
+   589→
+   590→                      {/* Status */}
+   591→                      <TableCell>
+   592→                        <StatusBadge status={client.status} />
+   593→                      </TableCell>
+   594→
+   595→                      {/* Country */}
+   596→                      <TableCell>
+   597→                        <span className="inline-flex items-center gap-1.5 text-xs">
+   598→                          <span className="text-base leading-none" aria-hidden>
+   599→                            {countryDef.flag}
+   600→                          </span>
+   601→                          <span className="font-medium text-muted-foreground">
+   602→                            {countryDef.code}
+   603→                          </span>
+   604→                        </span>
+   605→                      </TableCell>
+   606→
+   607→                      {/* Actions */}
+   608→                      <TableCell
+   609→                        className="pr-4 text-right"
+   610→                        onClick={(e) => e.stopPropagation()}
+   611→                      >
+   612→                        <DropdownMenu>
+   613→                          <DropdownMenuTrigger asChild>
+   614→                            <Button
+   615→                              variant="ghost"
+   616→                              size="icon"
+   617→                              className="h-8 w-8"
+   618→                              aria-label={`Actions for ${client.name}`}
+   619→                            >
+   620→                              <MoreHorizontal className="h-4 w-4" />
+   621→                            </Button>
+   622→                          </DropdownMenuTrigger>
+   623→                          <DropdownMenuContent align="end" className="w-48">
+   624→                            <DropdownMenuItem onClick={() => handleRowClick(client)}>
+   625→                              <Eye className="mr-2 h-4 w-4" />
+   626→                              View profile
+   627→                            </DropdownMenuItem>
+   628→                            <DropdownMenuItem onClick={() => openEdit(client)}>
+   629→                              <Pencil className="mr-2 h-4 w-4" />
+   630→                              Edit client
+   631→                            </DropdownMenuItem>
+   632→                            <DropdownMenuSeparator />
+   633→                            <DropdownMenuItem
+   634→                              onClick={() => {
+   635→                                toast.info('Navigating to engagements…')
+   636→                                navigate('engagements')
+   637→                              }}
+   638→                            >
+   639→                              <FilePlus2 className="mr-2 h-4 w-4" />
+   640→                              New engagement
+   641→                            </DropdownMenuItem>
+   642→                          </DropdownMenuContent>
+   643→                        </DropdownMenu>
+   644→                      </TableCell>
+   645→                    </TableRow>
+   646→                  )
+   647→                })}
+   648→              </TableBody>
+   649→            </Table>
+   650→          </div>
+   651→        )}
+   652→      </Card>
+   653→
+   654→      {/* Add/Edit Client Dialog */}
+   655→      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   656→        <DialogContent className="sm:max-w-[520px]">
+   657→          <DialogHeader>
+   658→            <DialogTitle>{editingId ? 'Edit Client' : 'Add New Client'}</DialogTitle>
+   659→            <DialogDescription>
+   660→              {editingId
+   661→                ? 'Update client contact and tax profile details.'
+   662→                : 'Create a new client record. They can be added to engagements once saved.'}
+   663→            </DialogDescription>
+   664→          </DialogHeader>
+   665→
+   666→          <form onSubmit={handleSubmit} className="space-y-4">
+   667→            {/* Name */}
+   668→            <div className="space-y-1.5">
+   669→              <Label htmlFor="client-name">
+   670→                Name <span className="text-destructive">*</span>
+   671→              </Label>
+   672→              <Input
+   673→                id="client-name"
+   674→                value={form.name}
+   675→                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+   676→                placeholder="e.g. Acme Corp or Jane Doe"
+   677→                autoFocus
+   678→                aria-invalid={!!errors.name}
+   679→              />
+   680→              {errors.name && (
+   681→                <p className="text-xs text-destructive">{errors.name}</p>
+   682→              )}
+   683→            </div>
+   684→
+   685→            {/* Email + Phone */}
+   686→            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   687→              <div className="space-y-1.5">
+   688→                <Label htmlFor="client-email">
+   689→                  Email <span className="text-destructive">*</span>
+   690→                </Label>
+   691→                <div className="relative">
+   692→                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   693→                  <Input
+   694→                    id="client-email"
+   695→                    type="email"
+   696→                    value={form.email}
+   697→                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+   698→                    placeholder="client@example.com"
+   699→                    className="pl-9"
+   700→                    aria-invalid={!!errors.email}
+   701→                  />
+   702→                </div>
+   703→                {errors.email && (
+   704→                  <p className="text-xs text-destructive">{errors.email}</p>
+   705→                )}
+   706→              </div>
+   707→              <div className="space-y-1.5">
+   708→                <Label htmlFor="client-phone">Phone</Label>
+   709→                <div className="relative">
+   710→                  <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   711→                  <Input
+   712→                    id="client-phone"
+   713→                    value={form.phone}
+   714→                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+   715→                    placeholder="+1 (555) 000-0000"
+   716→                    className="pl-9"
+   717→                  />
+   718→                </div>
+   719→              </div>
+   720→            </div>
+   721→
+   722→            {/* Tax ID */}
+   723→            <div className="space-y-1.5">
+   724→              <Label htmlFor="client-taxid">Tax ID (SSN / EIN)</Label>
+   725→              <div className="relative">
+   726→                <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   727→                <Input
+   728→                  id="client-taxid"
+   729→                  value={form.taxId}
+   730→                  onChange={(e) => setForm((f) => ({ ...f, taxId: e.target.value }))}
+   731→                  placeholder={form.clientType === 'individual' ? '123-45-6789' : '12-3456789'}
+   732→                  className="pl-9 font-mono"
+   733→                />
+   734→              </div>
+   735→              <p className="text-xs text-muted-foreground">
+   736→                Stored masked — only last 4 digits are visible in lists.
+   737→              </p>
+   738→            </div>
+   739→
+   740→            {/* Type + Country */}
+   741→            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   742→              <div className="space-y-1.5">
+   743→                <Label htmlFor="client-type">Client Type</Label>
+   744→                <Select
+   745→                  value={form.clientType}
+   746→                  onValueChange={(v) => setForm((f) => ({ ...f, clientType: v as ClientType }))}
+   747→                >
+   748→                  <SelectTrigger id="client-type" className="w-full">
+   749→                    <SelectValue placeholder="Select type" />
+   750→                  </SelectTrigger>
+   751→                  <SelectContent>
+   752→                    {CLIENT_TYPES.map((t) => (
+   753→                      <SelectItem key={t.value} value={t.value}>
+   754→                        <span className="mr-1.5">{t.icon}</span>
+   755→                        {t.label}
+   756→                      </SelectItem>
+   757→                    ))}
+   758→                  </SelectContent>
+   759→                </Select>
+   760→              </div>
+   761→              <div className="space-y-1.5">
+   762→                <Label htmlFor="client-country">Country</Label>
+   763→                <Select
+   764→                  value={form.country}
+   765→                  onValueChange={(v) => setForm((f) => ({ ...f, country: v }))}
+   766→                >
+   767→                  <SelectTrigger id="client-country" className="w-full">
+   768→                    <SelectValue placeholder="Select country" />
+   769→                  </SelectTrigger>
+   770→                  <SelectContent>
+   771→                    {COUNTRIES.map((c) => (
+   772→                      <SelectItem key={c.code} value={c.code}>
+   773→                        <span className="mr-1.5">{c.flag}</span>
+   774→                        {c.label}
+   775→                      </SelectItem>
+   776→                    ))}
+   777→                  </SelectContent>
+   778→                </Select>
+   779→              </div>
+   780→            </div>
+   781→
+   782→            {/* Status */}
+   783→            <div className="space-y-1.5">
+   784→              <Label htmlFor="client-status">Status</Label>
+   785→              <Select
+   786→                value={form.status}
+   787→                onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}
+   788→              >
+   789→                <SelectTrigger id="client-status" className="w-full">
+   790→                  <SelectValue placeholder="Select status" />
+   791→                </SelectTrigger>
+   792→                <SelectContent>
+   793→                  <SelectItem value="active">
+   794→                    <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+   795→                    Active
+   796→                  </SelectItem>
+   797→                  <SelectItem value="prospect">
+   798→                    <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+   799→                    Prospect
+   800→                  </SelectItem>
+   801→                  <SelectItem value="inactive">
+   802→                    <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-slate-400" />
+   803→                    Inactive
+   804→                  </SelectItem>
+   805→                </SelectContent>
+   806→              </Select>
+   807→            </div>
+   808→
+   809→            {/* Live preview card */}
+   810→            <div className="rounded-lg border bg-muted/30 p-3">
+   811→              <p className="mb-2 text-xs font-medium text-muted-foreground">Preview</p>
+   812→              <div className="flex items-center gap-3">
+   813→                <div
+   814→                  className={cn(
+   815→                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+   816→                    TYPE_AVATAR_COLORS[form.clientType]
+   817→                  )}
+   818→                >
+   819→                  {form.name ? getInitials(form.name) : '?'}
+   820→                </div>
+   821→                <div className="min-w-0">
+   822→                  <p className="truncate text-sm font-semibold">
+   823→                    {form.name || 'Client name'}
+   824→                  </p>
+   825→                  <p className="truncate text-xs text-muted-foreground">
+   826→                    {form.email || 'client@example.com'}
+   827→                  </p>
+   828→                </div>
+   829→                <div className="ml-auto flex items-center gap-2">
+   830→                  <span
+   831→                    className={cn(
+   832→                      'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
+   833→                      TYPE_BADGE_COLORS[form.clientType]
+   834→                    )}
+   835→                  >
+   836→                    {getTypeDef(form.clientType).icon} {getTypeDef(form.clientType).label}
+   837→                  </span>
+   838→                  <StatusBadge status={form.status} />
+   839→                </div>
+   840→              </div>
+   841→            </div>
+   842→
+   843→            <DialogFooter>
+   844→              <Button
+   845→                type="button"
+   846→                variant="outline"
+   847→                onClick={() => setDialogOpen(false)}
+   848→                disabled={submitting}
+   849→              >
+   850→                Cancel
+   851→              </Button>
+   852→              <Button type="submit" disabled={submitting}>
+   853→                {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+   854→                {editingId ? 'Save Changes' : 'Create Client'}
+   855→              </Button>
+   856→            </DialogFooter>
+   857→          </form>
+   858→        </DialogContent>
+   859→      </Dialog>
+   860→    </div>
+   861→  )
+   862→}
+   863→
+   864→// ─── Empty State ────────────────────────────────────────────────
+   865→
+   866→function EmptyState({
+   867→  hasClients,
+   868→  onAdd,
+   869→  onClear,
+   870→}: {
+   871→  hasClients: boolean
+   872→  onAdd: () => void
+   873→  onClear: () => void
+   874→}) {
+   875→  return (
+   876→    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+   877→      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+   878→        <Users className="h-7 w-7 text-primary" />
+   879→      </div>
+   880→      <h3 className="mt-4 text-base font-semibold">
+   881→        {hasClients ? 'No clients match your filters' : 'No clients yet'}
+   882→      </h3>
+   883→      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+   884→        {hasClients
+   885→          ? 'Try adjusting your search query or clearing active filters to see more results.'
+   886→          : 'Get started by adding your first client to the roster.'}
+   887→      </p>
+   888→      <div className="mt-4 flex items-center gap-2">
+   889→        {hasClients ? (
+   890→          <Button variant="outline" size="sm" onClick={onClear}>
+   891→            Clear filters
+   892→          </Button>
+   893→        ) : (
+   894→          <Button size="sm" onClick={onAdd}>
+   895→            <Plus className="mr-1.5 h-4 w-4" />
+   896→            Add your first client
+   897→          </Button>
+   898→        )}
+   899→      </div>
+   900→    </div>
+   901→  )
+   902→}
+   903→

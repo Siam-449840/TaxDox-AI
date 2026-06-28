@@ -168,6 +168,7 @@ function formatTaxId(taxId: string | null | undefined, type: ClientType): string
 
 export function ClientsView() {
   const navigate = useAppStore((s) => s.navigate)
+  const openClient = useAppStore((s) => s.openClient)
 
   const [clients, setClients] = useState<ClientRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -309,10 +310,7 @@ export function ClientsView() {
   }
 
   function handleRowClick(client: ClientRow) {
-    // No dedicated client detail view yet — toast for now.
-    toast(`Client details coming soon`, {
-      description: `${client.name} · ${client.email}`,
-    })
+    openClient(client.id)
   }
 
   // ─── Loading skeleton ────────────────────────────────────────

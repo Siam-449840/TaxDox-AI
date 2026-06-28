@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       const fileBuffer = await readFile(filePath)
       fileBase64 = fileBuffer.toString('base64')
       // Only process image files with GLM-4.6V (PDFs would need page rendering)
-      const isImage = fileMime.startsWith('image/')
+      const isImage = fileMime.startsWith('image/') && !fileMime.includes('svg')
       if (!isImage) {
         fileBase64 = null // Skip VLM for non-images, use simulated extraction
       }

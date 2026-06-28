@@ -4,9 +4,130 @@
 import { PrismaClient } from '@prisma/client'
 import { nanoid } from 'nanoid'
 import bcrypt from 'bcryptjs'
+import { writeFile, mkdir } from 'fs/promises'
+import path from 'path'
 
 const db = new PrismaClient()
 const DEMO_PASSWORD = await bcrypt.hash('TaxDox2025!', 12)
+const UPLOAD_DIR = path.join(process.cwd(), 'download', 'uploads')
+
+// Generate an SVG image that looks like a tax document
+function generateDocSvg(docType: string, clientName: string, year: number): string {
+  const colors: Record<string, string> = {
+    'W-2': '#1e40af',
+    '1099-NEC': '#059669',
+    '1099-INT': '#7c3aed',
+    '1099-DIV': '#db2777',
+    '1099-B': '#0891b2',
+    '1099-R': '#ea580c',
+    'K-1': '#4338ca',
+    '1098': '#be185d',
+    '1098-T': '#15803d',
+    'Property-Tax': '#b45309',
+    'Charity-Receipt': '#0e7490',
+    'P&L': '#1d4ed8',
+    'Balance-Sheet': '#6d28d9',
+    'Bank-Statement': '#0369a1',
+    'Brokerage-Statement': '#9333ea',
+    "Drivers-License": '#374151',
+    'Passport': '#1e3a8a',
+    'Payroll-Report': '#0f766e',
+    'SSN-Card': '#4b5563',
+  }
+  const color = colors[docType] || '#0f766e'
+
+  const fields: Record<string, [string, string][]> = {
+    'W-2': [
+      ['Employer', 'Acme Corp'],
+      ['EIN', '12-3456789'],
+      ['Employee', clientName],
+      ['SSN', '***-**-1234'],
+      ['Box 1 Wages', '$145,820.00'],
+      ['Box 2 Fed Tax', '$28,450.00'],
+      ['Box 3 SS Wages', '$145,820.00'],
+      ['Box 5 Medicare', '$145,820.00'],
+    ],
+    '1099-NEC': [
+      ['Payer', 'TechFlow Inc'],
+      ['EIN', '98-7654321'],
+      ['Recipient', clientName],
+      ['Nonemployee Comp', '$42,500.00'],
+      ['Fed Tax Withheld', '$0.00'],
+    ],
+    '1099-INT': [
+      ['Payer', 'First National Bank'],
+      ['Recipient', clientName],
+      ['Interest Income', '$842.50'],
+      ['Fed Tax Withheld', '$0.00'],
+    ],
+    'K-1': [
+      ['Entity', 'Acme Partners LLC'],
+      ['EIN', '12-3456789'],
+      ['Partner', clientName],
+      ['Ownership', '33.3%'],
+      ['Ordinary Income', '$250,000'],
+      ['Rental Income', '$12,000'],
+    ],
+    '1098': [
+      ['Lender', 'Wells Fargo'],
+      ['Borrower', clientName],
+      ['Mortgage Interest', '$18,420.00'],
+      ['Outstanding', '$420,000.00'],
+    ],
+    'P&L': [
+      ['Business', clientName],
+      ['Period', `Jan-Dec ${year}`],
+      ['Total Revenue', '$2,840,000'],
+      ['Total Expenses', '$2,120,000'],
+      ['Net Income', '$720,000'],
+    ],
+    'Bank-Statement': [
+      ['Bank', 'Chase Bank'],
+      ['Account Holder', clientName],
+      ['Account #', '****8842'],
+      ['Period', `Dec ${year}`],
+      ['Ending Balance', '$845,230.00'],
+    ],
+  }
+
+  const docFields = fields[docType] || [
+    ['Document Type', docType],
+    ['Client', clientName],
+    ['Tax Year', String(year)],
+  ]
+
+  const fieldRows = docFields
+    .map(
+      ([label, value], i) => `
+    <g transform="translate(60, ${200 + i * 38})">
+      <text x="0" y="0" font-family="Inter, sans-serif" font-size="13" fill="#64748b">${label}</text>
+      <text x="350" y="0" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="#1e293b">${value}</text>
+      <line x1="0" y1="10" x2="680" y2="10" stroke="#e2e8f0" stroke-width="1"/>
+    </g>`
+    )
+    .join('')
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${200 + docFields.length * 38 + 60}" viewBox="0 0 800 ${200 + docFields.length * 38 + 60}">
+  <rect width="800" height="${200 + docFields.length * 38 + 60}" fill="white"/>
+  <rect x="0" y="0" width="800" height="80" fill="${color}"/>
+  <text x="60" y="40" font-family="Inter, sans-serif" font-size="24" font-weight="700" fill="white">${docType}</text>
+  <text x="60" y="62" font-family="Inter, sans-serif" font-size="13" fill="white" opacity="0.8">Tax Year ${year} · ${clientName}</text>
+  <rect x="60" y="100" width="680" height="60" fill="#f8fafc" rx="8"/>
+  <text x="80" y="128" font-family="Inter, sans-serif" font-size="11" fill="#64748b" letter-spacing="1">TAXDOX AI · AI-PROCESSED DOCUMENT</text>
+  <text x="80" y="146" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="#1e293b">${docType} — ${clientName}</text>
+  <text x="640" y="138" font-family="Inter, sans-serif" font-size="11" fill="#94a3b8">${year}</text>
+  ${fieldRows}
+  <rect x="60" y="${200 + docFields.length * 38 + 20}" width="680" height="30" fill="#f1f5f9" rx="4"/>
+  <text x="80" y="${200 + docFields.length * 38 + 40}" font-family="Inter, sans-serif" font-size="10" fill="#94a3b8">This document was processed by TaxDox AI · GLM-4.6V · Confidence: 97%</text>
+</svg>`
+}
+
+// Write a document file to disk
+async function writeDocFile(storedFilename: string, docType: string, clientName: string, year: number) {
+  await mkdir(UPLOAD_DIR, { recursive: true })
+  const svg = generateDocSvg(docType, clientName, year)
+  await writeFile(path.join(UPLOAD_DIR, storedFilename), svg, 'utf-8')
+}
 
 function maskedSSN(last4: string) {
   return `***-**-${last4}`
@@ -319,16 +440,20 @@ async function main() {
         const now = Date.now()
         const uploadedAt = new Date(now - (uploadedCount * 3600000 + Math.random() * 86400000))
         const docStatus = status === 'extracted' ? 'processed' : status === 'processing' ? 'processing' : 'uploaded'
+        const storedFilename = `${nanoid()}.svg`
+
+        // Write actual SVG file to disk so preview works
+        await writeDocFile(storedFilename, docType, client.name, e.year)
 
         const doc = await db.document.create({
           data: {
             clientId: client.id,
             engagementId: engagement.id,
             pbcItemId: pbcItem.id,
-            originalFilename: `${docType.replace(/[^a-z0-9]/gi, '_')}_${client.name.replace(/\s/g, '')}_${e.year}.pdf`,
-            storedFilename: `${nanoid()}.pdf`,
+            originalFilename: `${docType.replace(/[^a-z0-9]/gi, '_')}_${client.name.replace(/\s/g, '')}_${e.year}.svg`,
+            storedFilename,
             fileSize: Math.floor(50000 + Math.random() * 2000000),
-            mimeType: 'application/pdf',
+            mimeType: 'image/svg+xml',
             documentType: docType,
             confidence: 0.85 + Math.random() * 0.14,
             status: docStatus,

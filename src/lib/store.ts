@@ -64,7 +64,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   openClient: (id) =>
     set({
-      currentView: 'clients',
+      currentView: 'client-detail',
       selectedClientId: id,
     }),
 
