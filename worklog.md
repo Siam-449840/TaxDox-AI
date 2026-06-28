@@ -362,3 +362,310 @@ Stage Summary:
 - ✅ Dark mode supported
 - ✅ Cron job created for continuous improvement
 - Project is production-ready and fully verified
+
+---
+Task ID: 10
+Agent: Command Palette Builder
+Task: Build ⌘K Command Palette with global search and quick navigation
+
+Work Log:
+- Read worklog.md to understand project context: single-route Next.js 16 app with Zustand view routing, teal design system, API shapes (`/api/clients?search=`, `/api/engagements?search=` filter by client name, `/api/documents` has no search param), shared types (`ViewKey`, `Client`, `Engagement`, `TaxDocument`), and existing app-shell search bar (decorative only).
+- Probed live API responses on http://localhost:3000 to confirm field shapes: clients return `{ clients: [{ id, name, email, clientType, status, country, _count }] }`; engagements return `{ engagements: [{ id, engagementType, taxYear, status, client: { name } }] }`; documents return `{ documents: [{ id, originalFilename, documentType, status, fileSize }] }`.
+- Updated `src/lib/store.ts`:
+  * Added `commandPaletteOpen: boolean` state field
+  * Added `toggleCommandPalette()` and `setCommandPalette(open)` actions
+  * Initialized `commandPaletteOpen: false`
+- Created `src/components/layout/command-palette.tsx` (~470 lines, premium Linear/Raycast-style):
+  * **Global trigger**: `useEffect` keydown listener on `window` for `⌘K` (metaKey) / `Ctrl+K` (ctrlKey), calls `toggle()`; preventDefault to suppress browser default.
+  * **Open/close via Zustand**: reads `commandPaletteOpen` from store; closes via `setCommandPalette(false)`. Auto-focuses input on open (30ms timeout), clears query + results + selection on close (150ms timeout to let close animation play).
+  * **UI**: full-screen `bg-black/50 backdrop-blur-sm` overlay; centered card `max-w-2xl w-full` positioned at ~18vh from top; `rounded-2xl shadow-2xl border bg-popover`; `animate-in fade-in-0 zoom-in-95 slide-in-from-top-4 duration-150` (tw-animate-css) for smooth entrance.
+  * **Search input**: h-14, large prominent with `Search` icon, auto-focus, clear button + `Loader2` spinner during fetch.
+  * **Results list**: `flex-1 overflow-y-auto`, grouped sections (Navigation, Quick Actions, Clients, Engagements, Documents) with small uppercase gray headers; section item count badge for search-result groups.
+  * **Navigation commands** (7): Dashboard, Clients, Engagements, Documents, Reports, Client Portal (also sets `clientPortalMode`), Settings — each with Lucide icon, subtitle, `G D`-style shortcut hints.
+  * **Quick actions** (6): New Engagement, New Client, Upload Document (each navigates to the relevant view where the primary create/upload affordance lives), Send PBC Reminders (→ engagements), Export Reports (→ reports), Toggle Theme (uses `next-themes` `setTheme` in place, icon swaps Sun/Moon). Each action has color-coded icon (emerald/teal/sky/amber/violet/primary).
+  * **Search** (debounced 300ms): `Promise.all` of `GET /api/clients?search=`, `GET /api/engagements?search=`, `GET /api/documents` (filtered client-side by `originalFilename` lowercase includes). Out-of-order responses guarded by a `requestIdRef` counter so stale fetches don't overwrite newer ones. Caps each group (clients 5, engagements 5, documents 6).
+  * **Result items**: icon tile + title + subtitle + uppercase badge (type/status). Clicking a client → `navigate('clients')`; engagement → `openEngagement(id)`; document → `openDocument(id)`. All close the palette after performing.
+  * **Keyboard navigation**: ↑/↓ cycle `selectedIndex` through a flat `BaseItem[]` (nav + actions + search results, in display order), Enter performs the highlighted action, Escape closes. `scrollIntoView({ block: 'nearest' })` keeps the active item in view. `onMouseEnter` on each row syncs the active index so hover + keyboard coexist seamlessly.
+  * **Empty state**: centered Search icon + "No results found" helper when `flatItems.length === 0 && !loading`.
+  * **Footer**: keyboard hints (↑↓ navigate, ↵ select via `CornerDownLeft` icon, esc close) + TaxDox AI brand dot.
+  * **Teal accent**: active row uses `bg-accent text-accent-foreground`, icon tile border switches to `border-primary/30 text-primary`, active arrow icon is `text-primary`. No indigo/blue as primary anywhere.
+- Updated `src/components/layout/app-shell.tsx`:
+  * Imported `CommandPalette` from `@/components/layout/command-palette`
+  * Replaced the decorative `<Input>` search bar with a `<button>` that calls `setCommandPalette(true)` — keeps the Search icon, placeholder text, and `⌘K` kbd badge visuals, now focusable/clickable with `aria-label="Open command palette"`.
+  * Removed the now-unused `Input` import.
+  * Rendered `<CommandPalette />` at the bottom of the AppShell root `<div>` so it overlays globally regardless of current view.
+- Verified:
+  * `bun run lint` — clean (no errors, no warnings).
+  * `npx tsc --noEmit --skipLibCheck` filtered to `command-palette|app-shell|store.ts` — clean (zero type errors in modified files).
+  * Dev server (`dev.log`) — homepage returns 200, `✓ Compiled in 216ms`, no `⨯`/Module-not-found entries for the command palette or app shell. (Pre-existing intermittent module-resolution warnings for `settings-view`/`ai-assistant` in the log are unrelated to this task — both files exist on disk and the latest compiles are clean.)
+
+Stage Summary:
+- ⌘K / Ctrl+K command palette is live globally across the entire TaxDox AI app.
+- Three command surfaces in one premium Linear/Raycast-style dialog: (1) 7 quick-navigation commands, (2) 6 quick actions including in-place theme toggle, (3) debounced global search across clients + engagements + documents with grouped, icon-badged results.
+- Full keyboard support (↑↓/Enter/Escape) with active-row sync, scroll-into-view, and hover coordination; auto-focus on open; query/results cleared on close.
+- Store now exposes `commandPaletteOpen`, `toggleCommandPalette()`, `setCommandPalette(open)` for any future trigger points (e.g. sidebar button, empty-state CTAs).
+- Header search bar is now a real trigger (click → opens palette) instead of a dead input.
+- Teal-primary design throughout, dark-mode friendly, smooth fade/zoom/slide entrance animation, zero lint/type errors.
+- Next action (optional, out of scope): to make "New Engagement / New Client / Upload Document" auto-open their respective create dialogs instead of just navigating, add a `pendingAction` field to the Zustand store that the target views read on mount.
+
+---
+Task ID: 11
+Agent: Notifications Panel Builder
+Task: Build notifications dropdown panel with real data from API
+
+Work Log:
+- Read worklog.md for full project context (API endpoints, design system, store, types, schema, shared components, app shell layout)
+- Inspected existing app-shell.tsx to understand the header bell button structure (Bell icon + red dot, no click handler), the store navigation actions (`openEngagement`, `openDocument`, `navigate`), and the Prisma schema (Engagement.deadline, Document.confidence/status, PbcItem.status/createdAt, Activity.type/createdAt, Message.read/fromType)
+- Created `src/app/api/notifications/route.ts` (GET endpoint):
+  * Runs 6 parallel Prisma queries for the 6 notification sources:
+    1. Deadlines — engagements with deadline within 7 days (or overdue) and status != 'done', includes client
+    2. Review — documents with status='processed' AND confidence < 0.9, includes client + engagement
+    3. PBC pending — PbcItem with status='pending' AND createdAt < 3 days ago, includes pbcList.engagement.client
+    4. Uploads — Activity.type='upload' AND createdAt >= 24h ago, includes document + engagement.client
+    5. Extracts — Activity.type='extract' AND createdAt >= 24h ago, includes document + engagement.client
+    6. Messages — Message.read=false AND fromType='client', includes client + engagement.client
+  * Generates deterministic IDs (`deadline-{engagementId}`, `review-{documentId}`, `pending-{pbcItemId}`, `upload-{activityId}`, `extract-{activityId}`, `message-{messageId}`) so client-side read-state can persist via localStorage
+  * Maps each type to its priority (deadline=high, review/pending=medium, upload/extract=low, message=high) and lucide icon name (CalendarClock/AlertCircle/Clock/FileText/Sparkles/MessageSquare)
+  * Sorts notifications by priority (high → medium → low) then by timestamp (newest → oldest)
+  * Returns `{ notifications: Notification[], unreadCount: number }`
+  * Verified live: 62 notifications (11 deadline, 21 review, 15 upload, 15 extract), all 6 source queries fire correctly
+- Created `src/components/layout/notifications-panel.tsx` (~340 lines):
+  * Uses shadcn `Popover` for the dropdown (handles open/close on outside-click + Escape natively)
+  * Bell icon button as the PopoverTrigger, with a red badge showing unread count (capped at "99+")
+  * Initial fetch on mount so the bell badge renders immediately; refetch on every panel open
+  * Client-side read state persisted in localStorage (`taxdox:read-notifications`), capped at 500 IDs to prevent unbounded growth
+  * Header: "Notifications" title + unread count badge ("N new") + "Mark all read" button (disabled when 0 unread)
+  * Tabs (All / Unread / Mentions): Unread filters to !read, Mentions filters to type='message' (closest semantic mapping for client messages)
+  * Notification list: scrollable (`max-h-96 overflow-y-auto scrollbar-thin`), divide-y between items
+  * Each notification item: colored icon circle (red/amber/blue/teal per type), title (font-semibold when unread, font-medium when read), 2-line clamped description, uppercase relative timestamp via `formatDistanceToNow` (date-fns), unread dot (teal, ring-2 ring-background) on the right
+  * Unread items get a subtle `bg-primary/[0.03]` highlight; hover adds `bg-accent/60`
+  * Click on a notification: marks it read in localStorage + closes panel + navigates (prefers document deep-link → falls back to engagement → falls back to client-portal for unattached messages → falls back to engagements list)
+  * Empty state: emerald Inbox icon in a circle + tab-aware message ("You're all caught up!" / "No unread notifications" / "No client messages") + subtext
+  * Loading skeleton: 5 rows with pulsing icon circle + 3 text lines each
+  * Footer: full-width "View all activity" link button (teal, ChevronRight icon) → navigate('engagements')
+  * Refreshes read-state on window focus (multi-tab sync)
+  * Error handling: fetch failure shows toast.error
+- Updated `src/components/layout/app-shell.tsx`:
+  * Removed unused `Bell` import from lucide-react (no longer needed since the panel renders its own Bell trigger)
+  * Added `import { NotificationsPanel } from '@/components/layout/notifications-panel'`
+  * Replaced the entire bell `Tooltip` + `Button` block in the header with `<NotificationsPanel />` (the panel manages its own open/close state, badge, and click handling)
+- Ran `bun run lint` — exit 0, zero errors, zero warnings (clean)
+- Ran `npx tsc --noEmit --skipLibCheck` — ZERO errors in any of my files (notifications/route.ts, notifications-panel.tsx, app-shell.tsx). Pre-existing errors in examples/, prisma/seed.ts, skills/, dashboard-view.tsx, api/ai/extract/route.ts remain — none introduced by this task.
+- Verified dev.log: `GET /api/notifications 200` with all 6 source Prisma queries executing correctly; `✓ Compiled in 178ms` with no `⨯` or "Module not found" errors for my files.
+- Visual QA with agent-browser:
+  * Bell button shows `aria-label="Notifications · 62 unread"` with red badge
+  * Click opens panel, header shows "Notifications" + "62 new" badge + "Mark all read" button
+  * Tabs work: All (62 items) → Unread (62, same since none read) → Mentions (empty state "No client messages")
+  * Notifications sorted by priority (11 deadlines first with red icon, then 21 review with amber icon, then 15 upload/extract with blue/teal icons)
+  * Each item shows correct icon circle color, title, description, and relative time ("7 MINUTES AGO", "ABOUT 1 HOUR AGO", "ABOUT 1 MONTH AGO", "2 MONTHS AGO")
+  * Click on deadline notification → navigated to engagement detail (heading "Greenfield Nonprofit" rendered) + unread badge dropped from 62 → 61
+  * Click on review notification → navigated to document detail (heading "W_2_JohnSmith_2025.pdf" rendered) + unread badge dropped from 61 → 60
+  * "Mark all read" button: clicks clear all unread, button becomes disabled, bell badge disappears, Unread tab badge disappears
+  * "View all activity" footer: clicks navigate to engagements view (heading "Engagements" rendered)
+  * Reload after clearing localStorage: badge reappears as "62 unread" (proves server-side feed drives the count, localStorage only tracks read/dismissed state)
+
+Stage Summary:
+- New `GET /api/notifications` endpoint generates a unified, real-time notification feed from 6 database sources (deadlines, low-confidence docs, stale PBC items, recent uploads, recent AI extractions, unread client messages) with deterministic IDs and priority+timestamp sorting
+- New `<NotificationsPanel />` component (Popover-based) drops into the app-shell header in place of the old dead bell button — renders its own bell trigger with a live unread-count badge, fetches on mount + on open, and persists read state in localStorage
+- Modern, GitHub/Linear-style notifications center UI: header with count + mark-all-read, All/Unread/Mentions tabs, scrollable list with priority-colored icon circles, relative timestamps, unread dots, hover highlights, loading skeleton, and contextual empty states
+- Click-to-navigate wiring uses the existing Zustand store (`openDocument` → document detail, `openEngagement` → engagement detail, `navigate('engagements')` for "View all activity", `navigate('client-portal')` for unattached messages)
+- Zero lint errors, zero TypeScript errors in new/edited files, dev server compiles cleanly, all interactions verified end-to-end via agent-browser
+- All teal-primary design (no indigo/blue as primary), Lucide icons throughout, dark-mode variants on icon circles and badges, fully responsive (`w-96 max-w-[calc(100vw-2rem)]` prevents overflow on mobile)
+
+---
+Task ID: 12
+Agent: Dashboard Polish Builder
+Task: Improve dashboard visual hierarchy, spacing, and micro-interactions
+
+Work Log:
+- Read worklog.md to load full project context (API contracts, shared components, deep-teal design system, `bg-gradient-primary` utility, `animate-pulse-ring` animation, ProgressRing/StatCard/Card props)
+- Inspected shared components: StatCard (already `p-5`, accepts className), ProgressRing (accepts color, size, strokeWidth, className), PriorityBadge, StatusBadge, Card (default `rounded-xl shadow-sm py-6`)
+- Made targeted, surgical edits to `src/components/views/dashboard-view.tsx` (no rewrite):
+  1. **Imports**: added `Sparkles`, `Flame` from lucide-react; added `format` from date-fns; removed unused `TrendingUp`; removed unused `Progress` import after replacing with custom gradient bar
+  2. **Helpers**: replaced flat `ACTIVITY_ICONS` map with richer `ACTIVITY_STYLES` (per-type icon + colored bg + colored text, dark-mode aware); added `teamColorHex()` and `daysUntil()` module-level helpers
+  3. **Hero header**: replaced plain header with a gradient hero card using `bg-gradient-primary`, white text, decorative blurred halo pattern, `Sparkles` + today's date (`format(new Date(), 'EEEE, MMMM d')`), inline quick-stats line that adapts to `alerts>0`, semi-transparent "View Reports" button + solid white "New Engagement" button
+  4. **Primary StatCards**: added `transition-all hover:-translate-y-0.5 hover:shadow-md` on every card; "Needs Attention" card now shows `ring-2 ring-red-400/60 ring-offset-2` when `alerts > 0`; bumped `lg:gap-4 → lg:gap-5`
+  5. **Secondary stat cards**: added per-card left accent stripe (4px) colored to match each icon (blue/violet/emerald/amber) via absolutely-positioned span + `overflow-hidden`; added hover lift + shadow; bumped `lg:gap-4 → lg:gap-5`
+  6. **Recent Engagements rows**: `p-3.5 → p-4`; ProgressRing `size 44 → 52`, `strokeWidth=5`; added priority-colored left border (`border-l-2 border-l-red-400 | -amber-400 | -slate-200`); added deadline countdown badge (red if ≤3d or overdue, amber if ≤7d, muted otherwise) with full-date tooltip; added row `title` tooltip with summary; arrow now `transition-transform group-hover:translate-x-0.5`; converted `map` body to return block to compute `daysUntil` once per row
+  7. **Upcoming Deadlines rows**: `p-3.5 → p-4`; added `group` + `transition-all hover:bg-muted/50`; date tile now scales on hover (`group-hover:scale-105`); added reveal-on-hover trailing arrow; added full-context row tooltip
+  8. **Engagement Status pie**: increased chart height 200→220, innerRadius 45→52, outerRadius 75→84; added donut center overlay (absolutely positioned, `pointer-events-none`) showing total count + "Total" label; added `stroke="var(--card)" strokeWidth={2}` between cells for crisp separation; legend now has hover bg, tabular-nums, slightly larger dots; switched tooltip border to `var(--border)` (was incorrectly `hsl(var(--border))`); bumped card `p-4 → p-5`
+  9. **Return Types pie**: added `stroke="var(--card)" strokeWidth={2}` between slices; changed label from `${name}: ${value}` to just `${pct}%` (cleaner); added a full legend below with colored dots, type name, count, and percentage; hover bg on legend rows; bumped card `p-4 → p-5`; outerRadius 75→72 to make room for % labels
+  10. **AI Extraction Quality ring**: size 120→140, strokeWidth 10→12; added soft emerald glow halo (`bg-emerald-500/15 blur-3xl`) absolutely positioned behind the ring; verified/needs-review counts now dark-mode aware
+  11. **Team Workload**: removed fragile `bg-${t.color}-500` template + inline ternary in favor of single `teamColorHex(t.color)` helper; avatar grew `h-8 w-8 → h-9 w-9` with `shadow-sm`; added `Flame` 🔥 badge overlay (`-right-1 -top-1`) on avatars when utilization ≥90% with `ring-2 ring-card` cutout; added role line under name (`text-[11px] text-muted-foreground`); added another inline Flame icon next to the load count for redundant signaling; load count now color-coded (red ≥90, amber ≥75, muted otherwise); replaced the broken `<Progress indicatorClassName=...>` (which the local UI Progress component doesn't actually accept — a pre-existing TS error) with a custom inline `<div>` progress bar that actually renders the intended vivid gradient (`from-emerald-500 to-teal-500` / `from-amber-500 to-orange-500` / `from-red-500 to-rose-500`); added per-row `title` tooltip with member/role/load summary; each row now `rounded-lg p-2 transition-colors hover:bg-muted/50`; card padding `p-4 → p-5`
+  12. **Activity Feed**: rebuilt each item with type-specific colored icon background (upload=blue, classify=violet, extract=teal, verify=emerald, send=amber, message=sky, status_change=slate) + matching text color, all dark-mode aware; added a vertical timeline line (`absolute left-[18px] top-4 bottom-4 w-px bg-border`) connecting activities, only rendered when >1 activity; icons upgraded to `h-9 w-9 rounded-full ring-1 ring-border` with `z-10` so they "break" the timeline line; spacing `space-y-3 → space-y-4`; scroll area `h-[280px] → h-[300px]`; actor name now slightly emphasized (`font-medium text-foreground/70`) with separator dots between actor/time/client; card padding `p-4 → p-5`
+  13. **General polish**: bumped all major section grid gaps from `gap-4 → gap-5` (main grid, charts row, team/activity row, both stat card rows); loading skeleton first placeholder now matches hero height (`h-28 w-full`) and uses `gap-5`; all section header buttons have `transition-colors`; all Card components retain default `rounded-xl shadow-sm`; introduced tabular-nums on stat counts and legend values for cleaner alignment
+  14. **Bug fix**: removed pre-existing `indicatorClassName` TypeScript error from dashboard-view (was noted in worklog as known issue) by replacing the `<Progress>` usage with a custom inline bar that the gradient colors actually apply to
+
+Verification:
+- `bun run lint` — passes cleanly (no errors, no warnings)
+- `npx tsc --noEmit --skipLibCheck | grep dashboard-view` — no errors (the pre-existing `indicatorClassName` TS error is now resolved)
+- Dev server (already running on :3000) returned HTTP 200 on `/` and `/api/dashboard`; no `⨯`, "Module not found", or compile errors related to dashboard-view in dev.log after edits
+- All data-fetching, navigation (`navigate`, `openEngagement`), and original component composition preserved — no functional changes
+
+Stage Summary:
+- Dashboard now opens with a premium gradient hero (teal `bg-gradient-primary`) showing today's date, inline attention/active/pending quick-stats, and high-contrast white CTAs
+- Primary stat cards have hover lift + shadow; "Needs Attention" pulses with a red ring when >0
+- Secondary stat cards have colored left accent stripes matching their icon color
+- Recent Engagements rows are roomier (`p-4`), have larger progress rings (52px), priority-colored left borders, deadline countdown badges (red/amber/muted), and animated hover arrows
+- Engagement Status donut has a total-count center label and crisp cell separation
+- Return Types pie has % labels on slices plus a full legend with counts + percentages
+- AI Extraction Quality ring is larger (140px) with a soft emerald glow halo
+- Team Workload shows 🔥 capacity-warning badges, member roles, color-coded load counts, and vivid gradient progress bars (the actual fix for the previously-broken `indicatorClassName`)
+- Activity Feed is a proper timeline: colored type-specific icons on a vertical connector line, with better visual hierarchy between actor/time/client
+- All transitions are smooth (`transition-all`, `transition-colors`, `transition-transform`), all cards use consistent `rounded-xl` + `shadow-sm`, and section gaps are now `gap-5` for breathing room
+- Teal primary color scheme preserved throughout; no indigo/blue introduced as primary; responsive (mobile-first) layout maintained
+- Zero lint errors, zero new TS errors, no compile/runtime regressions
+
+---
+Task ID: 13
+Agent: Bulk Actions Builder
+Task: Add bulk selection and bulk actions to Engagements view
+
+Work Log:
+- Read worklog.md for full project context (API endpoints, design system, store, types, schema, shared components, existing engagements-view.tsx structure)
+- Inspected `/api/engagements/[id]` PATCH route — confirms it accepts `status`, `progress`, `priority`, `assignedToId`, `deadline`, `fee`, `notes` (Prisma `update` treats `undefined` as "no change")
+- Inspected `/api/engagements/[id]/send` POST route — sets PBC list `sentAt`/`sentVia`, updates engagement status to 'pbc_sent', marks workflow steps, logs an activity
+- Verified `sonner` exposes `toast.warning` (used for partial-failure notifications)
+- Made targeted edits to `src/components/views/engagements-view.tsx` (no full rewrite — preserved all existing functionality):
+  1. **Imports**: added `Checkbox` from `@/components/ui/checkbox` and 6 new lucide icons (`CheckSquare`, `UserPlus`, `Send`, `Download`, `Archive`, `Flag`)
+  2. **Module-level helper**: added `exportCsv(rows: EngagementRow[])` that builds a 9-column CSV (Client, Type, Tax Year, Status, Priority, Progress, Deadline, Fee, Assigned To), escapes quotes, creates a Blob, and triggers a browser download as `taxdox-engagements-export-{timestamp}.csv`. Placed after `formatFee` and before the types section (type-only reference to `EngagementRow` works fine because interfaces are in scope at compile time)
+  3. **New state** (added after the existing form state): `selectionMode`, `selectedIds: Set<string>`, `bulkAssignOpen`, `bulkAssignToId`, `bulkPriorityOpen`, `bulkPriority`, `bulkSendOpen`, `bulkArchiveOpen`, `bulkBusy`, `bulkSending`, `bulkSendProgress: {sent, total} | null`
+  4. **Helpers + handlers** (added between `handleSubmit` and the render section):
+     - `refreshEngagements()` — re-fetches `/api/engagements` only (clients/team don't change)
+     - `toggleSelection(id)` — immutable Set update
+     - `selectAll()` — selects all `visibleEngagements` (respects current filters)
+     - `deselectAll()`, `exitSelectionMode()` — clears selection
+     - `eligibleSendCount` useMemo — derived count of selected engagements with status 'pbc_sent' or 'collecting'
+     - `openBulkAssign()` / `confirmBulkAssign()` — resolves User ID via `userIdByEmail[tm.email]`, then `Promise.allSettled` PATCH each engagement with `{ assignedToId: userId }`, success/partial toast, refresh
+     - `openBulkSend()` / `confirmBulkSend()` — gates on `eligibleSendCount`, iterates eligible engagements sequentially (with `bulkSendProgress` updates), POST `/api/engagements/{id}/send` with `{ via: 'email' }`, success/partial toast, refresh
+     - `openBulkPriority()` / `confirmBulkPriority()` — Promise.allSettled PATCH each with `{ priority: bulkPriority }`, success/partial toast, refresh
+     - `bulkExport()` — filters selected engagements, calls `exportCsv()`, success toast
+     - `confirmBulkArchive()` — Promise.allSettled PATCH each with `{ status: 'done', progress: 100 }`, success/partial toast, exits selection mode, refresh
+  5. **Header toolbar** — replaced the single "New Engagement" button with a button group containing:
+     - When in selection mode: "Select All", "Deselect All" (disabled when 0 selected), "Exit Select" (default variant)
+     - When NOT in selection mode: "Select" (outline variant) + "New Engagement" (primary, preserved from original)
+     - Added `pb-28` to main container when `selectionMode && selectedIds.size > 0` to prevent the fixed bulk action bar from covering content
+  6. **Card grid** — passes `selectionMode`, `selected={selectedIds.has(e.id)}`, and `onToggleSelect={toggleSelection}` to each `EngagementCard`. The `onClick` is now conditional: in selection mode it toggles selection; otherwise it calls `openEngagement(e.id)` (existing behavior preserved)
+  7. **EngagementCard** — added optional `selectionMode`, `selected`, `onToggleSelect` props; the card's div className conditionally applies `border-primary ring-2 ring-primary/20` when selected. When in selection mode, a `<Checkbox>` renders absolutely-positioned in the top-left corner (`absolute left-3 top-3 z-10`) with `onClick={(e) => e.stopPropagation()}` so it doesn't trigger the card's onClick. The top row of the card adds `pl-7` left padding in selection mode so content doesn't overlap the checkbox
+  8. **Bulk Action Bar** — fixed-position bar at the bottom (`fixed bottom-0 left-0 right-0 z-40 lg:left-64`) with backdrop-blur background, shows: "{n} selected" label, 5 action buttons (Assign..., Send PBC Reminders, Change Priority, Export CSV, Mark Done), and a "Cancel" ghost button on the right. Only renders when `selectionMode && selectedIds.size > 0`
+  9. **4 Bulk Action Dialogs** (shadcn `<Dialog>`, `sm:max-w-md`):
+     - **Bulk Assign**: heading + paragraph with count + team-member `<Select>` (with note about User ID resolution) + Cancel/Assign buttons (Assign disabled until team member selected; spinner during submit)
+     - **Bulk Send PBC Reminders**: confirmation paragraph with `eligibleSendCount` + note about eligible statuses (with amber warning if some selected are not eligible); switches to a progress bar view (`{sent} / {total}` + teal progress fill) during sending; Cancel/Send Reminders footer hidden while sending
+     - **Bulk Change Priority**: heading + count paragraph + priority `<Select>` (high/medium/low) + Cancel/Update Priority buttons
+     - **Bulk Archive**: heading + count paragraph + amber "cannot be easily undone" warning + Cancel/Mark {n} as Completed buttons
+
+- All design uses the teal primary color scheme (no indigo/blue as primary) — confirmed via the existing `border-primary`, `bg-primary`, `ring-primary/20` tokens
+- Lucide icons throughout (`CheckSquare`, `UserPlus`, `Send`, `Download`, `Archive`, `Flag`, `X`, `Loader2`)
+- Dark mode supported via existing tokens (no new color values introduced)
+- Existing functionality fully preserved: stats cards, tabs (All/Active/Completed), search, type/status/priority filters, card content (client, type, badges, progress, doc/pbc/message counts, deadline pill, fee), New Engagement dialog, skeleton, empty state
+
+- Ran `bun run lint` — exit 0, ZERO errors, ZERO warnings (clean)
+- Ran `npx tsc --noEmit --skipLibCheck` — ZERO errors in engagements-view.tsx (only pre-existing errors in unrelated files: examples/, prisma/seed.ts, skills/, api/ai/extract/route.ts)
+- Verified dev.log: `✓ Compiled` entries, no `⨯` errors, no "Module not found" errors for engagements-view. All API calls returned 200 (2× POST /send, 2× PATCH, multiple GET /api/engagements refetches)
+- Visual QA with agent-browser end-to-end:
+  * Opened Engagements view → saw "Select" outline button + "New Engagement" primary button
+  * Clicked "Select" → toolbar switched to "Select All" + "Deselect All" (disabled) + "Exit Select" (teal primary); each engagement card showed a checkbox in the top-left corner
+  * Checked 2 cards (Maple Leaf Consulting, Thames Enterprises) → checkboxes turned teal, both cards got a teal border + ring highlight, "Deselect All" enabled, fixed bottom bulk action bar appeared with "{2} selected" + 5 action buttons + Cancel
+  * Clicked "Export CSV" → toast "Exported 2 engagements to CSV" (CSV download triggered in browser)
+  * Clicked "Send PBC Reminders" → confirmation dialog "Send PBC reminders to 2 eligible clients via email?" appeared; clicked "Send Reminders" → progress bar appeared briefly → dialog closed → toast "Sent 2 PBC reminders · Clients will receive an email with their PBC list link." (verified 2× POST /api/engagements/{id}/send returned 200 in dev.log)
+  * Clicked "Change Priority" → dialog appeared with priority select defaulting to Medium; selected "High" and clicked "Update Priority" → dialog closed → both cards refreshed showing "High" priority badge (verified 2× PATCH returned 200 in dev.log)
+  * Clicked "Mark Done" → confirmation dialog appeared with warning; clicked "Cancel" (preserved test data)
+  * Clicked "Exit Select" → exited selection mode, checkboxes disappeared, toolbar returned to "Select" + "New Engagement", bulk action bar gone
+
+Stage Summary:
+- Engagements view now supports full bulk selection + 5 bulk actions: Assign, Send PBC Reminders, Change Priority, Export CSV, Mark Done
+- Selection mode is entered/exited via a "Select" toggle button in the toolbar; "Select All" / "Deselect All" / "Exit Select" appear in selection mode
+- Each engagement card shows a checkbox (top-left corner) when in selection mode; selected cards get a teal border + ring highlight
+- Fixed-position bulk action bar appears at the bottom of the screen with action count and 5 bulk action buttons + Cancel
+- All destructive/impactful operations (Bulk Send, Bulk Archive) require confirmation dialogs; Bulk Send shows a live progress bar during sending
+- Bulk Assign resolves team member → User ID via the existing `userIdByEmail` map (built from existing engagements' assignedTo.email → id); shows a helpful error toast if no User ID can be resolved
+- All bulk PATCH/POST operations use `Promise.allSettled` (parallel where possible) with success/partial-failure toasts and a `refreshEngagements()` refetch after completion
+- CSV export uses 9 columns matching the spec (Client, Type, Tax Year, Status, Priority, Progress, Deadline, Fee, Assigned To) with proper quote escaping
+- Zero lint errors, zero TypeScript errors in engagements-view.tsx, dev server compiles cleanly, all interactions verified end-to-end via agent-browser
+- All existing functionality preserved (search, filters, tabs, stats cards, New Engagement dialog, skeleton, empty state, card design)
+
+---
+Task ID: CRON-1
+Agent: Main (Claude) — webDevReview cron round 1
+Task: QA assessment, bug fix, and new feature development
+
+## Current Project Status Assessment
+The TaxDox AI platform was in a stable, production-ready state with all 9 views functional. QA testing via agent-browser + VLM (vision language model) analysis identified:
+- 1 real data bug (Reports team performance showing $0 revenue)
+- Non-functional UI elements (bell icon, ⌘K search bar)
+- Visual polish opportunities (dashboard hierarchy, spacing)
+
+## Completed Modifications
+
+### Bug Fix: Reports Team Performance Revenue
+- **Root cause**: Engagements were assigned to `User` records via `assignedToId`, but team performance was computed from `TeamMember` records. The seed assigned ALL engagements to one User (Sarah Chen), and the reports API matched by `assignedToId === teamMember.id` (comparing User IDs to TeamMember IDs — always false).
+- **Fix 1** (seed): Created User records for each of the 6 team members; assigned engagements to the correct User based on `assignedIdx` instead of always using Sarah Chen's ID. Also fixed workflow `assignedToId` to use the correct user.
+- **Fix 2** (API): Updated `/api/reports` to match team members to engagements by `assignedTo.name === teamMember.name` (since User and TeamMember share names).
+- **Result**: Team performance now shows real distributed data — Sarah Chen: 3 eng/$17,100, Michael Torres: 3 eng/$10,500, Lisa Park: 2 eng/$2,300, James Okafor: 2 eng/$8,100, Priya Sharma: 2 eng/$5,750.
+
+### New Feature: Command Palette (⌘K)
+- Global ⌘K/Ctrl+K keyboard shortcut opens a premium Linear/Raycast-style command palette
+- 7 navigation commands (Dashboard, Clients, Engagements, Documents, Reports, Client Portal, Settings) with shortcut hints
+- 6 quick actions (New Engagement, New Client, Upload Document, Send PBC Reminders, Export Reports, Toggle Theme)
+- Debounced search (300ms) across clients, engagements, and documents with grouped results
+- Full keyboard navigation (↑/↓/Enter/Escape) with scrollIntoView
+- Zustand store integration (`commandPaletteOpen` state)
+- Search bar in header is now clickable to open the palette
+- **Verified**: Searched "acme" → found 1 client, 1 engagement, 6 documents
+
+### New Feature: Notifications Dropdown Panel
+- New `/api/notifications` endpoint generates 6 notification types from real data:
+  - Deadlines (high/red) — engagements due within 7 days or overdue
+  - Reviews (medium/amber) — documents with confidence < 90%
+  - PBC pending (medium/amber) — PBC items pending > 3 days
+  - Uploads (low/blue) — recent upload activities
+  - AI extracts (low/teal) — recent extraction activities
+  - Messages (high/teal) — unread client messages
+- Bell icon in header now opens a popover panel with:
+  - Tabs: All / Unread / Mentions
+  - Priority-colored icons, relative timestamps, unread dots
+  - "Mark all read" button with localStorage persistence
+  - Click navigates to relevant engagement/document
+  - 62 notifications generated from seed data
+
+### Visual Polish: Dashboard Improvements
+- Hero section: gradient welcome card with today's date + inline quick-stats
+- Stat cards: hover lift effects, accent stripes, red ring on "Needs Attention" when > 0
+- Recent Engagements: larger progress rings (52px), priority-colored left borders, deadline countdown badges, hover animations
+- Charts: larger pie charts with center labels, percentage labels, enhanced legends
+- AI Quality ring: 140px with emerald glow halo
+- Team Workload: flame icon for ≥90% utilization, role labels, custom gradient progress bars
+- Activity Feed: type-specific colored icons, vertical timeline line, better spacing
+- VLM rating improved from issues-list to **8/10**
+
+### New Feature: Engagement Bulk Actions
+- Selection mode toggle with checkboxes on each engagement card
+- "Select All" / "Deselect All" controls
+- Fixed bottom action bar showing selected count + 5 bulk actions:
+  1. **Bulk Assign** — assign selected engagements to a team member
+  2. **Send PBC Reminders** — batch send PBC requests with progress bar
+  3. **Change Priority** — bulk update high/medium/low
+  4. **Export CSV** — download selected engagements as CSV
+  5. **Mark Done** — bulk complete engagements
+- All actions use Promise.allSettled with success/partial-failure toasts
+- Confirmation dialogs for destructive operations
+- **Verified**: Selected 2 cards → exported CSV → success toast "Exported 2 engagements to CSV"
+
+## Verification Results
+- `bun run lint` — 0 errors, 0 warnings (clean)
+- Dev server — compiles cleanly, no runtime errors
+- agent-browser QA — all new features tested and working:
+  - Command Palette: opens via ⌘K and search bar click, search returns grouped results
+  - Notifications: 62 real notifications, tabs work, mark-all-read works
+  - Dashboard: hero section, improved charts, better spacing (8/10 VLM rating)
+  - Bulk Actions: selection mode, checkboxes, action bar, CSV export all functional
+  - Reports: team performance shows real revenue ($17,100, $10,500, etc.)
+
+## Unresolved Issues / Next Phase Recommendations
+1. **Dashboard minor polish**: "Needs Attention" icon could be standardized; upcoming deadlines could have bolder client names; activity timestamps could be larger
+2. **Command Palette**: Quick actions (New Engagement, New Client) currently navigate to the view but don't auto-open the creation dialog — could add a `pendingAction` store field
+3. **Notifications**: Read state is localStorage-based — could add a proper notifications table with server-side read tracking
+4. **Bulk Actions**: Could add optimistic UI updates instead of refetching for faster perceived performance
+5. **Future features to consider**: Tax rules engine reference view, document validation/completeness checks, multi-country tax support UI, client communication templates, deadline calendar view
+
+Priority for next round: Continue adding depth to existing features and consider the tax rules engine view, which is a core differentiator mentioned in the spec but not yet implemented in the UI.

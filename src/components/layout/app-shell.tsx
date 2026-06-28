@@ -14,7 +14,6 @@ import {
   UserCircle,
   Moon,
   Sun,
-  Bell,
   Search,
   ChevronRight,
   PanelLeftClose,
@@ -24,8 +23,8 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { CommandPalette } from '@/components/layout/command-palette'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +39,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { NotificationsPanel } from '@/components/layout/notifications-panel'
 
 interface NavItem {
   key: string
@@ -65,6 +65,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useAppStore((s) => s.navigate)
   const currentView = useAppStore((s) => s.currentView)
   const setClientPortalMode = useAppStore((s) => s.setClientPortalMode)
+  const setCommandPalette = useAppStore((s) => s.setCommandPalette)
+  const openCommandPalette = () => setCommandPalette(true)
 
   const handleNav = (item: NavItem) => {
     navigate(item.view)
@@ -173,30 +175,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <PanelLeft className="h-5 w-5" />
           </Button>
 
-          {/* Search */}
-          <div className="relative hidden flex-1 max-w-md md:block">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search clients, engagements, documents..."
-              className="h-9 pl-9 pr-4"
-            />
-            <kbd className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground lg:block">
+          {/* Search — opens the ⌘K command palette */}
+          <button
+            type="button"
+            onClick={openCommandPalette}
+            className="relative hidden flex-1 max-w-md items-center gap-2 rounded-md border border-input bg-transparent px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 md:flex h-9"
+            aria-label="Open command palette"
+          >
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate">Search clients, engagements, documents…</span>
+            <kbd className="hidden shrink-0 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground lg:block">
               ⌘K
             </kbd>
-          </div>
+          </button>
 
           <div className="ml-auto flex items-center gap-2">
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9">
-                    <Bell className="h-4 w-4" />
-                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Notifications</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <NotificationsPanel />
 
             <TooltipProvider delayDuration={200}>
               <Tooltip>
@@ -249,6 +243,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Content */}
         <main className="flex-1 overflow-x-hidden">{children}</main>
       </div>
+
+      {/* Global ⌘K command palette */}
+      <CommandPalette />
     </div>
   )
 }

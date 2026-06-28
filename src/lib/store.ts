@@ -12,6 +12,9 @@ interface AppState {
   clientPortalMode: boolean
   sidebarCollapsed: boolean
 
+  // Command palette
+  commandPaletteOpen: boolean
+
   // Actions
   setView: (view: ViewKey) => void
   openEngagement: (id: string) => void
@@ -20,6 +23,8 @@ interface AppState {
   setClientPortalMode: (mode: boolean) => void
   toggleSidebar: () => void
   navigate: (view: ViewKey) => void
+  toggleCommandPalette: () => void
+  setCommandPalette: (open: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -66,4 +71,9 @@ export const useAppStore = create<AppState>((set) => ({
   setClientPortalMode: (mode) => set({ clientPortalMode: mode }),
 
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+
+  commandPaletteOpen: false,
+  toggleCommandPalette: () =>
+    set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
+  setCommandPalette: (open) => set({ commandPaletteOpen: open }),
 }))

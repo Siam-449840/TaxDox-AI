@@ -69,9 +69,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Team performance
+  // Team performance — match team members to engagements by name
+  // (engagements.assignedTo is a User record; teamMembers are TeamMember records;
+  //  they share the same names in seed data)
   const teamPerf = teamMembers.map((t) => {
-    const memberEngagements = engagements.filter((e) => e.assignedToId === t.id)
+    const memberEngagements = engagements.filter(
+      (e) => e.assignedTo?.name === t.name
+    )
     return {
       name: t.name,
       role: t.role,

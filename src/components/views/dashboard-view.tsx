@@ -9,7 +9,6 @@ import {
   Users,
   FileText,
   DollarSign,
-  TrendingUp,
   ArrowRight,
   Activity as ActivityIcon,
   CalendarClock,
@@ -17,6 +16,8 @@ import {
   Target,
   Plus,
   BarChart3,
+  Sparkles,
+  Flame,
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { StatCard } from '@/components/shared/stat-card'
@@ -26,7 +27,6 @@ import { ProgressRing } from '@/components/shared/progress-ring'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   AreaChart,
@@ -42,7 +42,7 @@ import {
   Legend,
 } from 'recharts'
 import { cn } from '@/lib/utils'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format } from 'date-fns'
 
 interface DashboardData {
   stats: {
@@ -115,14 +115,67 @@ const STATUS_COLORS: Record<string, string> = {
 
 const TYPE_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
 
-const ACTIVITY_ICONS: Record<string, typeof ActivityIcon> = {
-  upload: FileText,
-  classify: Zap,
-  extract: Target,
-  verify: CheckCircle2,
-  send: FileText,
-  message: Users,
-  status_change: ActivityIcon,
+const ACTIVITY_STYLES: Record<
+  string,
+  { icon: typeof ActivityIcon; bg: string; text: string }
+> = {
+  upload: {
+    icon: FileText,
+    bg: 'bg-blue-50 dark:bg-blue-950/40',
+    text: 'text-blue-600 dark:text-blue-400',
+  },
+  classify: {
+    icon: Zap,
+    bg: 'bg-violet-50 dark:bg-violet-950/40',
+    text: 'text-violet-600 dark:text-violet-400',
+  },
+  extract: {
+    icon: Target,
+    bg: 'bg-teal-50 dark:bg-teal-950/40',
+    text: 'text-teal-600 dark:text-teal-400',
+  },
+  verify: {
+    icon: CheckCircle2,
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    text: 'text-emerald-600 dark:text-emerald-400',
+  },
+  send: {
+    icon: FileText,
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    text: 'text-amber-600 dark:text-amber-400',
+  },
+  message: {
+    icon: Users,
+    bg: 'bg-sky-50 dark:bg-sky-950/40',
+    text: 'text-sky-600 dark:text-sky-400',
+  },
+  status_change: {
+    icon: ActivityIcon,
+    bg: 'bg-slate-100 dark:bg-slate-800/60',
+    text: 'text-slate-600 dark:text-slate-300',
+  },
+}
+
+function teamColorHex(color: string): string {
+  switch (color) {
+    case 'emerald':
+      return '#10b981'
+    case 'blue':
+      return '#3b82f6'
+    case 'amber':
+      return '#f59e0b'
+    case 'violet':
+      return '#8b5cf6'
+    case 'cyan':
+      return '#06b6d4'
+    default:
+      return '#f43f5e'
+  }
+}
+
+function daysUntil(dateStr: string): number {
+  const ms = new Date(dateStr).getTime() - Date.now()
+  return Math.ceil(ms / (1000 * 60 * 60 * 24))
 }
 
 export function DashboardView() {
@@ -144,13 +197,13 @@ export function DashboardView() {
   if (loading || !data) {
     return (
       <div className="space-y-6 p-6">
-        <div className="h-8 w-64 animate-pulse rounded-lg bg-muted" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="h-28 w-full animate-pulse rounded-xl bg-muted" />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
           ))}
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-64 animate-pulse rounded-xl bg-muted" />
           ))}
@@ -173,40 +226,80 @@ export function DashboardView() {
 
   return (
     <div className="space-y-6 p-4 lg:p-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Welcome back, Sarah</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Here's what's happening at Meridian CPA Group today.
-          </p>
+      {/* Hero header */}
+      <div className="relative overflow-hidden rounded-xl border bg-gradient-primary p-5 text-white shadow-sm sm:p-6">
+        {/* Decorative pattern */}
+        <div className="pointer-events-none absolute inset-0 opacity-30" aria-hidden>
+          <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/20 blur-3xl" />
+          <div className="absolute -bottom-24 right-32 h-48 w-48 rounded-full bg-cyan-300/30 blur-3xl" />
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate('reports')}>
-            <BarChart3 className="mr-1.5 h-4 w-4" />
-            View Reports
-          </Button>
-          <Button size="sm" onClick={() => navigate('engagements')}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Engagement
-          </Button>
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-white/80" />
+              <p className="text-xs font-medium uppercase tracking-wider text-white/80">
+                {format(new Date(), 'EEEE, MMMM d')}
+              </p>
+            </div>
+            <h1 className="mt-1.5 text-2xl font-bold tracking-tight sm:text-3xl">
+              Welcome back, Sarah
+            </h1>
+            <p className="mt-1.5 text-sm text-white/85">
+              {data.stats.alerts > 0 ? (
+                <>
+                  <span className="font-semibold text-white">
+                    {data.stats.alerts} engagement{data.stats.alerts === 1 ? '' : 's'}
+                  </span>{' '}
+                  need attention today ·{' '}
+                  <span className="font-semibold text-white">{data.stats.active}</span> active ·{' '}
+                  <span className="font-semibold text-white">{data.stats.pending}</span> pending collection
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-white">{data.stats.active}</span> active engagements ·{' '}
+                  <span className="font-semibold text-white">{data.stats.pending}</span> pending collection · all caught up
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('reports')}
+              className="border-0 bg-white/15 text-white backdrop-blur-sm hover:bg-white/25 hover:text-white"
+            >
+              <BarChart3 className="mr-1.5 h-4 w-4" />
+              View Reports
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => navigate('engagements')}
+              className="border-0 bg-white text-primary shadow-sm hover:bg-white/90 hover:text-primary"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Engagement
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
         <StatCard
           label="Active Engagements"
           value={data.stats.active}
           icon={LayoutDashboard}
           trend={{ value: 12, label: 'vs last month' }}
           accent="primary"
+          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
         />
         <StatCard
           label="Pending Collection"
           value={data.stats.pending}
           icon={Clock}
           accent="warning"
+          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
         />
         <StatCard
           label="Completed"
@@ -214,18 +307,24 @@ export function DashboardView() {
           icon={CheckCircle2}
           trend={{ value: 8, label: 'vs last month' }}
           accent="success"
+          className="transition-all hover:-translate-y-0.5 hover:shadow-md"
         />
         <StatCard
           label="Needs Attention"
           value={data.stats.alerts}
           icon={AlertTriangle}
           accent="danger"
+          className={cn(
+            'transition-all hover:-translate-y-0.5 hover:shadow-md',
+            data.stats.alerts > 0 && 'ring-2 ring-red-400/60 ring-offset-2 ring-offset-background'
+          )}
         />
       </div>
 
       {/* Secondary stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-        <Card className="flex items-center gap-3 p-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
+        <Card className="group relative flex items-center gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <span className="absolute left-0 top-0 h-full w-1 bg-blue-500" aria-hidden />
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
             <Users className="h-5 w-5" />
           </div>
@@ -234,7 +333,8 @@ export function DashboardView() {
             <p className="text-xs text-muted-foreground">Total Clients</p>
           </div>
         </Card>
-        <Card className="flex items-center gap-3 p-4">
+        <Card className="group relative flex items-center gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <span className="absolute left-0 top-0 h-full w-1 bg-violet-500" aria-hidden />
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400">
             <FileText className="h-5 w-5" />
           </div>
@@ -243,7 +343,8 @@ export function DashboardView() {
             <p className="text-xs text-muted-foreground">Documents</p>
           </div>
         </Card>
-        <Card className="flex items-center gap-3 p-4">
+        <Card className="group relative flex items-center gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <span className="absolute left-0 top-0 h-full w-1 bg-emerald-500" aria-hidden />
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
             <Target className="h-5 w-5" />
           </div>
@@ -252,7 +353,8 @@ export function DashboardView() {
             <p className="text-xs text-muted-foreground">AI Accuracy</p>
           </div>
         </Card>
-        <Card className="flex items-center gap-3 p-4">
+        <Card className="group relative flex items-center gap-3 overflow-hidden p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <span className="absolute left-0 top-0 h-full w-1 bg-amber-500" aria-hidden />
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
             <DollarSign className="h-5 w-5" />
           </div>
@@ -266,7 +368,7 @@ export function DashboardView() {
       </div>
 
       {/* Main grid */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Recent Engagements */}
         <Card className="lg:col-span-2">
           <div className="flex items-center justify-between border-b p-4">
@@ -274,37 +376,67 @@ export function DashboardView() {
               <h2 className="text-base font-semibold">Recent Engagements</h2>
               <p className="text-xs text-muted-foreground">Latest tax preparation activity</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate('engagements')}>
+            <Button variant="ghost" size="sm" onClick={() => navigate('engagements')} className="transition-colors">
               View all
               <ArrowRight className="ml-1 h-3.5 w-3.5" />
             </Button>
           </div>
           <div className="divide-y">
-            {data.recentEngagements.map((e) => (
-              <button
-                key={e.id}
-                onClick={() => openEngagement(e.id)}
-                className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-muted/50"
-              >
-                <ProgressRing value={e.progress} size={44} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-semibold">{e.clientName}</p>
-                    <Badge variant="outline" className="shrink-0 text-[10px]">
-                      {e.engagementType} · {e.taxYear}
+            {data.recentEngagements.map((e) => {
+              const d = daysUntil(e.deadline)
+              const hasDeadline = !Number.isNaN(d)
+              return (
+                <button
+                  key={e.id}
+                  onClick={() => openEngagement(e.id)}
+                  title={`${e.clientName} — ${e.engagementType} ${e.taxYear} · ${e.progress}% complete`}
+                  className={cn(
+                    'group flex w-full items-center gap-3 p-4 text-left transition-all hover:bg-muted/50',
+                    e.priority === 'high'
+                      ? 'border-l-2 border-l-red-400'
+                      : e.priority === 'medium'
+                        ? 'border-l-2 border-l-amber-400'
+                        : 'border-l-2 border-l-slate-200 dark:border-l-slate-700'
+                  )}
+                >
+                  <ProgressRing value={e.progress} size={52} strokeWidth={5} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold">{e.clientName}</p>
+                      <Badge variant="outline" className="shrink-0 text-[10px]">
+                        {e.engagementType} · {e.taxYear}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <StatusBadge status={e.status} />
+                      <PriorityBadge priority={e.priority as 'high' | 'medium' | 'low'} />
+                      {e.assignedTo && (
+                        <span className="text-xs text-muted-foreground">· {e.assignedTo}</span>
+                      )}
+                    </div>
+                  </div>
+                  {hasDeadline && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'shrink-0 border-0 text-[10px] font-semibold tabular-nums',
+                        d < 0
+                          ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
+                          : d <= 3
+                            ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
+                            : d <= 7
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                              : 'bg-muted text-muted-foreground'
+                      )}
+                      title={`Due ${format(new Date(e.deadline), 'MMM d, yyyy')}`}
+                    >
+                      {d < 0 ? `${Math.abs(d)}d overdue` : `${d}d left`}
                     </Badge>
-                  </div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <StatusBadge status={e.status} />
-                    <PriorityBadge priority={e.priority as 'high' | 'medium' | 'low'} />
-                    {e.assignedTo && (
-                      <span className="text-xs text-muted-foreground">· {e.assignedTo}</span>
-                    )}
-                  </div>
-                </div>
-                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </button>
-            ))}
+                  )}
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </button>
+              )
+            })}
           </div>
         </Card>
 
@@ -324,11 +456,12 @@ export function DashboardView() {
               <button
                 key={d.id}
                 onClick={() => openEngagement(d.id)}
-                className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-muted/50"
+                title={`${d.clientName} — ${d.engagementType} · ${d.progress}% complete · ${d.daysLeft}d left`}
+                className="group flex w-full items-center gap-3 p-4 text-left transition-all hover:bg-muted/50"
               >
                 <div
                   className={cn(
-                    'flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg',
+                    'flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg transition-transform group-hover:scale-105',
                     d.daysLeft <= 3
                       ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400'
                       : d.daysLeft <= 7
@@ -346,6 +479,7 @@ export function DashboardView() {
                     <span className="text-xs text-muted-foreground">{d.progress}% done</span>
                   </div>
                 </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
             ))}
           </div>
@@ -353,51 +487,69 @@ export function DashboardView() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Status Distribution */}
-        <Card className="p-4">
+        <Card className="p-5">
           <h2 className="text-sm font-semibold">Engagement Status</h2>
           <p className="mb-3 text-xs text-muted-foreground">Current pipeline distribution</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={statusData}
-                cx="50%"
-                cy="50%"
-                innerRadius={45}
-                outerRadius={75}
-                paddingAngle={2}
-                dataKey="value"
-              >
-                {statusData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  borderRadius: 8,
-                  border: '1px solid hsl(var(--border))',
-                  fontSize: 12,
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <div className="relative">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={statusData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={52}
+                  outerRadius={84}
+                  paddingAngle={2}
+                  dataKey="value"
+                  stroke="var(--card)"
+                  strokeWidth={2}
+                >
+                  {statusData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    fontSize: 12,
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div
+              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
+              aria-hidden
+            >
+              <span className="text-2xl font-bold tabular-nums">
+                {statusData.reduce((sum, s) => sum + s.value, 0)}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Total
+              </span>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5">
             {statusData.map((s) => (
-              <div key={s.name} className="flex items-center gap-1.5 text-xs">
+              <div
+                key={s.name}
+                className="flex items-center gap-1.5 text-xs transition-colors hover:bg-muted/40 rounded px-1 py-0.5"
+              >
                 <span
-                  className="h-2 w-2 rounded-full"
+                  className="h-2 w-2 shrink-0 rounded-full"
                   style={{ backgroundColor: s.color }}
                 />
                 <span className="capitalize text-muted-foreground">{s.name.replace('_', ' ')}</span>
-                <span className="ml-auto font-semibold">{s.value}</span>
+                <span className="ml-auto font-semibold tabular-nums">{s.value}</span>
               </div>
             ))}
           </div>
         </Card>
 
         {/* Return Type Distribution */}
-        <Card className="p-4">
+        <Card className="p-5">
           <h2 className="text-sm font-semibold">Return Types</h2>
           <p className="mb-3 text-xs text-muted-foreground">Engagement mix by form</p>
           <ResponsiveContainer width="100%" height={200}>
@@ -406,11 +558,15 @@ export function DashboardView() {
                 data={typeData}
                 cx="50%"
                 cy="50%"
-                outerRadius={75}
+                outerRadius={72}
                 dataKey="value"
-                label={({ name, value }) => `${name}: ${value}`}
+                label={({ percent }) =>
+                  `${((percent as number) * 100).toFixed(0)}%`
+                }
                 labelLine={false}
                 fontSize={11}
+                stroke="var(--card)"
+                strokeWidth={2}
               >
                 {typeData.map((entry, i) => (
                   <Cell key={i} fill={entry.color} />
@@ -419,36 +575,64 @@ export function DashboardView() {
               <Tooltip
                 contentStyle={{
                   borderRadius: 8,
-                  border: '1px solid hsl(var(--border))',
+                  border: '1px solid var(--border)',
                   fontSize: 12,
                 }}
               />
             </PieChart>
           </ResponsiveContainer>
+          <div className="mt-3 space-y-1.5">
+            {typeData.map((t) => {
+              const total = typeData.reduce((sum, x) => sum + x.value, 0)
+              const pct = total > 0 ? Math.round((t.value / total) * 100) : 0
+              return (
+                <div
+                  key={t.name}
+                  className="flex items-center gap-2 rounded px-1 py-0.5 text-xs transition-colors hover:bg-muted/40"
+                >
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: t.color }}
+                  />
+                  <span className="font-medium">{t.name}</span>
+                  <span className="ml-auto tabular-nums text-muted-foreground">
+                    {t.value} · {pct}%
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </Card>
 
         {/* AI Extraction Stats */}
-        <Card className="p-4">
+        <Card className="p-5">
           <h2 className="text-sm font-semibold">AI Extraction Quality</h2>
           <p className="mb-3 text-xs text-muted-foreground">Confidence & verification</p>
-          <div className="flex flex-col items-center justify-center py-4">
-            <ProgressRing
-              value={data.stats.avgConfidence}
-              size={120}
-              strokeWidth={10}
-              color="#10b981"
-            />
+          <div className="relative flex flex-col items-center justify-center py-3">
+            <div className="relative flex items-center justify-center">
+              <div
+                className="absolute h-32 w-32 rounded-full bg-emerald-500/15 blur-3xl"
+                aria-hidden
+              />
+              <ProgressRing
+                value={data.stats.avgConfidence}
+                size={140}
+                strokeWidth={12}
+                color="#10b981"
+                className="relative"
+              />
+            </div>
             <p className="mt-3 text-xs text-muted-foreground">Average confidence</p>
           </div>
           <div className="grid grid-cols-2 gap-2 border-t pt-3">
             <div className="text-center">
-              <p className="text-lg font-bold text-emerald-600">
+              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
                 {data.stats.verifiedExtractions}
               </p>
               <p className="text-[10px] text-muted-foreground">Verified</p>
             </div>
             <div className="text-center">
-              <p className="text-lg font-bold text-amber-600">
+              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
                 {data.stats.totalExtractions - data.stats.verifiedExtractions}
               </p>
               <p className="text-[10px] text-muted-foreground">Needs Review</p>
@@ -458,61 +642,82 @@ export function DashboardView() {
       </div>
 
       {/* Team Workload + Activity */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Team Workload */}
-        <Card className="p-4">
+        <Card className="p-5">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold">Team Workload</h2>
               <p className="text-xs text-muted-foreground">Current capacity utilization</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate('settings')}>
+            <Button variant="ghost" size="sm" onClick={() => navigate('settings')} className="transition-colors">
               Manage
             </Button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {data.teamWorkload.map((t) => (
-              <div key={t.id} className="flex items-center gap-3">
+              <div
+                key={t.id}
+                title={`${t.name} — ${t.role}: ${t.currentLoad} of ${t.capacity} engagements (${t.utilization}% utilized)`}
+                className="group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50"
+              >
                 <div
-                  className={cn(
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white',
-                    `bg-${t.color}-500`
-                  )}
-                  style={{
-                    backgroundColor:
-                      t.color === 'emerald'
-                        ? '#10b981'
-                        : t.color === 'blue'
-                          ? '#3b82f6'
-                          : t.color === 'amber'
-                            ? '#f59e0b'
-                            : t.color === 'violet'
-                              ? '#8b5cf6'
-                              : t.color === 'cyan'
-                                ? '#06b6d4'
-                                : '#f43f5e',
-                  }}
+                  className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm"
+                  style={{ backgroundColor: teamColorHex(t.color) }}
                 >
                   {t.name.split(' ').map((n) => n[0]).join('')}
+                  {t.utilization >= 90 && (
+                    <span
+                      className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white ring-2 ring-card"
+                      title="At or near capacity"
+                    >
+                      <Flame className="h-2.5 w-2.5" />
+                    </span>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className="truncate text-sm font-medium">{t.name}</p>
-                    <span className="text-xs text-muted-foreground">
-                      {t.currentLoad}/{t.capacity}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{t.name}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{t.role}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {t.utilization >= 90 && <Flame className="h-3.5 w-3.5 text-red-500" />}
+                      <span
+                        className={cn(
+                          'text-xs font-medium tabular-nums',
+                          t.utilization >= 90
+                            ? 'text-red-600 dark:text-red-400'
+                            : t.utilization >= 75
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-muted-foreground'
+                        )}
+                      >
+                        {t.currentLoad}/{t.capacity}
+                      </span>
+                    </div>
                   </div>
-                  <Progress
-                    value={t.utilization}
-                    className="mt-1 h-1.5"
-                    indicatorClassName={
-                      t.utilization >= 90
-                        ? 'bg-red-500'
-                        : t.utilization >= 75
-                          ? 'bg-amber-500'
-                          : 'bg-emerald-500'
-                    }
-                  />
+                  <div
+                    className="relative mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-valuenow={t.utilization}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all duration-500',
+                        t.utilization >= 90
+                          ? 'bg-gradient-to-r from-red-500 to-rose-500'
+                          : t.utilization >= 75
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+                            : 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                      )}
+                      style={{
+                        width: `${Math.min(100, Math.max(0, t.utilization))}%`,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             ))}
@@ -520,23 +725,47 @@ export function DashboardView() {
         </Card>
 
         {/* Recent Activity */}
-        <Card className="p-4">
+        <Card className="p-5">
           <h2 className="text-sm font-semibold">Recent Activity</h2>
           <p className="mb-3 text-xs text-muted-foreground">Latest events across all engagements</p>
-          <ScrollArea className="h-[280px] pr-3">
-            <div className="space-y-3">
+          <ScrollArea className="h-[300px] pr-3">
+            <div className="relative space-y-4 pl-0.5">
+              {/* Vertical timeline line */}
+              {data.recentActivities.length > 1 && (
+                <div
+                  className="absolute left-[18px] top-4 bottom-4 w-px bg-border"
+                  aria-hidden
+                />
+              )}
               {data.recentActivities.map((a) => {
-                const Icon = ACTIVITY_ICONS[a.type] || ActivityIcon
+                const style = ACTIVITY_STYLES[a.type] || {
+                  icon: ActivityIcon,
+                  bg: 'bg-muted',
+                  text: 'text-muted-foreground',
+                }
+                const Icon = style.icon
                 return (
-                  <div key={a.id} className="flex gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
+                  <div key={a.id} className="relative flex gap-3">
+                    <div
+                      className={cn(
+                        'relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1 ring-border',
+                        style.bg
+                      )}
+                    >
+                      <Icon className={cn('h-4 w-4', style.text)} />
                     </div>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 pt-0.5">
                       <p className="text-sm leading-snug">{a.description}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {a.actor} · {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
-                        {a.clientName && ` · ${a.clientName}`}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground/70">{a.actor}</span>
+                        <span className="mx-1">·</span>
+                        <span>{formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}</span>
+                        {a.clientName && (
+                          <>
+                            <span className="mx-1">·</span>
+                            <span>{a.clientName}</span>
+                          </>
+                        )}
                       </p>
                     </div>
                   </div>

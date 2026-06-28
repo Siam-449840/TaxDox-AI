@@ -1,0 +1,980 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useEffect, useMemo, useState } from 'react'
+     4→     4→import {
+     5→     5→  Plus,
+     6→     6→  Search,
+     7→     7→  Filter,
+     8→     8→  FolderOpen,
+     9→     9→  Loader2,
+    10→    10→  Clock,
+    11→    11→  CheckCircle2,
+    12→    12→  AlertCircle,
+    13→    13→  FileText,
+    14→    14→  CalendarClock,
+    15→    15→  MessageSquare,
+    16→    16→  X,
+    17→    17→} from 'lucide-react'
+    18→    18→import { useAppStore } from '@/lib/store'
+    19→    19→import { StatCard } from '@/components/shared/stat-card'
+    20→    20→import { StatusBadge } from '@/components/shared/status-badge'
+    21→    21→import { PriorityBadge } from '@/components/shared/priority-badge'
+    22→    22→import { ENGAGEMENT_TYPES, CLIENT_TYPES } from '@/lib/constants'
+    23→    23→import { Card } from '@/components/ui/card'
+    24→    24→import { Button } from '@/components/ui/button'
+    25→    25→import { Input } from '@/components/ui/input'
+    26→    26→import { Label } from '@/components/ui/label'
+    27→    27→import { Textarea } from '@/components/ui/textarea'
+    28→    28→import { Skeleton } from '@/components/ui/skeleton'
+    29→    29→import {
+    30→    30→  Dialog,
+    31→    31→  DialogContent,
+    32→    32→  DialogHeader,
+    33→    33→  DialogTitle,
+    34→    34→  DialogFooter,
+    35→    35→} from '@/components/ui/dialog'
+    36→    36→import {
+    37→    37→  Select,
+    38→    38→  SelectContent,
+    39→    39→  SelectItem,
+    40→    40→  SelectTrigger,
+    41→    41→  SelectValue,
+    42→    42→} from '@/components/ui/select'
+    43→    43→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    44→    44→import { toast } from 'sonner'
+    45→    45→import { format, differenceInDays, isValid } from 'date-fns'
+    46→    46→import { cn } from '@/lib/utils'
+    47→    47→import type { Engagement, Priority, EngagementType } from '@/lib/types'
+    48→    48→
+    49→    49→/* ----------------------------- helpers & config ----------------------------- */
+    50→    50→
+    51→    51→const ENGAGEMENT_TYPE_COLORS: Record<string, string> = {
+    52→    52→  '1040': 'bg-teal-50 text-teal-700 ring-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:ring-teal-900',
+    53→    53→  '1065': 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900',
+    54→    54→  '1120': 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900',
+    55→    55→  '1120S': 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900',
+    56→    56→  '1041': 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900',
+    57→    57→}
+    58→    58→
+    59→    59→const TEAM_COLOR_HEX: Record<string, string> = {
+    60→    60→  emerald: '#10b981',
+    61→    61→  blue: '#3b82f6',
+    62→    62→  amber: '#f59e0b',
+    63→    63→  violet: '#8b5cf6',
+    64→    64→  cyan: '#06b6d4',
+    65→    65→  rose: '#f43f5e',
+    66→    66→  teal: '#14b8a6',
+    67→    67→}
+    68→    68→
+    69→    69→const STATUS_FILTER_OPTIONS = [
+    70→    70→  { value: 'all', label: 'All Statuses' },
+    71→    71→  { value: 'created', label: 'Created' },
+    72→    72→  { value: 'pbc_sent', label: 'PBC Sent' },
+    73→    73→  { value: 'collecting', label: 'Collecting' },
+    74→    74→  { value: 'processing', label: 'Processing' },
+    75→    75→  { value: 'review', label: 'In Review' },
+    76→    76→  { value: 'filing', label: 'Filing' },
+    77→    77→  { value: 'done', label: 'Completed' },
+    78→    78→]
+    79→    79→
+    80→    80→const PRIORITY_FILTER_OPTIONS = [
+    81→    81→  { value: 'all', label: 'All Priorities' },
+    82→    82→  { value: 'high', label: 'High' },
+    83→    83→  { value: 'medium', label: 'Medium' },
+    84→    84→  { value: 'low', label: 'Low' },
+    85→    85→]
+    86→    86→
+    87→    87→const ACTIVE_STATUSES = ['created', 'pbc_sent', 'collecting', 'processing', 'review', 'filing']
+    88→    88→
+    89→    89→function getInitials(name?: string) {
+    90→    90→  if (!name) return '?'
+    91→    91→  const parts = name.trim().split(/\s+/)
+    92→    92→  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+    93→    93→  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    94→    94→}
+    95→    95→
+    96→    96→function getProgressColor(value: number) {
+    97→    97→  if (value >= 100) return 'bg-emerald-500'
+    98→    98→  if (value >= 75) return 'bg-teal-500'
+    99→    99→  if (value >= 50) return 'bg-amber-500'
+   100→   100→  return 'bg-red-500'
+   101→   101→}
+   102→   102→
+   103→   103→function getProgressText(value: number) {
+   104→   104→  if (value >= 100) return 'text-emerald-600 dark:text-emerald-400'
+   105→   105→  if (value >= 75) return 'text-teal-600 dark:text-teal-400'
+   106→   106→  if (value >= 50) return 'text-amber-600 dark:text-amber-400'
+   107→   107→  return 'text-red-600 dark:text-red-400'
+   108→   108→}
+   109→   109→
+   110→   110→function getTeamColorHex(color?: string) {
+   111→   111→  if (!color) return '#64748b'
+   112→   112→  return TEAM_COLOR_HEX[color] || '#64748b'
+   113→   113→}
+   114→   114→
+   115→   115→function getDeadlineState(deadline?: string | null) {
+   116→   116→  if (!deadline) return null
+   117→   117→  const date = new Date(deadline)
+   118→   118→  if (!isValid(date)) return null
+   119→   119→  const days = differenceInDays(date, new Date())
+   120→   120→  let tone: 'red' | 'amber' | 'neutral' | 'done' = 'neutral'
+   121→   121→  if (days < 0) tone = 'red'
+   122→   122→  else if (days <= 3) tone = 'red'
+   123→   123→  else if (days <= 7) tone = 'amber'
+   124→   124→  return { date, days, tone }
+   125→   125→}
+   126→   126→
+   127→   127→function formatFee(value: number) {
+   128→   128→  return new Intl.NumberFormat('en-US', {
+   129→   129→    style: 'currency',
+   130→   130→    currency: 'USD',
+   131→   131→    maximumFractionDigits: 0,
+   132→   132→  }).format(value || 0)
+   133→   133→}
+   134→   134→
+   135→   135→/* --------------------------------- types --------------------------------- */
+   136→   136→
+   137→   137→interface EngagementRow extends Omit<Engagement, 'client' | 'assignedTo' | '_count'> {
+   138→   138→  client?: {
+   139→   139→    id: string
+   140→   140→    name: string
+   141→   141→    email: string
+   142→   142→    clientType: string
+   143→   143→  } | null
+   144→   144→  assignedTo?: {
+   145→   145→    id: string
+   146→   146→    name: string
+   147→   147→    email?: string
+   148→   148→    role: string
+   149→   149→    color?: string
+   150→   150→  } | null
+   151→   151→  _count?: {
+   152→   152→    documents: number
+   153→   153→    pbcItems: number
+   154→   154→    pbcCompleted: number
+   155→   155→    messages: number
+   156→   156→  }
+   157→   157→}
+   158→   158→
+   159→   159→interface ClientOption {
+   160→   160→  id: string
+   161→   161→  name: string
+   162→   162→  firmId: string
+   163→   163→  email?: string
+   164→   164→  clientType: string
+   165→   165→}
+   166→   166→
+   167→   167→interface TeamOption {
+   168→   168→  id: string
+   169→   169→  name: string
+   170→   170→  role: string
+   171→   171→  email?: string
+   172→   172→  color?: string
+   173→   173→}
+   174→   174→
+   175→   175→type ViewTab = 'all' | 'active' | 'completed'
+   176→   176→
+   177→   177→interface NewEngagementForm {
+   178→   178→  clientId: string
+   179→   179→  engagementType: EngagementType | ''
+   180→   180→  taxYear: string
+   181→   181→  priority: Priority
+   182→   182→  deadline: string
+   183→   183→  fee: string
+   184→   184→  assignedToId: string
+   185→   185→  notes: string
+   186→   186→}
+   187→   187→
+   188→   188→const INITIAL_FORM: NewEngagementForm = {
+   189→   189→  clientId: '',
+   190→   190→  engagementType: '',
+   191→   191→  taxYear: '2025',
+   192→   192→  priority: 'medium',
+   193→   193→  deadline: '',
+   194→   194→  fee: '',
+   195→   195→  assignedToId: '',
+   196→   196→  notes: '',
+   197→   197→}
+   198→   198→
+   199→   199→/* ------------------------------ main component ------------------------------ */
+   200→   200→
+   201→   201→export function EngagementsView() {
+   202→   202→  const openEngagement = useAppStore((s) => s.openEngagement)
+   203→   203→
+   204→   204→  const [engagements, setEngagements] = useState<EngagementRow[]>([])
+   205→   205→  const [clients, setClients] = useState<ClientOption[]>([])
+   206→   206→  const [team, setTeam] = useState<TeamOption[]>([])
+   207→   207→
+   208→   208→  const [loading, setLoading] = useState(true)
+   209→   209→  const [dialogOpen, setDialogOpen] = useState(false)
+   210→   210→  const [submitting, setSubmitting] = useState(false)
+   211→   211→
+   212→   212→  const [viewTab, setViewTab] = useState<ViewTab>('all')
+   213→   213→  const [search, setSearch] = useState('')
+   214→   214→  const [typeFilter, setTypeFilter] = useState<string>('all')
+   215→   215→  const [statusFilter, setStatusFilter] = useState<string>('all')
+   216→   216→  const [priorityFilter, setPriorityFilter] = useState<string>('all')
+   217→   217→
+   218→   218→  const [form, setForm] = useState<NewEngagementForm>(INITIAL_FORM)
+   219→   219→
+   220→   220→  /* ------------------------------- data fetch ------------------------------ */
+   221→   221→  useEffect(() => {
+   222→   222→    let cancelled = false
+   223→   223→    async function load() {
+   224→   224→      try {
+   225→   225→        const [engRes, clientsRes, teamRes] = await Promise.all([
+   226→   226→          fetch('/api/engagements'),
+   227→   227→          fetch('/api/clients'),
+   228→   228→          fetch('/api/settings/team'),
+   229→   229→        ])
+   230→   230→        const [engData, clientsData, teamData] = await Promise.all([
+   231→   231→          engRes.json(),
+   232→   232→          clientsRes.json(),
+   233→   233→          teamRes.json(),
+   234→   234→        ])
+   235→   235→        if (cancelled) return
+   236→   236→        setEngagements(engData.engagements || [])
+   237→   237→        setClients(
+   238→   238→          (clientsData.clients || []).map((c: ClientOption) => ({
+   239→   239→            id: c.id,
+   240→   240→            name: c.name,
+   241→   241→            firmId: c.firmId,
+   242→   242→            email: c.email,
+   243→   243→            clientType: c.clientType,
+   244→   244→          }))
+   245→   245→        )
+   246→   246→        setTeam(teamData.team || [])
+   247→   247→      } catch (err) {
+   248→   248→        console.error('Failed to load engagements', err)
+   249→   249→        toast.error('Failed to load engagements')
+   250→   250→      } finally {
+   251→   251→        if (!cancelled) setLoading(false)
+   252→   252→      }
+   253→   253→    }
+   254→   254→    load()
+   255→   255→    return () => {
+   256→   256→      cancelled = true
+   257→   257→    }
+   258→   258→  }, [])
+   259→   259→
+   260→   260→  /* -------------------------------- stats ---------------------------------- */
+   261→   261→  const stats = useMemo(() => {
+   262→   262→    const total = engagements.length
+   263→   263→    const inProgress = engagements.filter((e) =>
+   264→   264→      ['pbc_sent', 'collecting', 'processing', 'filing'].includes(e.status)
+   265→   265→    ).length
+   266→   266→    const needsReview = engagements.filter((e) => e.status === 'review').length
+   267→   267→    const completed = engagements.filter((e) => e.status === 'done').length
+   268→   268→    return { total, inProgress, needsReview, completed }
+   269→   269→  }, [engagements])
+   270→   270→
+   271→   271→  /* --------------------------- team color lookup --------------------------- */
+   272→   272→  // Engagement.assignedTo is a User (no color), so we resolve the color
+   273→   273→  // by matching the assigned user's email against team members.
+   274→   274→  const colorByEmail = useMemo(() => {
+   275→   275→    const map: Record<string, string> = {}
+   276→   276→    for (const t of team) {
+   277→   277→      if (t.email) map[t.email.toLowerCase()] = getTeamColorHex(t.color)
+   278→   278→    }
+   279→   279→    return map
+   280→   280→  }, [team])
+   281→   281→
+   282→   282→  // Map team-member email → User ID (for assignment on submit)
+   283→   283→  const userIdByEmail = useMemo(() => {
+   284→   284→    const map: Record<string, string> = {}
+   285→   285→    for (const e of engagements) {
+   286→   286→      const u = e.assignedTo
+   287→   287→      if (u?.email) {
+   288→   288→        map[u.email.toLowerCase()] = u.id
+   289→   289→      }
+   290→   290→    }
+   291→   291→    return map
+   292→   292→  }, [engagements])
+   293→   293→
+   294→   294→  /* ------------------------------- filtering ------------------------------- */
+   295→   295→  const visibleEngagements = useMemo(() => {
+   296→   296→    return engagements.filter((e) => {
+   297→   297→      if (viewTab === 'active' && e.status === 'done') return false
+   298→   298→      if (viewTab === 'completed' && e.status !== 'done') return false
+   299→   299→      if (typeFilter !== 'all' && e.engagementType !== typeFilter) return false
+   300→   300→      if (statusFilter !== 'all' && e.status !== statusFilter) return false
+   301→   301→      if (priorityFilter !== 'all' && e.priority !== priorityFilter) return false
+   302→   302→      if (search.trim()) {
+   303→   303→        const q = search.toLowerCase().trim()
+   304→   304→        const name = e.client?.name?.toLowerCase() || ''
+   305→   305→        if (!name.includes(q)) return false
+   306→   306→      }
+   307→   307→      return true
+   308→   308→    })
+   309→   309→  }, [engagements, viewTab, typeFilter, statusFilter, priorityFilter, search])
+   310→   310→
+   311→   311→  const hasActiveFilters =
+   312→   312→    typeFilter !== 'all' ||
+   313→   313→    statusFilter !== 'all' ||
+   314→   314→    priorityFilter !== 'all' ||
+   315→   315→    search.trim() !== ''
+   316→   316→
+   317→   317→  function clearFilters() {
+   318→   318→    setTypeFilter('all')
+   319→   319→    setStatusFilter('all')
+   320→   320→    setPriorityFilter('all')
+   321→   321→    setSearch('')
+   322→   322→    setViewTab('all')
+   323→   323→  }
+   324→   324→
+   325→   325→  /* ---------------------------- dialog handlers ---------------------------- */
+   326→   326→  function openNewDialog() {
+   327→   327→    setForm(INITIAL_FORM)
+   328→   328→    setDialogOpen(true)
+   329→   329→  }
+   330→   330→
+   331→   331→  async function handleSubmit(e: React.FormEvent) {
+   332→   332→    e.preventDefault()
+   333→   333→    if (!form.clientId) {
+   334→   334→      toast.error('Please select a client')
+   335→   335→      return
+   336→   336→    }
+   337→   337→    if (!form.engagementType) {
+   338→   338→      toast.error('Please select an engagement type')
+   339→   339→      return
+   340→   340→    }
+   341→   341→    const client = clients.find((c) => c.id === form.clientId)
+   342→   342→    if (!client) {
+   343→   343→      toast.error('Selected client not found')
+   344→   344→      return
+   345→   345→    }
+   346→   346→
+   347→   347→    setSubmitting(true)
+   348→   348→    try {
+   349→   349→      // Resolve the selected team member's email to a User ID, since
+   350→   350→      // Engagement.assignedToId references the User table.
+   351→   351→      let assignedToId: string | null = null
+   352→   352→      if (form.assignedToId) {
+   353→   353→        const tm = team.find((t) => t.id === form.assignedToId)
+   354→   354→        if (tm?.email) {
+   355→   355→          assignedToId = userIdByEmail[tm.email.toLowerCase()] || null
+   356→   356→        }
+   357→   357→      }
+   358→   358→
+   359→   359→      const res = await fetch('/api/engagements', {
+   360→   360→        method: 'POST',
+   361→   361→        headers: { 'Content-Type': 'application/json' },
+   362→   362→        body: JSON.stringify({
+   363→   363→          firmId: client.firmId,
+   364→   364→          clientId: form.clientId,
+   365→   365→          engagementType: form.engagementType,
+   366→   366→          taxYear: Number(form.taxYear) || 2025,
+   367→   367→          priority: form.priority,
+   368→   368→          deadline: form.deadline || null,
+   369→   369→          fee: Number(form.fee) || 0,
+   370→   370→          assignedToId,
+   371→   371→          notes: form.notes || null,
+   372→   372→        }),
+   373→   373→      })
+   374→   374→      if (!res.ok) throw new Error('Failed to create engagement')
+   375→   375→      const data = await res.json()
+   376→   376→      const newEngagement = data.engagement as EngagementRow
+   377→   377→      // attach client + assignedTo for immediate display
+   378→   378→      newEngagement.client = {
+   379→   379→        id: client.id,
+   380→   380→        name: client.name,
+   381→   381→        email: client.email || '',
+   382→   382→        clientType: client.clientType,
+   383→   383→      }
+   384→   384→      const assigned = team.find((t) => t.id === form.assignedToId)
+   385→   385→      if (assigned) {
+   386→   386→        newEngagement.assignedTo = {
+   387→   387→          id: assignedToId || assigned.id,
+   388→   388→          name: assigned.name,
+   389→   389→          email: assigned.email,
+   390→   390→          role: assigned.role,
+   391→   391→          color: undefined,
+   392→   392→        }
+   393→   393→      }
+   394→   394→      setEngagements((prev) => [newEngagement, ...prev])
+   395→   395→      setDialogOpen(false)
+   396→   396→      setForm(INITIAL_FORM)
+   397→   397→      toast.success('Engagement created', {
+   398→   398→        description: `${client.name} · ${form.engagementType} · TY ${form.taxYear}`,
+   399→   399→      })
+   400→   400→    } catch (err) {
+   401→   401→      console.error(err)
+   402→   402→      toast.error('Could not create engagement')
+   403→   403→    } finally {
+   404→   404→      setSubmitting(false)
+   405→   405→    }
+   406→   406→  }
+   407→   407→
+   408→   408→  /* --------------------------------- render -------------------------------- */
+   409→   409→  if (loading) {
+   410→   410→    return <EngagementsSkeleton />
+   411→   411→  }
+   412→   412→
+   413→   413→  return (
+   414→   414→    <div className="space-y-6 p-4 lg:p-6">
+   415→   415→      {/* Header */}
+   416→   416→      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+   417→   417→        <div>
+   418→   418→          <h1 className="text-2xl font-bold tracking-tight">Engagements</h1>
+   419→   419→          <p className="mt-1 text-sm text-muted-foreground">
+   420→   420→            Manage tax preparation engagements
+   421→   421→          </p>
+   422→   422→        </div>
+   423→   423→        <Button onClick={openNewDialog} className="shrink-0">
+   424→   424→          <Plus className="mr-1.5 h-4 w-4" />
+   425→   425→          New Engagement
+   426→   426→        </Button>
+   427→   427→      </div>
+   428→   428→
+   429→   429→      {/* Stats Row */}
+   430→   430→      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+   431→   431→        <StatCard
+   432→   432→          label="Total Engagements"
+   433→   433→          value={stats.total}
+   434→   434→          icon={FolderOpen}
+   435→   435→          accent="primary"
+   436→   436→          trend={{ value: 12, label: 'vs last quarter' }}
+   437→   437→        />
+   438→   438→        <StatCard
+   439→   439→          label="In Progress"
+   440→   440→          value={stats.inProgress}
+   441→   441→          icon={Clock}
+   442→   442→          accent="info"
+   443→   443→        />
+   444→   444→        <StatCard
+   445→   445→          label="Needs Review"
+   446→   446→          value={stats.needsReview}
+   447→   447→          icon={AlertCircle}
+   448→   448→          accent="warning"
+   449→   449→        />
+   450→   450→        <StatCard
+   451→   451→          label="Completed"
+   452→   452→          value={stats.completed}
+   453→   453→          icon={CheckCircle2}
+   454→   454→          accent="success"
+   455→   455→          trend={{ value: 8, label: 'vs last quarter' }}
+   456→   456→        />
+   457→   457→      </div>
+   458→   458→
+   459→   459→      {/* Toolbar */}
+   460→   460→      <div className="flex flex-col gap-3">
+   461→   461→        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   462→   462→          <Tabs value={viewTab} onValueChange={(v) => setViewTab(v as ViewTab)}>
+   463→   463→            <TabsList>
+   464→   464→              <TabsTrigger value="all">All</TabsTrigger>
+   465→   465→              <TabsTrigger value="active">Active</TabsTrigger>
+   466→   466→              <TabsTrigger value="completed">Completed</TabsTrigger>
+   467→   467→            </TabsList>
+   468→   468→          </Tabs>
+   469→   469→          <div className="relative w-full sm:max-w-xs">
+   470→   470→            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   471→   471→            <Input
+   472→   472→              placeholder="Search by client name..."
+   473→   473→              value={search}
+   474→   474→              onChange={(e) => setSearch(e.target.value)}
+   475→   475→              className="pl-9"
+   476→   476→            />
+   477→   477→            {search && (
+   478→   478→              <button
+   479→   479→                onClick={() => setSearch('')}
+   480→   480→                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground hover:text-foreground"
+   481→   481→              >
+   482→   482→                <X className="h-3.5 w-3.5" />
+   483→   483→              </button>
+   484→   484→            )}
+   485→   485→          </div>
+   486→   486→        </div>
+   487→   487→
+   488→   488→        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+   489→   489→          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+   490→   490→            <Filter className="h-3.5 w-3.5" />
+   491→   491→            <span>Filters</span>
+   492→   492→          </div>
+   493→   493→          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:flex-1">
+   494→   494→            <Select value={typeFilter} onValueChange={setTypeFilter}>
+   495→   495→              <SelectTrigger className="w-full">
+   496→   496→                <SelectValue placeholder="Engagement Type" />
+   497→   497→              </SelectTrigger>
+   498→   498→              <SelectContent>
+   499→   499→                <SelectItem value="all">All Types</SelectItem>
+   500→   500→                {ENGAGEMENT_TYPES.map((t) => (
+   501→   501→                  <SelectItem key={t.value} value={t.value}>
+   502→   502→                    {t.label}
+   503→   503→                  </SelectItem>
+   504→   504→                ))}
+   505→   505→              </SelectContent>
+   506→   506→            </Select>
+   507→   507→
+   508→   508→            <Select value={statusFilter} onValueChange={setStatusFilter}>
+   509→   509→              <SelectTrigger className="w-full">
+   510→   510→                <SelectValue placeholder="Status" />
+   511→   511→              </SelectTrigger>
+   512→   512→              <SelectContent>
+   513→   513→                {STATUS_FILTER_OPTIONS.map((s) => (
+   514→   514→                  <SelectItem key={s.value} value={s.value}>
+   515→   515→                    {s.label}
+   516→   516→                  </SelectItem>
+   517→   517→                ))}
+   518→   518→              </SelectContent>
+   519→   519→            </Select>
+   520→   520→
+   521→   521→            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+   522→   522→              <SelectTrigger className="w-full">
+   523→   523→                <SelectValue placeholder="Priority" />
+   524→   524→              </SelectTrigger>
+   525→   525→              <SelectContent>
+   526→   526→                {PRIORITY_FILTER_OPTIONS.map((p) => (
+   527→   527→                  <SelectItem key={p.value} value={p.value}>
+   528→   528→                    {p.label}
+   529→   529→                  </SelectItem>
+   530→   530→                ))}
+   531→   531→              </SelectContent>
+   532→   532→            </Select>
+   533→   533→          </div>
+   534→   534→          {hasActiveFilters && (
+   535→   535→            <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0">
+   536→   536→              <X className="mr-1 h-3.5 w-3.5" />
+   537→   537→              Clear
+   538→   538→            </Button>
+   539→   539→          )}
+   540→   540→        </div>
+   541→   541→      </div>
+   542→   542→
+   543→   543→      {/* Result count */}
+   544→   544→      <div className="flex items-center justify-between text-xs text-muted-foreground">
+   545→   545→        <span>
+   546→   546→          Showing <span className="font-semibold text-foreground">{visibleEngagements.length}</span>{' '}
+   547→   547→          of <span className="font-semibold text-foreground">{engagements.length}</span> engagements
+   548→   548→        </span>
+   549→   549→      </div>
+   550→   550→
+   551→   551→      {/* Engagement Cards Grid */}
+   552→   552→      {visibleEngagements.length === 0 ? (
+   553→   553→        <EmptyState
+   554→   554→          hasFilters={hasActiveFilters}
+   555→   555→          onClear={clearFilters}
+   556→   556→          onCreate={openNewDialog}
+   557→   557→        />
+   558→   558→      ) : (
+   559→   559→        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+   560→   560→          {visibleEngagements.map((e) => (
+   561→   561→            <EngagementCard
+   562→   562→              key={e.id}
+   563→   563→              engagement={e}
+   564→   564→              colorByEmail={colorByEmail}
+   565→   565→              onClick={() => openEngagement(e.id)}
+   566→   566→            />
+   567→   567→          ))}
+   568→   568→        </div>
+   569→   569→      )}
+   570→   570→
+   571→   571→      {/* New Engagement Dialog */}
+   572→   572→      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   573→   573→        <DialogContent className="sm:max-w-2xl">
+   574→   574→          <DialogHeader>
+   575→   575→            <DialogTitle>Create New Engagement</DialogTitle>
+   576→   576→          </DialogHeader>
+   577→   577→          <form onSubmit={handleSubmit} className="space-y-4">
+   578→   578→            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+   579→   579→              {/* Client */}
+   580→   580→              <div className="space-y-1.5 sm:col-span-2">
+   581→   581→                <Label htmlFor="clientId">Client *</Label>
+   582→   582→                <Select
+   583→   583→                  value={form.clientId}
+   584→   584→                  onValueChange={(v) => setForm((f) => ({ ...f, clientId: v }))}
+   585→   585→                >
+   586→   586→                  <SelectTrigger id="clientId" className="w-full">
+   587→   587→                    <SelectValue placeholder="Select a client..." />
+   588→   588→                  </SelectTrigger>
+   589→   589→                  <SelectContent>
+   590→   590→                    {clients.length === 0 && (
+   591→   591→                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+   592→   592→                        No clients available
+   593→   593→                      </div>
+   594→   594→                    )}
+   595→   595→                    {clients.map((c) => {
+   596→   596→                      const typeDef = CLIENT_TYPES.find((t) => t.value === c.clientType)
+   597→   597→                      return (
+   598→   598→                        <SelectItem key={c.id} value={c.id}>
+   599→   599→                          <span className="mr-1.5">{typeDef?.icon || '👤'}</span>
+   600→   600→                          {c.name}
+   601→   601→                          {c.email && (
+   602→   602→                            <span className="ml-2 text-xs text-muted-foreground">
+   603→   603→                              · {c.email}
+   604→   604→                            </span>
+   605→   605→                          )}
+   606→   606→                        </SelectItem>
+   607→   607→                      )
+   608→   608→                    })}
+   609→   609→                  </SelectContent>
+   610→   610→                </Select>
+   611→   611→              </div>
+   612→   612→
+   613→   613→              {/* Engagement Type */}
+   614→   614→              <div className="space-y-1.5">
+   615→   615→                <Label htmlFor="engagementType">Engagement Type *</Label>
+   616→   616→                <Select
+   617→   617→                  value={form.engagementType}
+   618→   618→                  onValueChange={(v) =>
+   619→   619→                    setForm((f) => ({ ...f, engagementType: v as EngagementType }))
+   620→   620→                  }
+   621→   621→                >
+   622→   622→                  <SelectTrigger id="engagementType" className="w-full">
+   623→   623→                    <SelectValue placeholder="Select type..." />
+   624→   624→                  </SelectTrigger>
+   625→   625→                  <SelectContent>
+   626→   626→                    {ENGAGEMENT_TYPES.map((t) => (
+   627→   627→                      <SelectItem key={t.value} value={t.value}>
+   628→   628→                        {t.label}
+   629→   629→                      </SelectItem>
+   630→   630→                    ))}
+   631→   631→                  </SelectContent>
+   632→   632→                </Select>
+   633→   633→              </div>
+   634→   634→
+   635→   635→              {/* Tax Year */}
+   636→   636→              <div className="space-y-1.5">
+   637→   637→                <Label htmlFor="taxYear">Tax Year</Label>
+   638→   638→                <Input
+   639→   639→                  id="taxYear"
+   640→   640→                  type="number"
+   641→   641→                  value={form.taxYear}
+   642→   642→                  onChange={(e) => setForm((f) => ({ ...f, taxYear: e.target.value }))}
+   643→   643→                  min={2020}
+   644→   644→                  max={2030}
+   645→   645→                />
+   646→   646→              </div>
+   647→   647→
+   648→   648→              {/* Priority */}
+   649→   649→              <div className="space-y-1.5">
+   650→   650→                <Label htmlFor="priority">Priority</Label>
+   651→   651→                <Select
+   652→   652→                  value={form.priority}
+   653→   653→                  onValueChange={(v) => setForm((f) => ({ ...f, priority: v as Priority }))}
+   654→   654→                >
+   655→   655→                  <SelectTrigger id="priority" className="w-full">
+   656→   656→                    <SelectValue placeholder="Priority" />
+   657→   657→                  </SelectTrigger>
+   658→   658→                  <SelectContent>
+   659→   659→                    <SelectItem value="high">High</SelectItem>
+   660→   660→                    <SelectItem value="medium">Medium</SelectItem>
+   661→   661→                    <SelectItem value="low">Low</SelectItem>
+   662→   662→                  </SelectContent>
+   663→   663→                </Select>
+   664→   664→              </div>
+   665→   665→
+   666→   666→              {/* Assigned To */}
+   667→   667→              <div className="space-y-1.5">
+   668→   668→                <Label htmlFor="assignedToId">Assigned To</Label>
+   669→   669→                <Select
+   670→   670→                  value={form.assignedToId}
+   671→   671→                  onValueChange={(v) => setForm((f) => ({ ...f, assignedToId: v }))}
+   672→   672→                >
+   673→   673→                  <SelectTrigger id="assignedToId" className="w-full">
+   674→   674→                    <SelectValue placeholder="Select team member..." />
+   675→   675→                  </SelectTrigger>
+   676→   676→                  <SelectContent>
+   677→   677→                    {team.map((t) => (
+   678→   678→                      <SelectItem key={t.id} value={t.id}>
+   679→   679→                        {t.name} · {t.role}
+   680→   680→                      </SelectItem>
+   681→   681→                    ))}
+   682→   682→                  </SelectContent>
+   683→   683→                </Select>
+   684→   684→              </div>
+   685→   685→
+   686→   686→              {/* Deadline */}
+   687→   687→              <div className="space-y-1.5">
+   688→   688→                <Label htmlFor="deadline">Deadline</Label>
+   689→   689→                <Input
+   690→   690→                  id="deadline"
+   691→   691→                  type="date"
+   692→   692→                  value={form.deadline}
+   693→   693→                  onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
+   694→   694→                />
+   695→   695→              </div>
+   696→   696→
+   697→   697→              {/* Fee */}
+   698→   698→              <div className="space-y-1.5">
+   699→   699→                <Label htmlFor="fee">Fee (USD)</Label>
+   700→   700→                <Input
+   701→   701→                  id="fee"
+   702→   702→                  type="number"
+   703→   703→                  min={0}
+   704→   704→                  step={50}
+   705→   705→                  value={form.fee}
+   706→   706→                  onChange={(e) => setForm((f) => ({ ...f, fee: e.target.value }))}
+   707→   707→                  placeholder="0"
+   708→   708→                />
+   709→   709→              </div>
+   710→   710→
+   711→   711→              {/* Notes */}
+   712→   712→              <div className="space-y-1.5 sm:col-span-2">
+   713→   713→                <Label htmlFor="notes">Notes</Label>
+   714→   714→                <Textarea
+   715→   715→                  id="notes"
+   716→   716→                  rows={3}
+   717→   717→                  value={form.notes}
+   718→   718→                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+   719→   719→                  placeholder="Any additional context for this engagement..."
+   720→   720→                />
+   721→   721→              </div>
+   722→   722→            </div>
+   723→   723→
+   724→   724→            <DialogFooter>
+   725→   725→              <Button
+   726→   726→                type="button"
+   727→   727→                variant="outline"
+   728→   728→                onClick={() => setDialogOpen(false)}
+   729→   729→                disabled={submitting}
+   730→   730→              >
+   731→   731→                Cancel
+   732→   732→              </Button>
+   733→   733→              <Button type="submit" disabled={submitting}>
+   734→   734→                {submitting ? (
+   735→   735→                  <>
+   736→   736→                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+   737→   737→                    Creating...
+   738→   738→                  </>
+   739→   739→                ) : (
+   740→   740→                  <>
+   741→   741→                    <Plus className="mr-1.5 h-4 w-4" />
+   742→   742→                    Create Engagement
+   743→   743→                  </>
+   744→   744→                )}
+   745→   745→              </Button>
+   746→   746→            </DialogFooter>
+   747→   747→          </form>
+   748→   748→        </DialogContent>
+   749→   749→      </Dialog>
+   750→   750→    </div>
+   751→   751→  )
+   752→   752→}
+   753→   753→
+   754→   754→/* ------------------------------ engagement card ----------------------------- */
+   755→   755→
+   756→   756→interface EngagementCardProps {
+   757→   757→  engagement: EngagementRow
+   758→   758→  colorByEmail: Record<string, string>
+   759→   759→  onClick: () => void
+   760→   760→}
+   761→   761→
+   762→   762→function EngagementCard({ engagement, colorByEmail, onClick }: EngagementCardProps) {
+   763→   763→  const e = engagement
+   764→   764→  const clientName = e.client?.name || 'Unknown Client'
+   765→   765→  const clientType = e.client?.clientType || 'individual'
+   766→   766→  const typeDef = CLIENT_TYPES.find((t) => t.value === clientType)
+   767→   767→  const assigned = e.assignedTo
+   768→   768→  const assignedColor = assigned?.email
+   769→   769→    ? colorByEmail[assigned.email.toLowerCase()]
+   770→   770→    : undefined
+   771→   771→  const progress = e.progress ?? 0
+   772→   772→  const docsCount = e._count?.documents ?? 0
+   773→   773→  const pbcTotal = e._count?.pbcItems ?? 0
+   774→   774→  const pbcDone = e._count?.pbcCompleted ?? 0
+   775→   775→  const messagesCount = e._count?.messages ?? 0
+   776→   776→  const deadline = getDeadlineState(e.deadline)
+   777→   777→
+   778→   778→  return (
+   779→   779→    <div
+   780→   780→      onClick={onClick}
+   781→   781→      className={cn(
+   782→   782→        'group relative flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm transition-all',
+   783→   783→        'cursor-pointer hover:-translate-y-0.5 hover:shadow-md'
+   784→   784→      )}
+   785→   785→    >
+   786→   786→      {/* Top row: client + assigned avatar */}
+   787→   787→      <div className="flex items-start justify-between gap-3">
+   788→   788→        <div className="flex min-w-0 items-center gap-2.5">
+   789→   789→          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+   790→   790→            {getInitials(clientName)}
+   791→   791→          </div>
+   792→   792→          <div className="min-w-0">
+   793→   793→            <p className="truncate text-sm font-semibold leading-tight">{clientName}</p>
+   794→   794→            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+   795→   795→              {typeDef?.icon} {typeDef?.label || clientType}
+   796→   796→              {e.client?.email ? ` · ${e.client.email}` : ''}
+   797→   797→            </p>
+   798→   798→          </div>
+   799→   799→        </div>
+   800→   800→        {assigned && (
+   801→   801→          <div
+   802→   802→            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+   803→   803→            style={{ backgroundColor: assignedColor || '#64748b' }}
+   804→   804→            title={`${assigned.name} · ${assigned.role}`}
+   805→   805→          >
+   806→   806→            {getInitials(assigned.name)}
+   807→   807→          </div>
+   808→   808→        )}
+   809→   809→      </div>
+   810→   810→
+   811→   811→      {/* Badges row */}
+   812→   812→      <div className="flex flex-wrap items-center gap-1.5">
+   813→   813→        <span
+   814→   814→          className={cn(
+   815→   815→            'inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-semibold ring-1 ring-inset',
+   816→   816→            ENGAGEMENT_TYPE_COLORS[e.engagementType] ||
+   817→   817→              'bg-slate-50 text-slate-700 ring-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:ring-slate-800'
+   818→   818→          )}
+   819→   819→        >
+   820→   820→          {e.engagementType}
+   821→   821→        </span>
+   822→   822→        <span className="inline-flex items-center rounded-md border border-input bg-muted/40 px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+   823→   823→          TY {e.taxYear}
+   824→   824→        </span>
+   825→   825→        <StatusBadge status={e.status} />
+   826→   826→        <PriorityBadge priority={e.priority} />
+   827→   827→      </div>
+   828→   828→
+   829→   829→      {/* Progress */}
+   830→   830→      <div className="space-y-1.5">
+   831→   831→        <div className="flex items-center justify-between text-xs">
+   832→   832→          <span className="text-muted-foreground">Progress</span>
+   833→   833→          <span className={cn('font-semibold tabular-nums', getProgressText(progress))}>
+   834→   834→            {progress}%
+   835→   835→          </span>
+   836→   836→        </div>
+   837→   837→        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+   838→   838→          <div
+   839→   839→            className={cn('h-full rounded-full transition-all duration-500', getProgressColor(progress))}
+   840→   840→            style={{ width: `${Math.min(progress, 100)}%` }}
+   841→   841→          />
+   842→   842→        </div>
+   843→   843→      </div>
+   844→   844→
+   845→   845→      {/* Stats row */}
+   846→   846→      <div className="grid grid-cols-3 gap-2 border-t pt-3 text-xs">
+   847→   847→        <div className="flex flex-col gap-0.5">
+   848→   848→          <span className="text-muted-foreground">Documents</span>
+   849→   849→          <span className="flex items-center gap-1 font-semibold tabular-nums">
+   850→   850→            <FileText className="h-3 w-3 text-muted-foreground" />
+   851→   851→            {docsCount}
+   852→   852→          </span>
+   853→   853→        </div>
+   854→   854→        <div className="flex flex-col gap-0.5">
+   855→   855→          <span className="text-muted-foreground">PBC</span>
+   856→   856→          <span className="flex items-center gap-1 font-semibold tabular-nums">
+   857→   857→            <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
+   858→   858→            {pbcDone}/{pbcTotal}
+   859→   859→          </span>
+   860→   860→        </div>
+   861→   861→        <div className="flex flex-col gap-0.5">
+   862→   862→          <span className="text-muted-foreground">Messages</span>
+   863→   863→          <span className="flex items-center gap-1 font-semibold tabular-nums">
+   864→   864→            <MessageSquare className="h-3 w-3 text-muted-foreground" />
+   865→   865→            {messagesCount}
+   866→   866→          </span>
+   867→   867→        </div>
+   868→   868→      </div>
+   869→   869→
+   870→   870→      {/* Footer: deadline + fee */}
+   871→   871→      <div className="flex items-center justify-between border-t pt-3">
+   872→   872→        {deadline ? (
+   873→   873→          <div
+   874→   874→            className={cn(
+   875→   875→              'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium',
+   876→   876→              deadline.tone === 'red' &&
+   877→   877→                'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+   878→   878→              deadline.tone === 'amber' &&
+   879→   879→                'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+   880→   880→              deadline.tone === 'neutral' &&
+   881→   881→                'bg-muted text-muted-foreground'
+   882→   882→            )}
+   883→   883→          >
+   884→   884→            <CalendarClock className="h-3.5 w-3.5" />
+   885→   885→            <span>
+   886→   886→              {deadline.days < 0
+   887→   887→                ? `${Math.abs(deadline.days)}d overdue`
+   888→   888→                : deadline.days === 0
+   889→   889→                  ? 'Due today'
+   890→   890→                  : `${deadline.days}d left`}
+   891→   891→            </span>
+   892→   892→            <span className="text-[10px] opacity-70">· {format(deadline.date, 'MMM d')}</span>
+   893→   893→          </div>
+   894→   894→        ) : (
+   895→   895→          <span className="text-xs text-muted-foreground">No deadline</span>
+   896→   896→        )}
+   897→   897→        {e.fee > 0 && (
+   898→   898→          <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+   899→   899→            {formatFee(e.fee)}
+   900→   900→          </span>
+   901→   901→        )}
+   902→   902→      </div>
+   903→   903→    </div>
+   904→   904→  )
+   905→   905→}
+   906→   906→
+   907→   907→/* --------------------------------- skeleton -------------------------------- */
+   908→   908→
+   909→   909→function EngagementsSkeleton() {
+   910→   910→  return (
+   911→   911→    <div className="space-y-6 p-4 lg:p-6">
+   912→   912→      <div className="flex items-center justify-between">
+   913→   913→        <div className="space-y-2">
+   914→   914→          <Skeleton className="h-8 w-48" />
+   915→   915→          <Skeleton className="h-4 w-72" />
+   916→   916→        </div>
+   917→   917→        <Skeleton className="h-9 w-36" />
+   918→   918→      </div>
+   919→   919→      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+   920→   920→        {Array.from({ length: 4 }).map((_, i) => (
+   921→   921→          <Skeleton key={i} className="h-28 w-full rounded-xl" />
+   922→   922→        ))}
+   923→   923→      </div>
+   924→   924→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   925→   925→        <Skeleton className="h-9 w-64" />
+   926→   926→        <Skeleton className="h-9 w-72" />
+   927→   927→      </div>
+   928→   928→      <div className="flex gap-2">
+   929→   929→        <Skeleton className="h-9 w-32" />
+   930→   930→        <Skeleton className="h-9 w-32" />
+   931→   931→        <Skeleton className="h-9 w-32" />
+   932→   932→      </div>
+   933→   933→      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+   934→   934→        {Array.from({ length: 6 }).map((_, i) => (
+   935→   935→          <Skeleton key={i} className="h-64 w-full rounded-xl" />
+   936→   936→        ))}
+   937→   937→      </div>
+   938→   938→    </div>
+   939→   939→  )
+   940→   940→}
+   941→   941→
+   942→   942→/* ------------------------------- empty state ------------------------------- */
+   943→   943→
+   944→   944→interface EmptyStateProps {
+   945→   945→  hasFilters: boolean
+   946→   946→  onClear: () => void
+   947→   947→  onCreate: () => void
+   948→   948→}
+   949→   949→
+   950→   950→function EmptyState({ hasFilters, onClear, onCreate }: EmptyStateProps) {
+   951→   951→  return (
+   952→   952→    <Card className="flex flex-col items-center justify-center gap-3 p-12 py-16 text-center">
+   953→   953→      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+   954→   954→        <FolderOpen className="h-7 w-7 text-primary" />
+   955→   955→      </div>
+   956→   956→      <div>
+   957→   957→        <h3 className="text-base font-semibold">
+   958→   958→          {hasFilters ? 'No matching engagements' : 'No engagements yet'}
+   959→   959→        </h3>
+   960→   960→        <p className="mt-1 text-sm text-muted-foreground">
+   961→   961→          {hasFilters
+   962→   962→            ? 'Try adjusting your filters or search query.'
+   963→   963→            : 'Create your first tax preparation engagement to get started.'}
+   964→   964→        </p>
+   965→   965→      </div>
+   966→   966→      {hasFilters ? (
+   967→   967→        <Button variant="outline" onClick={onClear}>
+   968→   968→          <X className="mr-1.5 h-4 w-4" />
+   969→   969→          Clear filters
+   970→   970→        </Button>
+   971→   971→      ) : (
+   972→   972→        <Button onClick={onCreate}>
+   973→   973→          <Plus className="mr-1.5 h-4 w-4" />
+   974→   974→          New Engagement
+   975→   975→        </Button>
+   976→   976→      )}
+   977→   977→    </Card>
+   978→   978→  )
+   979→   979→}
+   980→   980→

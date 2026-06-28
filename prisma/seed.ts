@@ -187,20 +187,32 @@ async function main() {
     },
   })
 
-  // Users
-  const user = await db.user.create({
-    data: {
-      firmId: firm.id,
-      email: 'sarah.chen@meridiancpa.com',
-      name: 'Sarah Chen',
-      role: 'partner',
-      status: 'active',
-    },
-  })
+  // Users — create one User per team member so engagements can be assigned properly
+  const users = []
+  for (const t of TEAM) {
+    const u = await db.user.create({
+      data: {
+        firmId: firm.id,
+        email: t.email,
+        name: t.name,
+        role: t.role.toLowerCase().includes('partner')
+          ? 'partner'
+          : t.role.toLowerCase().includes('manager')
+            ? 'manager'
+            : t.role.toLowerCase().includes('admin')
+              ? 'admin'
+              : 'preparer',
+        status: 'active',
+      },
+    })
+    users.push(u)
+  }
+  const user = users[0] // Sarah Chen — primary user for audit logs
 
   // Team members
   const teamMembers = []
-  for (const t of TEAM) {
+  for (let i = 0; i < TEAM.length; i++) {
+    const t = TEAM[i]
     const tm = await db.teamMember.create({
       data: {
         firmId: firm.id,
@@ -237,7 +249,7 @@ async function main() {
   // Engagements with PBC lists & documents
   for (const e of ENGAGEMENTS) {
     const client = clients[e.clientIdx]
-    const assignedTo = teamMembers[e.assignedIdx] || teamMembers[0]
+    const assignedUser = users[e.assignedIdx] || users[0]
     const pbcItems = getPbcItems(e.type)
 
     const engagement = await db.engagement.create({
@@ -251,7 +263,7 @@ async function main() {
         progress: e.progress,
         fee: e.fee,
         deadline: new Date(e.deadline),
-        assignedToId: user.id,
+        assignedToId: assignedUser.id,
         notes: `${e.type} tax return for ${client.name} — tax year ${e.year}`,
       },
     })
@@ -375,7 +387,7 @@ async function main() {
           engagementId: engagement.id,
           step: steps[i],
           status: stepStatus,
-          assignedToId: i >= 3 ? user.id : undefined,
+          assignedToId: i >= 3 ? assignedUser.id : undefined,
           startedAt: i <= activeStepIdx ? new Date(Date.now() - (activeStepIdx - i) * 86400000) : null,
           completedAt: i < activeStepIdx ? new Date(Date.now() - (activeStepIdx - i - 1) * 86400000) : null,
         },

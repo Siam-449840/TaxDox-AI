@@ -14,6 +14,12 @@ import {
   CalendarClock,
   MessageSquare,
   X,
+  CheckSquare,
+  UserPlus,
+  Send,
+  Download,
+  Archive,
+  Flag,
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { StatCard } from '@/components/shared/stat-card'
@@ -26,6 +32,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -132,6 +139,43 @@ function formatFee(value: number) {
   }).format(value || 0)
 }
 
+function exportCsv(rows: EngagementRow[]) {
+  const headers = [
+    'Client',
+    'Type',
+    'Tax Year',
+    'Status',
+    'Priority',
+    'Progress',
+    'Deadline',
+    'Fee',
+    'Assigned To',
+  ]
+  const data = rows.map((e) => [
+    e.client?.name || 'Unknown',
+    e.engagementType,
+    String(e.taxYear),
+    e.status,
+    e.priority,
+    `${e.progress ?? 0}%`,
+    e.deadline ? format(new Date(e.deadline), 'yyyy-MM-dd') : '',
+    String(e.fee ?? 0),
+    e.assignedTo?.name || 'Unassigned',
+  ])
+  const csv = [headers, ...data]
+    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `taxdox-engagements-export-${Date.now()}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 /* --------------------------------- types --------------------------------- */
 
 interface EngagementRow extends Omit<Engagement, 'client' | 'assignedTo' | '_count'> {
@@ -216,6 +260,21 @@ export function EngagementsView() {
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
 
   const [form, setForm] = useState<NewEngagementForm>(INITIAL_FORM)
+
+  // Bulk selection state
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Bulk action dialog state
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false)
+  const [bulkAssignToId, setBulkAssignToId] = useState('')
+  const [bulkPriorityOpen, setBulkPriorityOpen] = useState(false)
+  const [bulkPriority, setBulkPriority] = useState<Priority>('medium')
+  const [bulkSendOpen, setBulkSendOpen] = useState(false)
+  const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkSending, setBulkSending] = useState(false)
+  const [bulkSendProgress, setBulkSendProgress] = useState<{ sent: number; total: number } | null>(null)
 
   /* ------------------------------- data fetch ------------------------------ */
   useEffect(() => {
@@ -405,13 +464,240 @@ export function EngagementsView() {
     }
   }
 
+  /* --------------------------- bulk action helpers -------------------------- */
+  async function refreshEngagements() {
+    try {
+      const res = await fetch('/api/engagements')
+      const data = await res.json()
+      setEngagements(data.engagements || [])
+    } catch (err) {
+      console.error('Failed to refresh engagements', err)
+    }
+  }
+
+  function toggleSelection(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(visibleEngagements.map((e) => e.id)))
+  }
+
+  function deselectAll() {
+    setSelectedIds(new Set())
+  }
+
+  function exitSelectionMode() {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
+
+  // Count of selected engagements eligible for PBC reminder (status 'pbc_sent' or 'collecting')
+  const eligibleSendCount = useMemo(
+    () =>
+      engagements.filter(
+        (e) => selectedIds.has(e.id) && ['pbc_sent', 'collecting'].includes(e.status)
+      ).length,
+    [engagements, selectedIds]
+  )
+
+  function openBulkAssign() {
+    setBulkAssignToId('')
+    setBulkAssignOpen(true)
+  }
+
+  async function confirmBulkAssign() {
+    const tm = team.find((t) => t.id === bulkAssignToId)
+    if (!tm) {
+      toast.error('Please select a team member')
+      return
+    }
+    // Resolve User ID from existing engagements by email
+    const userId = tm.email ? userIdByEmail[tm.email.toLowerCase()] : undefined
+    if (!userId) {
+      toast.error(
+        `Could not resolve a User ID for ${tm.name}. Make sure they are assigned to at least one existing engagement.`
+      )
+      return
+    }
+    setBulkBusy(true)
+    try {
+      const ids = Array.from(selectedIds)
+      const results = await Promise.allSettled(
+        ids.map((id) =>
+          fetch(`/api/engagements/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assignedToId: userId }),
+          })
+        )
+      )
+      const ok = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.length - ok
+      if (failed > 0) {
+        toast.warning(`Assigned ${ok} engagement${ok === 1 ? '' : 's'}; ${failed} failed`)
+      } else {
+        toast.success(
+          `Assigned ${ok} engagement${ok === 1 ? '' : 's'} to ${tm.name}`,
+          { description: `${tm.role}` }
+        )
+      }
+      setBulkAssignOpen(false)
+      setBulkAssignToId('')
+      await refreshEngagements()
+    } catch (err) {
+      console.error(err)
+      toast.error('Bulk assign failed')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  function openBulkSend() {
+    if (eligibleSendCount === 0) {
+      toast.info('No selected engagements are eligible for PBC reminders', {
+        description: 'Only engagements in PBC Sent or Collecting status can receive reminders.',
+      })
+      return
+    }
+    setBulkSendProgress(null)
+    setBulkSendOpen(true)
+  }
+
+  async function confirmBulkSend() {
+    const eligible = engagements.filter(
+      (e) => selectedIds.has(e.id) && ['pbc_sent', 'collecting'].includes(e.status)
+    )
+    if (eligible.length === 0) {
+      setBulkSendOpen(false)
+      return
+    }
+    setBulkSending(true)
+    setBulkSendProgress({ sent: 0, total: eligible.length })
+    let sent = 0
+    let failed = 0
+    for (const e of eligible) {
+      try {
+        const res = await fetch(`/api/engagements/${e.id}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ via: 'email' }),
+        })
+        if (res.ok) sent++
+        else failed++
+      } catch {
+        failed++
+      }
+      setBulkSendProgress({ sent: sent + failed, total: eligible.length })
+    }
+    setBulkSending(false)
+    setBulkSendOpen(false)
+    setBulkSendProgress(null)
+    if (failed > 0) {
+      toast.warning(`Sent ${sent} reminder${sent === 1 ? '' : 's'}; ${failed} failed`)
+    } else {
+      toast.success(`Sent ${sent} PBC reminder${sent === 1 ? '' : 's'}`, {
+        description: 'Clients will receive an email with their PBC list link.',
+      })
+    }
+    await refreshEngagements()
+  }
+
+  function openBulkPriority() {
+    setBulkPriority('medium')
+    setBulkPriorityOpen(true)
+  }
+
+  async function confirmBulkPriority() {
+    setBulkBusy(true)
+    try {
+      const ids = Array.from(selectedIds)
+      const results = await Promise.allSettled(
+        ids.map((id) =>
+          fetch(`/api/engagements/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ priority: bulkPriority }),
+          })
+        )
+      )
+      const ok = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.length - ok
+      if (failed > 0) {
+        toast.warning(`Updated ${ok} engagement${ok === 1 ? '' : 's'}; ${failed} failed`)
+      } else {
+        toast.success(
+          `Priority updated to ${bulkPriority} for ${ok} engagement${ok === 1 ? '' : 's'}`
+        )
+      }
+      setBulkPriorityOpen(false)
+      await refreshEngagements()
+    } catch (err) {
+      console.error(err)
+      toast.error('Bulk priority update failed')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  function bulkExport() {
+    const selected = engagements.filter((e) => selectedIds.has(e.id))
+    if (selected.length === 0) {
+      toast.error('No engagements selected')
+      return
+    }
+    exportCsv(selected)
+    toast.success(`Exported ${selected.length} engagement${selected.length === 1 ? '' : 's'} to CSV`)
+  }
+
+  async function confirmBulkArchive() {
+    setBulkBusy(true)
+    try {
+      const ids = Array.from(selectedIds)
+      const results = await Promise.allSettled(
+        ids.map((id) =>
+          fetch(`/api/engagements/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'done', progress: 100 }),
+          })
+        )
+      )
+      const ok = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.length - ok
+      if (failed > 0) {
+        toast.warning(`Completed ${ok} engagement${ok === 1 ? '' : 's'}; ${failed} failed`)
+      } else {
+        toast.success(`Marked ${ok} engagement${ok === 1 ? '' : 's'} as completed`)
+      }
+      setBulkArchiveOpen(false)
+      exitSelectionMode()
+      await refreshEngagements()
+    } catch (err) {
+      console.error(err)
+      toast.error('Bulk archive failed')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
   /* --------------------------------- render -------------------------------- */
   if (loading) {
     return <EngagementsSkeleton />
   }
 
   return (
-    <div className="space-y-6 p-4 lg:p-6">
+    <div
+      className={cn(
+        'space-y-6 p-4 lg:p-6',
+        selectionMode && selectedIds.size > 0 && 'pb-28'
+      )}
+    >
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -420,10 +706,44 @@ export function EngagementsView() {
             Manage tax preparation engagements
           </p>
         </div>
-        <Button onClick={openNewDialog} className="shrink-0">
-          <Plus className="mr-1.5 h-4 w-4" />
-          New Engagement
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {selectionMode && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={selectAll}
+                disabled={visibleEngagements.length === 0}
+              >
+                <CheckSquare className="mr-1.5 h-4 w-4" />
+                Select All
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={deselectAll}
+                disabled={selectedIds.size === 0}
+              >
+                <X className="mr-1.5 h-4 w-4" />
+                Deselect All
+              </Button>
+            </>
+          )}
+          <Button
+            variant={selectionMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
+          >
+            <CheckSquare className="mr-1.5 h-4 w-4" />
+            {selectionMode ? 'Exit Select' : 'Select'}
+          </Button>
+          {!selectionMode && (
+            <Button onClick={openNewDialog} className="shrink-0">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Engagement
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Stats Row */}
@@ -562,7 +882,14 @@ export function EngagementsView() {
               key={e.id}
               engagement={e}
               colorByEmail={colorByEmail}
-              onClick={() => openEngagement(e.id)}
+              onClick={
+                selectionMode
+                  ? () => toggleSelection(e.id)
+                  : () => openEngagement(e.id)
+              }
+              selectionMode={selectionMode}
+              selected={selectedIds.has(e.id)}
+              onToggleSelect={toggleSelection}
             />
           ))}
         </div>
@@ -747,6 +1074,270 @@ export function EngagementsView() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Action Bar */}
+      {selectionMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:left-64">
+          <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+            <span className="text-sm font-medium">
+              {selectedIds.size} selected
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={openBulkAssign}>
+                <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                Assign...
+              </Button>
+              <Button size="sm" variant="outline" onClick={openBulkSend}>
+                <Send className="mr-1.5 h-3.5 w-3.5" />
+                Send PBC Reminders
+              </Button>
+              <Button size="sm" variant="outline" onClick={openBulkPriority}>
+                <Flag className="mr-1.5 h-3.5 w-3.5" />
+                Change Priority
+              </Button>
+              <Button size="sm" variant="outline" onClick={bulkExport}>
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                Export CSV
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setBulkArchiveOpen(true)}>
+                <Archive className="mr-1.5 h-3.5 w-3.5" />
+                Mark Done
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={exitSelectionMode}
+              className="ml-auto"
+            >
+              <X className="mr-1.5 h-3.5 w-3.5" />
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Assign Dialog */}
+      <Dialog
+        open={bulkAssignOpen}
+        onOpenChange={(o) => {
+          setBulkAssignOpen(o)
+          if (!o) setBulkAssignToId('')
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Assign Engagements</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Assign{' '}
+              <span className="font-semibold text-foreground">{selectedIds.size}</span>{' '}
+              selected engagement{selectedIds.size === 1 ? '' : 's'} to a team member.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-assign">Team Member</Label>
+              <Select value={bulkAssignToId} onValueChange={setBulkAssignToId}>
+                <SelectTrigger id="bulk-assign" className="w-full">
+                  <SelectValue placeholder="Select team member..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {team.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name} · {t.role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                The team member&apos;s User ID is resolved from existing engagements by email.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkAssignOpen(false)}
+              disabled={bulkBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmBulkAssign}
+              disabled={bulkBusy || !bulkAssignToId}
+            >
+              {bulkBusy ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Assigning...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="mr-1.5 h-4 w-4" />
+                  Assign {selectedIds.size} engagement{selectedIds.size === 1 ? '' : 's'}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Send PBC Reminders Confirmation */}
+      <Dialog open={bulkSendOpen} onOpenChange={setBulkSendOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send PBC Reminders</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {bulkSendProgress ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Sending reminders...</span>
+                  <span className="font-semibold tabular-nums">
+                    {bulkSendProgress.sent} / {bulkSendProgress.total}
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    style={{
+                      width: `${bulkSendProgress.total === 0 ? 0 : (bulkSendProgress.sent / bulkSendProgress.total) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Send PBC reminders to{' '}
+                  <span className="font-semibold text-foreground">{eligibleSendCount}</span>{' '}
+                  eligible client{eligibleSendCount === 1 ? '' : 's'} via email?
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Only engagements in <span className="font-medium">PBC Sent</span> or{' '}
+                  <span className="font-medium">Collecting</span> status are eligible.
+                  {selectedIds.size - eligibleSendCount > 0 && (
+                    <>
+                      {' '}
+                      <span className="text-amber-600 dark:text-amber-400">
+                        ({selectedIds.size - eligibleSendCount} of the selected will be skipped.)
+                      </span>
+                    </>
+                  )}
+                </p>
+              </>
+            )}
+          </div>
+          {!bulkSending && (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBulkSendOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={confirmBulkSend}>
+                <Send className="mr-1.5 h-4 w-4" />
+                Send Reminders
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Change Priority Dialog */}
+      <Dialog open={bulkPriorityOpen} onOpenChange={setBulkPriorityOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Priority</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Update priority for{' '}
+              <span className="font-semibold text-foreground">{selectedIds.size}</span>{' '}
+              selected engagement{selectedIds.size === 1 ? '' : 's'}.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-priority">Priority</Label>
+              <Select
+                value={bulkPriority}
+                onValueChange={(v) => setBulkPriority(v as Priority)}
+              >
+                <SelectTrigger id="bulk-priority" className="w-full">
+                  <SelectValue placeholder="Select priority..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkPriorityOpen(false)}
+              disabled={bulkBusy}
+            >
+              Cancel
+            </Button>
+            <Button onClick={confirmBulkPriority} disabled={bulkBusy}>
+              {bulkBusy ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Flag className="mr-1.5 h-4 w-4" />
+                  Update Priority
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Archive Confirmation */}
+      <Dialog open={bulkArchiveOpen} onOpenChange={setBulkArchiveOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark Engagements as Completed</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Mark{' '}
+              <span className="font-semibold text-foreground">{selectedIds.size}</span>{' '}
+              engagement{selectedIds.size === 1 ? '' : 's'} as completed? Their status will be
+              set to <span className="font-medium">Done</span> and progress to{' '}
+              <span className="font-medium">100%</span>.
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              This action cannot be easily undone from this view.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkArchiveOpen(false)}
+              disabled={bulkBusy}
+            >
+              Cancel
+            </Button>
+            <Button onClick={confirmBulkArchive} disabled={bulkBusy}>
+              {bulkBusy ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Completing...
+                </>
+              ) : (
+                <>
+                  <Archive className="mr-1.5 h-4 w-4" />
+                  Mark {selectedIds.size} as Completed
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -757,9 +1348,19 @@ interface EngagementCardProps {
   engagement: EngagementRow
   colorByEmail: Record<string, string>
   onClick: () => void
+  selectionMode?: boolean
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
 }
 
-function EngagementCard({ engagement, colorByEmail, onClick }: EngagementCardProps) {
+function EngagementCard({
+  engagement,
+  colorByEmail,
+  onClick,
+  selectionMode,
+  selected,
+  onToggleSelect,
+}: EngagementCardProps) {
   const e = engagement
   const clientName = e.client?.name || 'Unknown Client'
   const clientType = e.client?.clientType || 'individual'
@@ -780,11 +1381,20 @@ function EngagementCard({ engagement, colorByEmail, onClick }: EngagementCardPro
       onClick={onClick}
       className={cn(
         'group relative flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm transition-all',
-        'cursor-pointer hover:-translate-y-0.5 hover:shadow-md'
+        'cursor-pointer hover:-translate-y-0.5 hover:shadow-md',
+        selected && 'border-primary ring-2 ring-primary/20'
       )}
     >
+      {selectionMode && (
+        <Checkbox
+          checked={!!selected}
+          onCheckedChange={() => onToggleSelect?.(e.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute left-3 top-3 z-10"
+        />
+      )}
       {/* Top row: client + assigned avatar */}
-      <div className="flex items-start justify-between gap-3">
+      <div className={cn('flex items-start justify-between gap-3', selectionMode && 'pl-7')}>
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
             {getInitials(clientName)}
