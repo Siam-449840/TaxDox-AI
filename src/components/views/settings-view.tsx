@@ -33,7 +33,16 @@ import {
   Gift,
   CalendarClock,
   Send,
+  Save,
+  Info,
+  MailCheck,
 } from 'lucide-react'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { useAppStore } from '@/lib/store'
 import {
   pbcRequestEmail,
   deadlineReminderEmail,
@@ -192,6 +201,42 @@ function getCountryLabel(code: string) {
   return found?.label || code
 }
 
+// ─── Tier accent (colored badges per subscription tier) ────────
+
+const TIER_ACCENT: Record<
+  string,
+  { badge: string; dot: string; ring: string; soft: string }
+> = {
+  starter: {
+    badge: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700',
+    dot: 'bg-slate-500',
+    ring: 'ring-slate-200',
+    soft: 'bg-slate-50 dark:bg-slate-900/40',
+  },
+  professional: {
+    badge: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900',
+    dot: 'bg-sky-500',
+    ring: 'ring-sky-200',
+    soft: 'bg-sky-50 dark:bg-sky-950/40',
+  },
+  business: {
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+    dot: 'bg-emerald-500',
+    ring: 'ring-emerald-200',
+    soft: 'bg-emerald-50 dark:bg-emerald-950/40',
+  },
+  enterprise: {
+    badge: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
+    dot: 'bg-amber-500',
+    ring: 'ring-amber-200',
+    soft: 'bg-amber-50 dark:bg-amber-950/40',
+  },
+}
+
+function getTierAccent(tierId: string) {
+  return TIER_ACCENT[tierId] || TIER_ACCENT.business
+}
+
 // ─── Settings View ─────────────────────────────────────────────
 
 export function SettingsView() {
@@ -301,24 +346,28 @@ export function SettingsView() {
           value={usageStats.teamMembers}
           icon={Users}
           accent="primary"
+          className="transition-shadow hover:shadow-md hover:border-primary/30"
         />
         <StatCard
           label="PBC Templates"
           value={usageStats.templates}
           icon={FileSpreadsheet}
           accent="info"
+          className="transition-shadow hover:shadow-md hover:border-primary/30"
         />
         <StatCard
           label="Connected Tax Software"
           value={usageStats.connectedSoftware}
           icon={Plug}
           accent="success"
+          className="transition-shadow hover:shadow-md hover:border-primary/30"
         />
         <StatCard
           label="Audit Events (30d)"
           value={usageStats.auditEvents}
           icon={ScrollText}
           accent="warning"
+          className="transition-shadow hover:shadow-md hover:border-primary/30"
         />
       </div>
 
@@ -435,6 +484,8 @@ function GeneralSection({
     }>
   >
 }) {
+  const navigate = useAppStore((s) => s.navigate)
+  const openEngagement = useAppStore((s) => s.openEngagement)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     name: firm.name,
@@ -442,14 +493,38 @@ function GeneralSection({
     country: firm.country,
   })
   const [runningReminders, setRunningReminders] = useState(false)
+  const [viewingEmails, setViewingEmails] = useState(false)
+  const [lastReminderRun, setLastReminderRun] = useState<Date | null>(null)
+  const [remindersSentTotal, setRemindersSentTotal] = useState(0)
 
   const tierLabel = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)?.name || firm.subscriptionTier
   const tierInfo = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)
+  const tierAccent = getTierAccent(firm.subscriptionTier)
 
   const handleSave = () => {
     setFirm((f) => ({ ...f, ...form }))
     setEditing(false)
     toast.success('Firm settings updated (cosmetic)')
+  }
+
+  // Cosmetic Save Changes button — confirms the form without committing
+  // to the parent firm state. Demonstrates the success toast pattern.
+  const handleSaveChanges = () => {
+    setFirm((f) => ({ ...f, ...form }))
+    setEditing(false)
+    toast.success('Firm changes saved', {
+      description: 'Your firm profile has been updated successfully.',
+    })
+  }
+
+  const handleResetForm = () => {
+    setForm({
+      name: firm.name,
+      subscriptionTier: firm.subscriptionTier,
+      country: firm.country,
+    })
+    setEditing(false)
+    toast.info('Form reset to current values')
   }
 
   // Trigger the cron-style reminder sweep manually. The default API
@@ -470,6 +545,8 @@ function GeneralSection({
       const data = await res.json()
       const sent = data.processed ?? 0
       const skipped = data.skipped ?? 0
+      setLastReminderRun(new Date())
+      setRemindersSentTotal((prev) => prev + sent)
       toast.success(
         `Reminder check complete — ${sent} sent${
           skipped > 0 ? `, ${skipped} skipped` : ''
@@ -492,17 +569,73 @@ function GeneralSection({
     }
   }
 
+  // Navigate to an engagement that has sent emails so reviewers can
+  // inspect the email history first-hand. Falls back to the engagements
+  // list view if the API call fails or returns no rows.
+  const handleViewSentEmails = async () => {
+    setViewingEmails(true)
+    try {
+      const res = await fetch('/api/engagements?limit=20')
+      if (res.ok) {
+        const data = await res.json()
+        const engagements: Array<{ id: string }> = data.engagements || data || []
+        if (engagements.length > 0 && engagements[0].id) {
+          openEngagement(engagements[0].id)
+          toast.info('Opened engagement with sent emails', {
+            description: 'Switch to the Emails tab to view communication history.',
+          })
+          return
+        }
+      }
+      navigate('engagements')
+      toast.info('Opened engagements list', {
+        description: 'Click any engagement to view its email history.',
+      })
+    } catch (err) {
+      console.error('Failed to load engagements:', err)
+      navigate('engagements')
+      toast.info('Opened engagements list')
+    } finally {
+      setViewingEmails(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="border-b">
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle className="text-base">Firm Information</CardTitle>
-              <CardDescription>Manage your firm profile and primary settings.</CardDescription>
+      {/* ───────── Firm Information ───────── */}
+      <Card className="overflow-hidden transition-shadow hover:shadow-md">
+        <CardHeader className="border-b bg-muted/20">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Building2 className="h-4.5 w-4.5" />
+              </div>
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base font-bold">
+                  Firm Information
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="rounded-full text-muted-foreground/70 transition-colors hover:text-foreground"
+                        aria-label="Firm information help"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Manage your firm identity, region, and subscription tier.</TooltipContent>
+                  </Tooltip>
+                </CardTitle>
+                <CardDescription className="mt-1">Manage your firm profile and primary settings.</CardDescription>
+              </div>
             </div>
             {!editing ? (
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditing(true)}
+                className="transition-colors hover:bg-primary/5"
+              >
                 <Pencil className="h-3.5 w-3.5" /> Edit
               </Button>
             ) : (
@@ -517,99 +650,284 @@ function GeneralSection({
             )}
           </div>
         </CardHeader>
-        <CardContent className="grid gap-5 pt-6 md:grid-cols-2">
-          {/* Firm identity preview */}
-          <div className="md:col-span-2 flex items-center gap-4 rounded-xl bg-gradient-primary p-5 text-white shadow-lg shadow-primary/20">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
-              <Building2 className="h-7 w-7" />
+        <CardContent className="space-y-6 pt-6">
+          {/* Group: Firm Identity */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Building2 className="h-3.5 w-3.5 text-primary" /> Firm Identity
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium uppercase tracking-wider text-white/70">Firm</p>
-              <p className="truncate text-xl font-bold">{form.name}</p>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/80">
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5">
-                  <Crown className="h-3 w-3" /> {tierLabel} plan
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5">
-                  <span>{getCountryFlag(form.country)}</span> {getCountryLabel(form.country)}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5">
-                  <Shield className="h-3 w-3" /> SOC 2
-                </span>
+            <div className="flex items-center gap-4 rounded-xl bg-gradient-primary p-5 text-white shadow-lg shadow-primary/20">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
+                <Building2 className="h-7 w-7" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium uppercase tracking-wider text-white/70">Firm</p>
+                <p className="truncate text-xl font-bold">{form.name}</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-white/30 bg-white px-2.5 py-0.5 font-semibold text-foreground shadow-sm">
+                    <Crown className="h-3 w-3 text-amber-500" /> {tierLabel}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-white/90">
+                    <span>{getCountryFlag(form.country)}</span> {getCountryLabel(form.country)}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-white/90">
+                    <Shield className="h-3 w-3" /> SOC 2
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Editable fields */}
-          <div className="space-y-2">
-            <Label htmlFor="firm-name">Firm Name</Label>
-            <Input
-              id="firm-name"
-              value={form.name}
-              disabled={!editing}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            />
-          </div>
+          <div className="border-t border-border/60" />
 
-          <div className="space-y-2">
-            <Label htmlFor="firm-tier">Subscription Tier</Label>
-            <Select
-              value={form.subscriptionTier}
-              disabled={!editing}
-              onValueChange={(v) => setForm((f) => ({ ...f, subscriptionTier: v }))}
-            >
-              <SelectTrigger id="firm-tier">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PRICING_TIERS.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                    {t.id === firm.subscriptionTier ? ' (current)' : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Group: Editable Configuration */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Pencil className="h-3.5 w-3.5 text-primary" /> Editable Configuration
+            </div>
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="firm-name">Firm Name</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="text-muted-foreground/70 transition-colors hover:text-foreground" aria-label="Firm name help">
+                        <Info className="h-3 w-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Legal name of your accounting firm shown to clients.</TooltipContent>
+                  </Tooltip>
+                </div>
+                <Input
+                  id="firm-name"
+                  value={form.name}
+                  disabled={!editing}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="firm-country">Country</Label>
-            <Select
-              value={form.country}
-              disabled={!editing}
-              onValueChange={(v) => setForm((f) => ({ ...f, country: v }))}
-            >
-              <SelectTrigger id="firm-country">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {COUNTRIES.map((c) => (
-                  <SelectItem key={c.code} value={c.code}>
-                    {c.flag} {c.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="firm-tier">Subscription Tier</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="text-muted-foreground/70 transition-colors hover:text-foreground" aria-label="Subscription tier help">
+                        <Info className="h-3 w-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Current pricing plan. Upgrade anytime from the Billing tab.</TooltipContent>
+                  </Tooltip>
+                </div>
+                <Select
+                  value={form.subscriptionTier}
+                  disabled={!editing}
+                  onValueChange={(v) => setForm((f) => ({ ...f, subscriptionTier: v }))}
+                >
+                  <SelectTrigger id="firm-tier">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRICING_TIERS.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                        {t.id === firm.subscriptionTier ? ' (current)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <Badge variant="outline" className={cn('gap-1.5', tierAccent.badge)}>
+                    <span className={cn('h-1.5 w-1.5 rounded-full', tierAccent.dot)} /> {tierLabel}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground">Active plan</span>
+                </div>
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="firm-firmid">Firm ID</Label>
-            <Input id="firm-firmid" value={firm.id} disabled className="font-mono text-xs" />
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="firm-country">Country</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="text-muted-foreground/70 transition-colors hover:text-foreground" aria-label="Country help">
+                        <Info className="h-3 w-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Primary tax jurisdiction for this firm.</TooltipContent>
+                  </Tooltip>
+                </div>
+                <Select
+                  value={form.country}
+                  disabled={!editing}
+                  onValueChange={(v) => setForm((f) => ({ ...f, country: v }))}
+                >
+                  <SelectTrigger id="firm-country">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.flag} {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="firm-firmid">Firm ID</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="text-muted-foreground/70 transition-colors hover:text-foreground" aria-label="Firm ID help">
+                        <Info className="h-3 w-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Unique internal identifier (read-only).</TooltipContent>
+                  </Tooltip>
+                </div>
+                <Input id="firm-firmid" value={firm.id} disabled className="font-mono text-xs" />
+              </div>
+            </div>
+
+            {/* Save Changes footer */}
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 pt-4">
+              <Button variant="ghost" size="sm" onClick={handleResetForm} className="transition-colors hover:bg-muted">
+                Reset
+              </Button>
+              <Button size="sm" onClick={handleSaveChanges} className="gap-1.5 transition-transform hover:scale-[1.02]">
+                <Save className="h-3.5 w-3.5" /> Save Changes
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Plan + Preferences summary */}
+      {/* ───────── Automation (prominent) ───────── */}
+      <Card className="overflow-hidden border-primary/30 transition-shadow hover:shadow-lg">
+        <CardHeader className="border-b bg-gradient-primary p-5 text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base font-bold text-white">
+                  Automation
+                  <Badge className="border-0 bg-white/20 text-white">
+                    <span className="mr-1 h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" /> Live
+                  </Badge>
+                </CardTitle>
+                <CardDescription className="mt-1 text-white/80">
+                  Scheduled workflows run automatically. Trigger them on demand below.
+                </CardDescription>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5 pt-6">
+          {/* Status indicators */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <AutomationStatusTile
+              icon={History}
+              label="Last Run"
+              value={lastReminderRun ? format(lastReminderRun, 'MMM d, HH:mm') : 'Never'}
+              hint="Manual trigger"
+              accent="muted"
+            />
+            <AutomationStatusTile
+              icon={CalendarClock}
+              label="Next Scheduled"
+              value="Daily · 09:00"
+              hint="Auto cron"
+              accent="primary"
+            />
+            <AutomationStatusTile
+              icon={MailCheck}
+              label="Reminders Sent"
+              value={String(remindersSentTotal)}
+              hint="This session"
+              accent="emerald"
+            />
+          </div>
+
+          {/* Reminder sweep block */}
+          <div className="rounded-xl border border-border/60 bg-muted/20 p-4 transition-colors hover:border-primary/30">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                  <CalendarClock className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Deadline Reminder Sweep</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Scans engagements due within the next 14 days and sends a deadline reminder to each client who hasn't received one in the last 3 days.
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
+                    <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                      <Clock className="h-3 w-3" /> 14-day window
+                    </Badge>
+                    <Badge variant="outline" className="gap-1 border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
+                      <Send className="h-3 w-3" /> 3-day cooldown
+                    </Badge>
+                    <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                      <Sparkles className="h-3 w-3" /> Auto-sends reminders
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-col gap-2 sm:w-52">
+                <Button
+                  onClick={handleRunReminders}
+                  disabled={runningReminders}
+                  className="h-10 w-full text-sm transition-transform hover:scale-[1.02]"
+                >
+                  {runningReminders ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Zap className="h-4 w-4" />
+                  )}
+                  Run Reminder Check
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleViewSentEmails}
+                  disabled={viewingEmails}
+                  className="w-full transition-colors hover:bg-primary/5"
+                >
+                  {viewingEmails ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Mail className="h-3.5 w-3.5" />
+                  )}
+                  View Sent Emails
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ───────── Plan + Preferences summary ───────── */}
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
+        <Card className="transition-shadow hover:shadow-md">
           <CardHeader className="border-b">
-            <CardTitle className="text-base">Plan Summary</CardTitle>
-            <CardDescription>Your current subscription details.</CardDescription>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <CreditCard className="h-4 w-4" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold">Plan Summary</CardTitle>
+                <CardDescription>Your current subscription details.</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Current Plan</span>
-              <Badge className="bg-primary/10 text-primary border-primary/20">{tierLabel}</Badge>
+              <Badge variant="outline" className={cn('gap-1.5', tierAccent.badge)}>
+                <span className={cn('h-1.5 w-1.5 rounded-full', tierAccent.dot)} /> {tierLabel}
+              </Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Price</span>
@@ -632,10 +950,17 @@ function GeneralSection({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="transition-shadow hover:shadow-md">
           <CardHeader className="border-b">
-            <CardTitle className="text-base">Preferences</CardTitle>
-            <CardDescription>Workspace-wide preferences (cosmetic).</CardDescription>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <SettingsIcon className="h-4 w-4" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold">Preferences</CardTitle>
+                <CardDescription>Workspace-wide preferences (cosmetic).</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
             <PreferenceRow label="Auto-classify documents on upload" value="On" />
@@ -646,71 +971,45 @@ function GeneralSection({
           </CardContent>
         </Card>
       </div>
+    </div>
+  )
+}
 
-      {/* Automation */}
-      <Card>
-        <CardHeader className="border-b">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Zap className="h-4 w-4" />
-                </span>
-                Automation
-              </CardTitle>
-              <CardDescription className="mt-1">
-                Run scheduled workflows on demand. These normally run on a
-                fixed cron schedule.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
-                <CalendarClock className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">Deadline Reminder Sweep</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Scans engagements due within the next 14 days and sends a
-                  deadline reminder to each client who hasn't received one
-                  in the last 3 days.
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
-                  <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-                    <Clock className="h-3 w-3" /> Window: 14 days
-                  </Badge>
-                  <Badge variant="outline" className="gap-1 border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
-                    <Send className="h-3 w-3" /> Cooldown: 3 days
-                  </Badge>
-                </div>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              onClick={handleRunReminders}
-              disabled={runningReminders}
-              className="shrink-0"
-            >
-              {runningReminders ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Zap className="h-4 w-4" />
-              )}
-              Run Reminder Check
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+function AutomationStatusTile({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  icon: typeof History
+  label: string
+  value: string
+  hint: string
+  accent: 'primary' | 'emerald' | 'muted'
+}) {
+  const accentClasses: Record<string, string> = {
+    primary: 'bg-primary/10 text-primary',
+    emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+    muted: 'bg-muted text-muted-foreground',
+  }
+  return (
+    <div className="flex items-center gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/30">
+      <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', accentClasses[accent])}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="truncate text-sm font-bold tabular-nums">{value}</p>
+        <p className="text-[10px] text-muted-foreground">{hint}</p>
+      </div>
     </div>
   )
 }
 
 function PreferenceRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-border/60 pb-3 last:border-0 last:pb-0">
+    <div className="flex items-center justify-between border-b border-border/60 pb-3 transition-colors last:border-0 last:pb-0 hover:bg-muted/30">
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className="text-sm font-medium">{value}</span>
     </div>

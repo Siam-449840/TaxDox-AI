@@ -14,6 +14,7 @@ export type ViewKey =
   | 'document-detail'
   | 'pbc-list'
   | 'client-detail'
+  | 'team-detail'
 
 export type ClientType = 'individual' | 'business' | 'trust' | 'nonprofit'
 export type EngagementType = '1040' | '1065' | '1120' | '1120S' | '1041'

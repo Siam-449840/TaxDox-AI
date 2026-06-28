@@ -9,6 +9,7 @@ interface AppState {
   selectedEngagementId: string | null
   selectedDocumentId: string | null
   selectedClientId: string | null
+  selectedTeamMemberName: string | null
   clientPortalMode: boolean
   sidebarCollapsed: boolean
 
@@ -20,6 +21,7 @@ interface AppState {
   openEngagement: (id: string) => void
   openDocument: (id: string, engagementId?: string) => void
   openClient: (id: string) => void
+  openTeamMember: (name: string) => void
   setClientPortalMode: (mode: boolean) => void
   toggleSidebar: () => void
   navigate: (view: ViewKey) => void
@@ -32,6 +34,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectedEngagementId: null,
   selectedDocumentId: null,
   selectedClientId: null,
+  selectedTeamMemberName: null,
   clientPortalMode: false,
   sidebarCollapsed: false,
 
@@ -48,6 +51,7 @@ export const useAppStore = create<AppState>((set) => ({
       selectedEngagementId: null,
       selectedDocumentId: null,
       selectedClientId: null,
+      selectedTeamMemberName: null,
     }),
 
   openEngagement: (id) =>
@@ -66,6 +70,12 @@ export const useAppStore = create<AppState>((set) => ({
     set({
       currentView: 'client-detail',
       selectedClientId: id,
+    }),
+
+  openTeamMember: (name) =>
+    set({
+      currentView: 'team-detail',
+      selectedTeamMemberName: name,
     }),
 
   setClientPortalMode: (mode) => set({ clientPortalMode: mode }),

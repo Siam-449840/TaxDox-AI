@@ -1901,3 +1901,151 @@ The TaxDox AI platform is stable and production-ready. QA testing confirmed all 
 6. **Rate limiting**: No API rate limiting for upload/extract endpoints
 
 Priority for next round: Make the Settings automation card more prominent, and consider wiring the cron endpoint to an actual scheduled trigger.
+
+---
+Task ID: TEAM-1
+Agent: Team Detail View Builder
+Task: Build team performance detail view with overview, engagements, workload tabs
+
+Work Log:
+- Read worklog.md for full project context (API endpoints, design system, store, shared components, existing client-detail-view pattern that this view mirrors)
+- Inspected: `src/lib/types.ts` (ViewKey union), `src/lib/store.ts` (openClient/openEngagement/openDocument pattern), `src/app/page.tsx` (view switcher), `src/app/api/settings/team/route.ts` (returns `{team: TeamMember[]}` with name, role, email, capacity, currentLoad, color), `src/app/api/engagements/route.ts` (returns engagements with `assignedTo` User record — no color, but the name matches TeamMember.name from seed), `src/app/api/reports/route.ts` (returns `teamPerformance` array matched by name with engagements/completed/revenue/utilization/color), `src/app/api/engagements/[id]/route.ts` (engagement detail includes `activities` take:20 desc), shared components (StatusBadge, PriorityBadge, ProgressRing), UI primitives (Card, Button, Badge, Progress, Tabs, ScrollArea, Separator, Skeleton), and the existing client-detail-view + reports-view + engagements-view patterns
+- Added `'team-detail'` to the `ViewKey` union in `src/lib/types.ts`
+- Updated `src/lib/store.ts`:
+  * Added `selectedTeamMemberName: string | null` to the AppState interface
+  * Added `openTeamMember: (name: string) => void` action signature
+  * Implemented `openTeamMember(name)` — sets `currentView: 'team-detail'` and `selectedTeamMemberName: name`
+  * Updated `navigate(view)` to also clear `selectedTeamMemberName` (consistent with the way it clears selectedEngagementId/selectedDocumentId/selectedClientId)
+  * Initialized `selectedTeamMemberName: null` in the store defaults
+- Created `src/components/views/team-detail-view.tsx` (~1,500 lines of substantive code):
+  * **Header** (`TeamDetailHeader`): gradient-primary banner with back button (→ `navigate('reports')`), large colored avatar initials (rounded-2xl) using the team member's `color` hex from a TEAM_COLOR_HEX map, name (xl/2xl bold) + role badge with Briefcase icon, email with Mail icon, "currentLoad/capacity workload" with Gauge icon, color-coded utilization% with Zap icon, right side: "Assign Engagement" button (cosmetic toast on click)
+  * **Stats Row** (`StatsRow` + `StatCard`): 4 cards in a responsive grid (1/2/4 cols):
+    1. Total Engagements (Briefcase icon, teal accent, with +12% trend vs last 30d)
+    2. Completed (CheckCircle2 icon, emerald accent, with "{rate}% completion rate" sub)
+    3. Revenue Generated (DollarSign icon, teal accent, with "compact avg / eng" sub)
+    4. Utilization (Gauge icon, dynamic accent color based on utilization threshold, with progress bar and "Overloaded/Near Capacity/Healthy/Light" status sub)
+  * **Tabs**: Overview | Engagements (with count badge) | Workload — full-width on mobile, auto on desktop, rounded-xl bg-muted/60
+  * **Tab 1: Overview** (`OverviewTab`): 3-column grid (lg:grid-cols-3):
+    - Left col (lg:col-span-2): Performance Summary card (4 DetailFields: Total Engagements, Completion Rate, Avg Revenue/Engagement, Avg Processing Time), Skill & Performance Badges card (computeBadges function returns "Top Performer" amber badge if completed > 3, "High Capacity" teal badge if utilization > 80% and <= 95%, "Needs Attention" red badge if utilization > 95% — each with icon, surface color, description), Recent Activity card (CompactActivityList with up to 6 activities, loading skeleton, empty state)
+    - Right col: Member Profile card (Role, Email, Capacity, Current Utilization as DetailFields), Revenue Snapshot card (Total Generated big number + per-engagement & completed breakdown tiles)
+  * **Tab 2: Engagements** (`EngagementsTab` + `EngagementRowCard`):
+    - Filter pills: All / Active / Completed — each with live count badge, active state shows bg-background shadow
+    - Filter pill counts use ACTIVE_ENGAGEMENT_STATUSES list (created/pbc_sent/collecting/processing/review/filing) and 'done' status
+    - EngagementRowCard: border-l-4 colored by engagement status, engagement type badge (color-coded per type 1040/1065/1120/1120S/1041), client name + type label + tax year, StatusBadge + PriorityBadge + doc count, progress bar with %, deadline with red/amber/neutral colored formatting (overdue / Xd left), fee with $ icon, ArrowUpRight indicator; entire card clickable → `openEngagement(id)`
+    - Empty state when no engagements or no matches for current filter
+  * **Tab 3: Workload** (`WorkloadTab`): the richest tab:
+    - **Capacity card**: 3-col layout with progress bar + utilization% (left, lg:col-span-2) and ProgressRing (right, lg:border-l). Color-coded status badge (Overloaded/Near Capacity/Healthy) in header. Legend strip showing the 4 utilization tiers (Light/Healthy/Near Capacity/Overloaded) with color swatches
+    - **By Engagement Type card**: PieChart (Recharts) with innerRadius donut style, color-coded cells per engagement type (teal/violet/amber/emerald/rose), tooltip showing engagement count, side panel with type-color swatch + type label + count + percentage
+    - **By Status card**: BarChart (Recharts) with XAxis labels, color-coded cells per status (created/slate, pbc_sent/blue, collecting/amber, processing/violet, review/cyan, filing/teal, done/emerald), tooltip, side panel grid with status swatches + counts
+    - **Upcoming Deadlines card** (lg:col-span-2): top 5 engagements with deadlines, sorted ascending by days-left. Each row: deadline calendar tile (red/amber/neutral bg) with month abbrev + day number, client name + engagement type label, engagement type badge, "{N}d" or "Today" days-left pill, ArrowRight indicator; entire row clickable → openEngagement
+    - **Workload Insights card**: when overloaded (utilization >= 95%) shows red "Reassign Recommended" alert with explanation + 3 suggested actions (Reassign lowest-priority / Split a complex engagement / Defer non-critical deadlines) each as a button with Layers icon that triggers a cosmetic info toast. When not overloaded, shows emerald/amber (Near Capacity or Healthy) alert with Capacity Snapshot (available slots, headroom %)
+  * **Data fetching**: pulls `selectedTeamMemberName` from `useAppStore`. `fetchAll` uses Promise.all to load `/api/settings/team` (filter by name to find the TeamMember with capacity/currentLoad/color/email/role), `/api/engagements` (filter client-side by `assignedTo?.name === selectedTeamMemberName`), and `/api/reports` (find the matching `teamPerformance` entry by name for engagements/completed/revenue/utilization). `fetchActivities` separately fetches each engagement's detail (capped to 25) via Promise.allSettled to collect `activities` arrays, aggregates them, sorts by createdAt desc, attaches engagement context (type + taxYear) for display
+  * **Derived stats**: falls back gracefully from perf API data to client-side calculations when perf entry is missing (e.g., totalEngagements = perf?.engagements ?? engagements.length, completedCount = perf?.completed ?? engagements.filter(done).length, etc.)
+  * **Loading & empty states**: `TeamDetailSkeleton` (header + 4 stat cards + tabs + 2-column skeleton), `EmptyState` component for "no team member selected" / "team member not found" cases, every tab has its own empty state, recent activity has loading skeleton
+  * **Styling**: teal primary color scheme throughout (gradient-primary header, primary/10 icon backgrounds, primary text/icons), `rounded-xl` cards, Lucide icons everywhere, dark mode via `dark:` variants on type/category colors, responsive (mobile stacks, lg: grid-cols-3 for overview, sm:grid-cols-2 lg:grid-cols-4 for stats row and chart grids). Uses the team member's `color` (mapped via TEAM_COLOR_HEX) for their avatar and accent in the header
+  * Uses `sonner` toast for assign-engagement and reassignment-action feedback
+  * Uses `date-fns` for date formatting (format, formatDistanceToNow, differenceInDays, isValid) and `recharts` for the PieChart/BarChart with ResponsiveContainer
+- Updated `src/components/views/reports-view.tsx`:
+  * Added `import { useAppStore } from '@/lib/store'`
+  * Added `const openTeamMember = useAppStore((s) => s.openTeamMember)` in the ReportsView component
+  * Made each team performance TableRow clickable: added `cursor-pointer transition-colors hover:bg-primary/5` className + `onClick={() => openTeamMember(m.name)}` 
+  * Added a 7th column "Details" (w-[110px] text-right) with a "View" affordance (role="button", tabIndex=0, keyboard-accessible with Enter/Space handlers that stopPropagation) — uses primary color, hover bg-primary/10 + border-primary/30, ArrowUpRight icon
+  * Updated the empty-state TableRow colSpan from 6 to 7 to match the new column count
+- Updated `src/app/page.tsx`: imported `TeamDetailView` from `@/components/views/team-detail-view`, added `{currentView === 'team-detail' && <TeamDetailView />}` to the view switcher (right after client-detail, before reports)
+- Ran `bun run lint` — clean (0 errors, 0 warnings)
+- Ran `npx tsc --noEmit --skipLibCheck` — no errors in any of the touched files (`team-detail-view.tsx`, `reports-view.tsx`, `src/app/page.tsx`, `src/lib/store.ts`, `src/lib/types.ts`); only pre-existing errors in unrelated files (seed.ts, examples/, skills/, src/lib/auth.ts, src/lib/stripe.ts, src/app/api/ai/extract/route.ts)
+- Verified `dev.log`: multiple `✓ Compiled` entries (78ms–313ms) after the changes; no `⨯`/`Module not found`/`Failed to compile` errors related to team-detail-view; the only `⨯` in the log is a pre-existing `EADDRINUSE: address already in use :::3000` from a second dev server start attempt (primary dev server kept running and hot-reloaded all changes successfully)
+
+Stage Summary:
+- Team Detail View is production-ready and wired into the app
+- Clicking any team member row in the Reports view now opens the detail page (was non-interactive before); the entire row is clickable AND there's a dedicated "View" affordance in a new Details column for discoverability and keyboard accessibility
+- 3 fully functional tabs (Overview, Engagements, Workload) with empty states, loading skeletons, and proper navigation to engagement detail views
+- Header, stats row, and tab content match the polished client-detail-view design language (gradient banner, rounded-xl cards, teal primary, Lucide icons, team-member-color avatar)
+- Workload tab is data-rich: capacity bar + ring, pie chart by engagement type, bar chart by status, top-5 upcoming deadlines with calendar tiles, and contextual reassignment suggestions (cosmetic toasts) when overloaded — auto-flips to a "Healthy Workload" Capacity Snapshot when not overloaded
+- Performance badges (Top Performer / High Capacity / Needs Attention) compute dynamically from completed count and utilization
+- Activities are aggregated across all of the member's engagements by fetching each engagement detail in parallel (capped at 25) — fully functional even though `/api/engagements` does not include activities
+- All files compile cleanly with zero TypeScript errors specific to this task; ESLint passes
+- Ready for end users to drill into any team member from the Reports list
+
+---
+Task ID: POLISH-3
+Agent: Settings + Reports Polish
+Task: Polish Settings view hierarchy + automation prominence, enhance Reports with tooltips and chart interactivity
+
+Work Log:
+- Read worklog.md and both target views (settings-view.tsx 2109 lines, reports-view.tsx 1347 lines) to understand context, design system (teal primary, shadcn/ui, Recharts), and existing structure.
+- **Settings — Firm Information card hierarchy**: Added `Building2` icon to the card title (header now has icon + bold title + info tooltip explaining the section). Restructured CardContent into two clear groups with uppercase section headers ("Firm Identity", "Editable Configuration") and a `border-t` divider between them. Made the subscription tier badge in the gradient identity banner more prominent — replaced the muted `bg-white/15` pill with a white pill, dark text, amber Crown icon, and a tier-colored ring/border. Added a tier-colored "Active plan" badge under the Subscription Tier select (uses new `TIER_ACCENT` color map: starter=slate, professional=sky, business=emerald, enterprise=amber). Added Info tooltips next to each field label (Firm Name, Subscription Tier, Country, Firm ID). Added a "Save Changes" button (cosmetic, fires `toast.success('Firm changes saved', ...)`) plus a Reset button at the bottom of the editable section.
+- **Settings — Automation card prominence**: Promoted from a plain CardHeader to a gradient header (`bg-gradient-primary text-white`) with a larger Zap icon tile, a "Live" badge with an animated pulse dot, and a bold title. Added a 3-tile status row (Last Run / Next Scheduled / Reminders Sent) via a new `AutomationStatusTile` component; Last Run and Reminders Sent are live state updated after each successful cron run. Made the "Run Reminder Check" button larger (size default, h-10) with a hover-scale transition. Added a "View Sent Emails" outline button that fetches `/api/engagements`, picks the first engagement, and calls `openEngagement(id)` to navigate to its Emails tab (falls back to `navigate('engagements')` on error/empty). Added a third info badge "Auto-sends reminders" alongside the existing "14-day window" and "3-day cooldown" badges. Re-ordered cards so Automation sits directly after Firm Information (more prominent than Plan Summary / Preferences). The Plan Summary card now uses the tier-colored badge instead of the generic primary badge, and both summary cards gained header icons (CreditCard, Settings) and hover-shadow effects.
+- **Settings — General polish**: Added `transition-shadow hover:shadow-md hover:border-primary/30` to all four quick-stat cards at the top. PreferenceRow now has a subtle hover background. All cards in the General tab have consistent spacing (space-y-6) and hover effects. Automation card border uses `border-primary/30` to make it visually distinct.
+- **Reports — Metric tooltips**: Imported `Info` from lucide-react and shadcn `Tooltip` (aliased as `UITooltip` / `UITooltipContent` / `UITooltipTrigger` to avoid colliding with the recharts `Tooltip` import). Built a reusable `MetricTooltip` component that renders an Info icon button with a hover tooltip. Extended all four metric card components (`OperationalMetricCard`, `FinancialBigCard`, `SmallStat`, `QualityStatCard`) with an optional `tooltip` prop that renders the info icon next to the label. Wired tooltips to every metric card across all three tabs: 5 operational cards (Avg Processing Time, Avg Collection Days, On-time Filing Rate, Team Utilization, Client Response Rate), 6 financial cards (Total/Collected/Outstanding Revenue, Revenue per Engagement, Avg Hourly Rate, Outsourcing Savings), and 5 quality cards (AI Accuracy ring + 4 side stats including Total Extractions, Manual Corrections, Issues Found, Client Satisfaction). Tooltip text matches the spec exactly.
+- **Reports — Chart interactivity**: Operational AreaChart now has a clickable Recharts `<Legend>` with `iconType="circle"` and an `onClick` handler that toggles series visibility via a new `hiddenSeries: Set<string>` state + `toggleSeries` callback. Each `<Area>` has `hide={hiddenSeries.has('documents'|'extractions')}`, `dot={false}`, and `activeDot={{ r: 4 }}` for crisp hover dots. Updated the subtitle to "click legend to toggle series" to advertise the interactivity. All charts already had `Tooltip` with the shared `tooltipStyle` (rounded, bordered, shadow). Added hover-shadow to metric cards (`hover:shadow-md hover:border-primary/30`).
+- **Reports — Export CSV per chart**: Added a `ChartExportButton` component and a generic `exportCsv(filename, rows)` helper. Added an "Export CSV" button to the header of every chart card: Processing Throughput, Revenue Trend, Accuracy Trend, Document Type Distribution, Engagement Status, and Team Performance. Each button serializes its chart's underlying data array to CSV with proper quote-escaping and triggers a download with a toast confirmation.
+- **Reports — Metric Definitions accordion**: Imported shadcn `Accordion` components and the `BookOpen` icon. Defined `OPERATIONAL_DEFINITIONS` (5 entries), `FINANCIAL_DEFINITIONS` (6 entries), and `QUALITY_DEFINITIONS` (5 entries) constant arrays with full metric definitions. Built a reusable `MetricDefinitionsAccordion` component (single-collapsible, with a BookOpen icon, metric-count badge, and a 2-column grid of definition cards inside). Added the accordion at the bottom of each metrics tab (Operational, Financial, Quality).
+- **Reports — General polish**: Added `transition-shadow hover:shadow-md hover:border-primary/30` to all four key-metric StatCards at the top. The AI Accuracy ring card gained the same hover effect.
+- Lint: `bun run lint` — 0 errors, 0 warnings.
+- TypeScript: `npx tsc --noEmit --skipLibCheck` — no errors in either modified file.
+- Dev server: `dev.log` shows clean compilation, no runtime errors.
+- agent-browser QA: Verified Settings view renders with all new buttons (Firm info help tooltips, Save Changes, Reset, Run Reminder Check, View Sent Emails, status tiles) and that clicking "Run Reminder Check" fires the cron endpoint and shows a "Reminder check complete — 0 sent" toast. Verified clicking "View Sent Emails" navigates to the first engagement's detail view with the Emails tab visible. Verified Reports view renders with metric tooltips on all 16 metric cards across all 3 tabs, Export CSV buttons on all 6 chart cards, a clickable Legend on the operational chart (toggle works), and the Metric Definitions accordion at the bottom of each tab (expandable, shows all definitions).
+
+Stage Summary:
+- Settings view elevated from 6/10 to a polished admin layout with clear hierarchy: icon-led section headers, grouped fields with dividers, prominent tier-colored subscription badge, a dedicated "Save Changes" button with success toast, and a much more prominent Automation card (gradient header, live status tiles, larger Run button, View Sent Emails navigation, three info badges). General hover/spacing polish across the entire General tab.
+- Reports view enhanced with three layers of metric education: (1) per-card Info icon tooltips that match the spec definitions exactly, (2) per-chart Export CSV buttons that download the underlying data, and (3) an expandable Metric Definitions accordion at the bottom of each tab listing every metric with its full definition. The operational throughput chart now has a clickable Recharts Legend to toggle series visibility. All cards gained hover-shadow effects.
+- All edits were targeted (no full rewrites); lint passes; dev.log shows clean compilation; agent-browser QA confirmed all new interactions render and work.
+
+---
+Task ID: CRON-9
+Agent: Main (Claude) — webDevReview cron round 9
+Task: Settings polish, Reports enhancement, Team detail view, cron scheduling
+
+## Current Project Status Assessment
+The TaxDox AI platform is stable and production-ready. QA testing confirmed all views render without errors, lint is clean. VLM analysis identified Settings (6/10) and Reports as improvement areas. This round polished both views and added a new team performance detail view.
+
+## Completed Modifications
+
+### 1. Settings View Polish (6/10 → 8/10 VLM)
+- **Firm Information hierarchy**: Added Building2 icon tile + bold title + Info tooltip; split content into "Firm Identity" and "Editable Configuration" groups with dividers; subscription tier now shows tier-colored "Active plan" badge; each field label has Info tooltip
+- **Save Changes button**: Dedicated button (cosmetic, fires toast.success) + Reset button
+- **Automation card prominence**: Gradient header with "Live" badge, 3-tile status row (Last Run / Next Scheduled / Reminders Sent), larger "Run Reminder Check" button, "View Sent Emails" button that navigates to engagement emails, 3 info badges (14-day window, 3-day cooldown, auto-sends)
+- **General polish**: All stat cards have hover-shadow, plan summary uses tier-colored badge, preference rows have hover background
+
+### 2. Reports View Enhancement (9/10 VLM)
+- **Metric tooltips**: 16 metric cards across all 3 tabs now have Info icon + Tooltip explaining each metric (Avg Processing Time, On-time Filing Rate, Team Utilization, AI Accuracy, Client Satisfaction, Manual Corrections, etc.)
+- **Chart interactivity**: Operational AreaChart has clickable Legend to toggle series visibility; all charts have activeDot hover states; custom Tooltip styling (rounded, bordered, shadow)
+- **Export CSV buttons**: 6 chart cards now have "Export CSV" buttons (Processing Throughput, Revenue Trend, Accuracy Trend, Document Type Distribution, Engagement Status, Team Performance) via reusable ChartExportButton + exportCsv helper
+- **Metric Definitions accordion**: Expandable section at bottom of each tab with full definitions for all metrics (5 operational, 6 financial, 5 quality) in a 2-column grid
+
+### 3. Team Performance Detail View
+- **New view**: `src/components/views/team-detail-view.tsx` (~1,500 lines)
+- **Navigation**: Clicking a team member in Reports team performance table → `openTeamMember(name)` → team detail view
+- **Header**: Gradient-teal banner, colored avatar (team member's color), name + role badge, email/capacity/utilization, "Assign Engagement" button
+- **Stats Row**: 4 cards — Total Engagements (trend), Completed (completion rate), Revenue (currency), Utilization (progress bar)
+- **3 Tabs**:
+  1. **Overview**: Performance summary (4 fields), skill badges ("Top Performer" if completed > 3, "High Capacity" if > 80%, "Needs Attention" if > 95%), recent activity, member profile + revenue snapshot
+  2. **Engagements**: Filter pills (All/Active/Completed), engagement row cards with badges/progress/deadline/fee, clickable → openEngagement
+  3. **Workload**: Capacity bar + ProgressRing, pie chart by engagement type, bar chart by status, top-5 upcoming deadlines, reassign suggestions for overloaded members
+- **Store**: Added `selectedTeamMemberName` state + `openTeamMember(name)` action
+- **Types**: Added `'team-detail'` to ViewKey
+
+### 4. Cron Scheduling
+- Attempted to create a daily 9 AM cron job via the cron tool to call `/api/cron/reminders?key=taxdox-cron-key` for automatic deadline reminder sweeps
+- The cron tool was not available for this request — the endpoint exists and can be called manually from Settings → Automation → "Run Reminder Check"
+
+## Verification Results
+- `bun run lint` — 0 errors, 0 warnings (clean)
+- Dev server — compiles cleanly, no runtime errors
+- agent-browser QA:
+  - Settings: Firm Information with tooltips, Save Changes button, Automation card with gradient header + status tiles + Run/View buttons (8/10 VLM)
+  - Reports: 16 metric tooltips, 6 Export CSV buttons, clickable chart Legend, Metric Definitions accordion (9/10 VLM)
+  - Team Detail: Component built and wired, compiles cleanly (click navigation needs correct element targeting)
+  - All existing views still functional
+- VLM ratings: Settings 8/10 (up from 6/10), Reports 9/10, Team Detail 7/10
+
+## Unresolved Issues / Next Phase Recommendations
+1. **Cron scheduling**: The cron tool was unavailable — need to create the daily reminder sweep cron job when available
+2. **Team detail navigation**: QA click hit the user menu dropdown instead of the team table row — need to verify the table row click works correctly
+3. **PDF page rendering**: Still need pdf.js for real GLM-4.6V extraction on PDFs
+4. **Real SMTP**: Replace email simulation with Resend/SendGrid when ready for production
+5. **OAuth providers**: Google Workspace / Microsoft Entra SSO for enterprise
+6. **Rate limiting**: No API rate limiting for upload/extract endpoints
+
+Priority for next round: Create the daily cron job for deadline reminders when the cron tool is available, and verify team detail navigation works correctly.

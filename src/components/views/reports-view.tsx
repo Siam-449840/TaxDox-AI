@@ -26,6 +26,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Activity,
+  Info,
+  BookOpen,
 } from 'lucide-react'
 import { StatCard } from '@/components/shared/stat-card'
 import { ProgressRing } from '@/components/shared/progress-ring'
@@ -42,6 +44,17 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Tooltip as UITooltip,
+  TooltipContent as UITooltipContent,
+  TooltipTrigger as UITooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import {
   AreaChart,
   Area,
@@ -61,6 +74,7 @@ import {
 } from 'recharts'
 import { toast } from 'sonner'
 import { DOCUMENT_TYPE_MAP } from '@/lib/constants'
+import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -262,6 +276,199 @@ const tooltipStyle = {
 }
 
 /* ------------------------------------------------------------------ */
+/* Shared helpers: tooltips, CSV export, metric definitions           */
+/* ------------------------------------------------------------------ */
+
+function MetricTooltip({ text }: { text: string }) {
+  return (
+    <UITooltip>
+      <UITooltipTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground/70 transition-colors hover:text-foreground"
+          aria-label="Metric definition"
+        >
+          <Info className="h-3 w-3" />
+        </button>
+      </UITooltipTrigger>
+      <UITooltipContent className="max-w-[220px] text-left leading-relaxed">
+        {text}
+      </UITooltipContent>
+    </UITooltip>
+  )
+}
+
+function exportCsv(filename: string, rows: Array<Record<string, unknown>>) {
+  if (!rows.length) {
+    toast.info('No data to export')
+    return
+  }
+  const headers = Object.keys(rows[0])
+  const escape = (v: unknown) => {
+    if (v === null || v === undefined) return ''
+    const s = String(v)
+    return `"${s.replace(/"/g, '""')}"`
+  }
+  const csv = [
+    headers.map(escape).join(','),
+    ...rows.map((r) => headers.map((h) => escape(r[h])).join(',')),
+  ].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  toast.success(`Exported ${filename}`)
+}
+
+function ChartExportButton({
+  filename,
+  rows,
+  label = 'Export CSV',
+}: {
+  filename: string
+  rows: Array<Record<string, unknown>>
+  label?: string
+}) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 gap-1.5 text-xs transition-colors hover:bg-primary/5"
+      onClick={() => exportCsv(filename, rows)}
+    >
+      <Download className="h-3 w-3" />
+      {label}
+    </Button>
+  )
+}
+
+interface MetricDefinition {
+  name: string
+  definition: string
+}
+
+const OPERATIONAL_DEFINITIONS: MetricDefinition[] = [
+  {
+    name: 'Avg Processing Time',
+    definition: 'Average time from document upload to extraction completion, measured per document across the selected range.',
+  },
+  {
+    name: 'Avg Collection Days',
+    definition: 'Average number of days between the PBC request being sent and the last required document being uploaded.',
+  },
+  {
+    name: 'On-time Filing Rate',
+    definition: 'Percentage of engagements completed before their deadline. Engagements finished after the deadline are counted as late.',
+  },
+  {
+    name: 'Team Utilization',
+    definition: 'Average capacity utilization across all team members. Calculated as current load divided by capacity.',
+  },
+  {
+    name: 'Client Response Rate',
+    definition: 'Percentage of PBC requests that received at least one client response (upload or message) within 7 days.',
+  },
+]
+
+const FINANCIAL_DEFINITIONS: MetricDefinition[] = [
+  {
+    name: 'Total Revenue',
+    definition: 'Sum of all engagement fees across engagements that started or completed within the selected range.',
+  },
+  {
+    name: 'Collected Revenue',
+    definition: 'Portion of total revenue marked as collected (engagement status = done and fee invoiced).',
+  },
+  {
+    name: 'Outstanding Revenue',
+    definition: 'Total revenue minus collected revenue. Represents fees still owed by clients for engagements in the range.',
+  },
+  {
+    name: 'Revenue per Engagement',
+    definition: 'Average fee per engagement, calculated as total revenue divided by engagement count.',
+  },
+  {
+    name: 'Avg Hourly Rate',
+    definition: 'Implied hourly rate derived from revenue divided by estimated processing hours (extractions × processing time).',
+  },
+  {
+    name: 'Outsourcing Savings',
+    definition: 'Estimated cost savings from in-house AI extraction vs. outsourcing the same volume to a manual bookkeeping service.',
+  },
+]
+
+const QUALITY_DEFINITIONS: MetricDefinition[] = [
+  {
+    name: 'AI Accuracy',
+    definition: 'Average confidence score across all AI-extracted fields, weighted by field count per document.',
+  },
+  {
+    name: 'Total Extractions',
+    definition: 'Total number of fields extracted by the AI across all processed documents in the selected range.',
+  },
+  {
+    name: 'Manual Corrections',
+    definition: 'Number of extraction fields manually corrected by reviewers. Lower values indicate higher AI accuracy.',
+  },
+  {
+    name: 'Issues Found',
+    definition: 'Number of documents flagged for review due to low extraction confidence (below the 90% threshold).',
+  },
+  {
+    name: 'Client Satisfaction',
+    definition: 'Average client rating from post-engagement surveys, on a scale of 1 to 5 stars.',
+  },
+]
+
+function MetricDefinitionsAccordion({
+  title,
+  definitions,
+}: {
+  title: string
+  definitions: MetricDefinition[]
+}) {
+  return (
+    <Card className="rounded-xl">
+      <Accordion type="single" collapsible className="w-full">
+        <AccordionItem value="definitions" className="border-b-0">
+          <AccordionTrigger className="px-5 hover:no-underline">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <BookOpen className="h-3.5 w-3.5" />
+              </div>
+              <span className="text-sm font-semibold">{title}</span>
+              <Badge variant="outline" className="ml-1 text-[10px]">
+                {definitions.length} metrics
+              </Badge>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-5 pb-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {definitions.map((d) => (
+                <div
+                  key={d.name}
+                  className="rounded-lg border border-border/60 bg-muted/20 p-3"
+                >
+                  <p className="text-xs font-semibold text-foreground">{d.name}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {d.definition}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </Card>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -270,6 +477,20 @@ export function ReportsView() {
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<RangeValue>('30d')
   const [refreshing, setRefreshing] = useState(false)
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set())
+
+  const toggleSeries = useCallback((dataKey: string) => {
+    setHiddenSeries((prev) => {
+      const next = new Set(prev)
+      if (next.has(dataKey)) {
+        next.delete(dataKey)
+      } else {
+        next.add(dataKey)
+      }
+      return next
+    })
+  }, [])
+  const openTeamMember = useAppStore((s) => s.openTeamMember)
 
   const fetchData = useCallback(
     async (r: RangeValue, silent = false) => {
@@ -462,6 +683,7 @@ export function ReportsView() {
           icon={DollarSign}
           trend={{ value: 12.4, label: 'vs last period' }}
           accent="primary"
+          className="transition-shadow hover:shadow-md hover:border-primary/30"
         />
         <StatCard
           label="Avg Processing Time"
@@ -469,6 +691,7 @@ export function ReportsView() {
           icon={Clock}
           trend={{ value: -8.2, label: 'per document' }}
           accent="info"
+          className="transition-shadow hover:shadow-md hover:border-primary/30"
         />
         <StatCard
           label="AI Accuracy"
@@ -476,6 +699,7 @@ export function ReportsView() {
           icon={Target}
           trend={{ value: 3.1, label: 'extraction confidence' }}
           accent="success"
+          className="transition-shadow hover:shadow-md hover:border-primary/30"
         />
         <StatCard
           label="Client Satisfaction"
@@ -483,6 +707,7 @@ export function ReportsView() {
           icon={Star}
           trend={{ value: 2.5, label: 'avg rating' }}
           accent="warning"
+          className="transition-shadow hover:shadow-md hover:border-primary/30"
         />
       </div>
 
@@ -526,6 +751,7 @@ export function ReportsView() {
                 label="Avg Processing / Doc"
                 value={`${operational.avgProcessingMin}m`}
                 trend={{ value: -8.2, label: 'faster' }}
+                tooltip="Average time from document upload to extraction completion."
               />
               <OperationalMetricCard
                 icon={CalendarClock}
@@ -533,6 +759,7 @@ export function ReportsView() {
                 label="Avg Collection Days"
                 value={`${operational.avgCollectionDays}d`}
                 trend={{ value: -4.5, label: 'faster' }}
+                tooltip="Average days from PBC request to last required document upload."
               />
               <OperationalMetricCard
                 icon={CheckCircle2}
@@ -540,6 +767,7 @@ export function ReportsView() {
                 label="On-time Filing Rate"
                 value={`${operational.onTimeRate}%`}
                 trend={{ value: 2.1, label: 'vs target' }}
+                tooltip="Percentage of engagements completed before their deadline."
               />
               <OperationalMetricCard
                 icon={Users}
@@ -547,6 +775,7 @@ export function ReportsView() {
                 label="Team Utilization"
                 value={`${operational.teamUtilization}%`}
                 trend={{ value: 5.6, label: 'capacity' }}
+                tooltip="Average capacity utilization across all team members."
               />
               <OperationalMetricCard
                 icon={MessageSquare}
@@ -554,28 +783,20 @@ export function ReportsView() {
                 label="Client Response Rate"
                 value={`${operational.clientResponseRate}%`}
                 trend={{ value: 1.8, label: 'engagement' }}
+                tooltip="Percentage of PBC requests that received a client response within 7 days."
               />
             </div>
 
             {/* Mini area chart showing document/extraction throughput */}
             <div className="mt-6 border-t pt-5">
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold">Processing Throughput</h3>
-                  <p className="text-xs text-muted-foreground">Daily documents &amp; extractions over the selected range</p>
+                  <p className="text-xs text-muted-foreground">Daily documents &amp; extractions · click legend to toggle series</p>
                 </div>
-                <div className="flex items-center gap-3 text-xs">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART_COLORS.primary }} />
-                    Documents
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART_COLORS.emerald }} />
-                    Extractions
-                  </span>
-                </div>
+                <ChartExportButton filename="processing-throughput.csv" rows={revenueTrend} />
               </div>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={240}>
                 <AreaChart data={revenueTrend} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
                   <defs>
                     <linearGradient id="opDocsGrad" x1="0" y1="0" x2="0" y2="1">
@@ -608,6 +829,9 @@ export function ReportsView() {
                     strokeWidth={2}
                     fill="url(#opDocsGrad)"
                     name="Documents"
+                    hide={hiddenSeries.has('documents')}
+                    dot={false}
+                    activeDot={{ r: 4 }}
                   />
                   <Area
                     type="monotone"
@@ -616,11 +840,30 @@ export function ReportsView() {
                     strokeWidth={2}
                     fill="url(#opExtGrad)"
                     name="Extractions"
+                    hide={hiddenSeries.has('extractions')}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                  <Legend
+                    iconType="circle"
+                    wrapperStyle={{ cursor: 'pointer', fontSize: 12, paddingTop: 8 }}
+                    onClick={(item: unknown) => {
+                      const key = (item as { dataKey?: string })?.dataKey
+                      if (key) toggleSeries(key)
+                    }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </Card>
+
+          {/* Metric Definitions accordion */}
+          <div className="mt-4">
+            <MetricDefinitionsAccordion
+              title="Operational Metric Definitions"
+              definitions={OPERATIONAL_DEFINITIONS}
+            />
+          </div>
         </TabsContent>
 
         {/* ----------------------- Financial ----------------------- */}
@@ -645,6 +888,7 @@ export function ReportsView() {
                 icon={DollarSign}
                 accent="primary"
                 subtitle={`Across ${teamPerformance.reduce((s, t) => s + t.engagements, 0)} engagements`}
+                tooltip="Sum of all engagement fees within the selected range."
               />
               <FinancialBigCard
                 label="Collected Revenue"
@@ -652,6 +896,7 @@ export function ReportsView() {
                 icon={CheckCircle2}
                 accent="success"
                 subtitle={`${Math.round((financial.collectedRevenue / (financial.totalRevenue || 1)) * 100)}% of total`}
+                tooltip="Portion of total revenue marked as collected (engagements marked done and invoiced)."
               />
               <FinancialBigCard
                 label="Outstanding Revenue"
@@ -659,6 +904,7 @@ export function ReportsView() {
                 icon={AlertTriangle}
                 accent="warning"
                 subtitle={`${Math.round((financial.outstandingRevenue / (financial.totalRevenue || 1)) * 100)}% of total`}
+                tooltip="Total revenue minus collected revenue — fees still owed by clients."
               />
             </div>
 
@@ -669,12 +915,14 @@ export function ReportsView() {
                 accent="primary"
                 label="Revenue per Engagement"
                 value={currency.format(financial.revenuePerEngagement)}
+                tooltip="Average fee per engagement (total revenue ÷ engagement count)."
               />
               <SmallStat
                 icon={Timer}
                 accent="violet"
                 label="Avg Hourly Rate"
                 value={`${currency.format(financial.avgHourlyRate)}/hr`}
+                tooltip="Implied hourly rate derived from revenue ÷ estimated processing hours."
               />
               <SmallStat
                 icon={TrendingUp}
@@ -682,12 +930,13 @@ export function ReportsView() {
                 label="Outsourcing Savings"
                 value={currency.format(financial.outsourcingSavings)}
                 trend={{ value: 18.3, label: 'YoY' }}
+                tooltip="Estimated savings vs. outsourcing the same volume to a manual bookkeeping service."
               />
             </div>
 
             {/* Revenue trend area chart */}
             <div className="mt-6 border-t pt-5">
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold">Revenue Trend</h3>
                   <p className="text-xs text-muted-foreground">
@@ -699,6 +948,7 @@ export function ReportsView() {
                     <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART_COLORS.primary }} />
                     Revenue
                   </span>
+                  <ChartExportButton filename="revenue-trend.csv" rows={revenueTrend} />
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={260}>
@@ -739,6 +989,14 @@ export function ReportsView() {
               </ResponsiveContainer>
             </div>
           </Card>
+
+          {/* Metric Definitions accordion */}
+          <div className="mt-4">
+            <MetricDefinitionsAccordion
+              title="Financial Metric Definitions"
+              definitions={FINANCIAL_DEFINITIONS}
+            />
+          </div>
         </TabsContent>
 
         {/* ----------------------- Quality ----------------------- */}
@@ -757,9 +1015,10 @@ export function ReportsView() {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* Accuracy ring (large) */}
-              <div className="flex flex-col items-center justify-center rounded-xl border bg-muted/20 p-6">
-                <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  AI Extraction Accuracy
+              <div className="flex flex-col items-center justify-center rounded-xl border bg-muted/20 p-6 transition-shadow hover:shadow-md hover:border-primary/30">
+                <p className="mb-3 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <span>AI Extraction Accuracy</span>
+                  <MetricTooltip text="Average confidence score across all AI-extracted fields, weighted by field count per document." />
                 </p>
                 <ProgressRing
                   value={quality.avgConfidence}
@@ -789,6 +1048,7 @@ export function ReportsView() {
                   label="Total Extractions"
                   value={numberCompact.format(quality.totalExtractions)}
                   subtitle="fields extracted"
+                  tooltip="Total fields extracted by the AI across all processed documents."
                 />
                 <QualityStatCard
                   icon={AlertTriangle}
@@ -796,6 +1056,7 @@ export function ReportsView() {
                   label="Manual Corrections"
                   value={String(quality.manualCorrections)}
                   subtitle="unverified fields"
+                  tooltip="Number of extraction fields manually corrected by reviewers."
                 />
                 <QualityStatCard
                   icon={ListChecks}
@@ -803,6 +1064,7 @@ export function ReportsView() {
                   label="Issues Found"
                   value={String(quality.issuesFound)}
                   subtitle="low-confidence docs"
+                  tooltip="Number of documents flagged for review due to low extraction confidence."
                 />
                 <QualityStatCard
                   icon={Star}
@@ -810,13 +1072,14 @@ export function ReportsView() {
                   label="Client Satisfaction"
                   value={`${quality.clientSatisfaction} / 5`}
                   subtitle={<StarRating value={quality.clientSatisfaction} />}
+                  tooltip="Average client rating from post-engagement surveys (1-5 stars)."
                 />
               </div>
             </div>
 
             {/* Accuracy trend line chart */}
             <div className="mt-6 border-t pt-5">
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold">Accuracy Trend</h3>
                   <p className="text-xs text-muted-foreground">Daily AI extraction confidence over the selected range</p>
@@ -826,6 +1089,7 @@ export function ReportsView() {
                     <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART_COLORS.emerald }} />
                     Accuracy %
                   </span>
+                  <ChartExportButton filename="accuracy-trend.csv" rows={accuracyTrend} />
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={240}>
@@ -862,6 +1126,14 @@ export function ReportsView() {
               </ResponsiveContainer>
             </div>
           </Card>
+
+          {/* Metric Definitions accordion */}
+          <div className="mt-4">
+            <MetricDefinitionsAccordion
+              title="Quality Metric Definitions"
+              definitions={QUALITY_DEFINITIONS}
+            />
+          </div>
         </TabsContent>
       </Tabs>
 
@@ -869,17 +1141,23 @@ export function ReportsView() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Document Type Distribution (2/3 width) */}
         <Card className="rounded-xl p-5 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Document Type Distribution</h2>
               <p className="text-xs text-muted-foreground">
                 Top {typeChartData.length} document types processed by the AI
               </p>
             </div>
-            <Badge variant="outline" className="gap-1">
-              <FileSearch className="h-3 w-3" />
-              {typeDistribution.length} types
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="gap-1">
+                <FileSearch className="h-3 w-3" />
+                {typeDistribution.length} types
+              </Badge>
+              <ChartExportButton
+                filename="document-type-distribution.csv"
+                rows={typeChartData.map((t) => ({ type: t.type, shortType: t.shortType, count: t.count, pct: t.pct }))}
+              />
+            </div>
           </div>
 
           <ResponsiveContainer width="100%" height={Math.max(240, typeChartData.length * 36)}>
@@ -937,9 +1215,15 @@ export function ReportsView() {
 
         {/* Engagement Status Breakdown (1/3 width) */}
         <Card className="rounded-xl p-5">
-          <div className="mb-4">
-            <h2 className="text-base font-semibold">Engagement Status</h2>
-            <p className="text-xs text-muted-foreground">Active pipeline distribution</p>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">Engagement Status</h2>
+              <p className="text-xs text-muted-foreground">Active pipeline distribution</p>
+            </div>
+            <ChartExportButton
+              filename="engagement-status.csv"
+              rows={statusPieData.map((s) => ({ status: s.name, count: s.value, pct: Math.round((s.value / (statusTotal || 1)) * 100) }))}
+            />
           </div>
 
           <div className="relative flex items-center justify-center">
@@ -995,17 +1279,30 @@ export function ReportsView() {
 
       {/* ----------------------- Team Performance Table ----------------------- */}
       <Card className="rounded-xl p-5">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">Team Performance</h2>
             <p className="text-xs text-muted-foreground">
               Individual contributor metrics across all engagements
             </p>
           </div>
-          <Badge variant="outline" className="gap-1">
-            <Users className="h-3 w-3" />
-            {teamPerformance.length} members
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="gap-1">
+              <Users className="h-3 w-3" />
+              {teamPerformance.length} members
+            </Badge>
+            <ChartExportButton
+              filename="team-performance.csv"
+              rows={teamPerformance.map((m) => ({
+                name: m.name,
+                role: m.role,
+                engagements: m.engagements,
+                completed: m.completed,
+                revenue: m.revenue,
+                utilization_pct: m.utilization,
+              }))}
+            />
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -1018,6 +1315,7 @@ export function ReportsView() {
                 <TableHead className="text-right">Revenue</TableHead>
                 <TableHead className="min-w-[160px]">Utilization</TableHead>
                 <TableHead className="text-center">Performance</TableHead>
+                <TableHead className="w-[110px] text-right pr-3">Details</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1027,7 +1325,11 @@ export function ReportsView() {
                 const completionRate =
                   m.engagements > 0 ? Math.round((m.completed / m.engagements) * 100) : 0
                 return (
-                  <TableRow key={`${m.name}-${i}`} className="text-sm">
+                  <TableRow
+                    key={`${m.name}-${i}`}
+                    className="cursor-pointer text-sm transition-colors hover:bg-primary/5"
+                    onClick={() => openTeamMember(m.name)}
+                  >
                     <TableCell className="pl-3 py-3">
                       <div className="flex items-center gap-3">
                         <div
@@ -1095,12 +1397,34 @@ export function ReportsView() {
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
+                    <TableCell className="pr-3 text-right">
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(ev) => {
+                          ev.stopPropagation()
+                          openTeamMember(m.name)
+                        }}
+                        onKeyDown={(ev) => {
+                          if (ev.key === 'Enter' || ev.key === ' ') {
+                            ev.preventDefault()
+                            ev.stopPropagation()
+                            openTeamMember(m.name)
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 hover:border-primary/30"
+                        aria-label={`View details for ${m.name}`}
+                      >
+                        View
+                        <ArrowUpRight className="h-3 w-3" />
+                      </span>
+                    </TableCell>
                   </TableRow>
                 )
               })}
               {teamPerformance.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                     No team performance data available
                   </TableCell>
                 </TableRow>
@@ -1123,12 +1447,14 @@ function OperationalMetricCard({
   label,
   value,
   trend,
+  tooltip,
 }: {
   icon: typeof Clock
   accent: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'violet'
   label: string
   value: string
   trend?: { value: number; label: string }
+  tooltip?: string
 }) {
   const accentClasses: Record<string, string> = {
     primary: 'bg-primary/10 text-primary',
@@ -1139,7 +1465,7 @@ function OperationalMetricCard({
     violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
   }
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 transition-shadow hover:shadow-md hover:border-primary/30">
       <div className="flex items-center justify-between">
         <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', accentClasses[accent])}>
           <Icon className="h-4 w-4" />
@@ -1162,7 +1488,10 @@ function OperationalMetricCard({
       </div>
       <div>
         <p className="text-2xl font-bold tabular-nums tracking-tight">{value}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+          <span>{label}</span>
+          {tooltip && <MetricTooltip text={tooltip} />}
+        </p>
         {trend && <p className="mt-0.5 text-[10px] text-muted-foreground">{trend.label}</p>}
       </div>
     </div>
@@ -1175,12 +1504,14 @@ function FinancialBigCard({
   icon: Icon,
   accent,
   subtitle,
+  tooltip,
 }: {
   label: string
   value: string
   icon: typeof DollarSign
   accent: 'primary' | 'success' | 'warning'
   subtitle: string
+  tooltip?: string
 }) {
   const accentClasses: Record<string, string> = {
     primary: 'bg-primary/10 text-primary',
@@ -1188,9 +1519,12 @@ function FinancialBigCard({
     warning: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
   }
   return (
-    <div className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-card to-muted/20 p-5">
+    <div className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-card to-muted/20 p-5 transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span>{label}</span>
+          {tooltip && <MetricTooltip text={tooltip} />}
+        </p>
         <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', accentClasses[accent])}>
           <Icon className="h-4 w-4" />
         </div>
@@ -1207,12 +1541,14 @@ function SmallStat({
   label,
   value,
   trend,
+  tooltip,
 }: {
   icon: typeof DollarSign
   accent: 'primary' | 'success' | 'warning' | 'violet'
   label: string
   value: string
   trend?: { value: number; label: string }
+  tooltip?: string
 }) {
   const accentClasses: Record<string, string> = {
     primary: 'bg-primary/10 text-primary',
@@ -1221,12 +1557,15 @@ function SmallStat({
     violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
   }
   return (
-    <div className="flex items-center gap-3 rounded-xl border bg-card p-4">
+    <div className="flex items-center gap-3 rounded-xl border bg-card p-4 transition-shadow hover:shadow-md hover:border-primary/30">
       <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', accentClasses[accent])}>
         <Icon className="h-5 w-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          <span>{label}</span>
+          {tooltip && <MetricTooltip text={tooltip} />}
+        </p>
         <p className="text-lg font-bold tabular-nums">{value}</p>
       </div>
       {trend && (
@@ -1250,12 +1589,14 @@ function QualityStatCard({
   label,
   value,
   subtitle,
+  tooltip,
 }: {
   icon: typeof Star
   accent: 'primary' | 'success' | 'warning' | 'danger' | 'violet'
   label: string
   value: string
   subtitle: React.ReactNode
+  tooltip?: string
 }) {
   const accentClasses: Record<string, string> = {
     primary: 'bg-primary/10 text-primary',
@@ -1265,12 +1606,15 @@ function QualityStatCard({
     violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
   }
   return (
-    <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+    <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 transition-shadow hover:shadow-md hover:border-primary/30">
       <div className="flex items-center gap-2">
         <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', accentClasses[accent])}>
           <Icon className="h-4 w-4" />
         </div>
-        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          <span>{label}</span>
+          {tooltip && <MetricTooltip text={tooltip} />}
+        </p>
       </div>
       <p className="text-2xl font-bold tabular-nums tracking-tight">{value}</p>
       <div className="text-xs text-muted-foreground">{subtitle}</div>

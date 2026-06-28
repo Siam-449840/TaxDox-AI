@@ -1,0 +1,2002 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useMemo, useState } from 'react'
+     4→import {
+     5→  Settings as SettingsIcon,
+     6→  Building2,
+     7→  Users,
+     8→  FileSpreadsheet,
+     9→  Plug,
+    10→  CreditCard,
+    11→  ScrollText,
+    12→  Plus,
+    13→  RefreshCw,
+    14→  Loader2,
+    15→  Mail,
+    16→  Check,
+    17→  X,
+    18→  Globe,
+    19→  HardDrive,
+    20→  Cloud,
+    21→  Shield,
+    22→  Crown,
+    23→  Activity as ActivityIcon,
+    24→  History,
+    25→  ChevronRight,
+    26→  Pencil,
+    27→  Star,
+    28→  Zap,
+    29→  Hash,
+    30→  Clock,
+    31→  FileText,
+    32→  Sparkles,
+    33→  Gift,
+    34→  CalendarClock,
+    35→  Send,
+    36→} from 'lucide-react'
+    37→import {
+    38→  pbcRequestEmail,
+    39→  deadlineReminderEmail,
+    40→  documentReceivedEmail,
+    41→  extractionCompleteEmail,
+    42→  welcomeEmail,
+    43→  EMAIL_TEMPLATE_LABELS,
+    44→  type EmailContent,
+    45→  type EmailTemplate,
+    46→} from '@/lib/email-templates'
+    47→import { StatCard } from '@/components/shared/stat-card'
+    48→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+    49→import { Button } from '@/components/ui/button'
+    50→import { Badge } from '@/components/ui/badge'
+    51→import { Input } from '@/components/ui/input'
+    52→import { Label } from '@/components/ui/label'
+    53→import { Progress } from '@/components/ui/progress'
+    54→import {
+    55→  Table,
+    56→  TableBody,
+    57→  TableCell,
+    58→  TableHead,
+    59→  TableHeader,
+    60→  TableRow,
+    61→} from '@/components/ui/table'
+    62→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    63→import {
+    64→  Dialog,
+    65→  DialogContent,
+    66→  DialogHeader,
+    67→  DialogTitle,
+    68→  DialogFooter,
+    69→  DialogDescription,
+    70→} from '@/components/ui/dialog'
+    71→import {
+    72→  Select,
+    73→  SelectContent,
+    74→  SelectItem,
+    75→  SelectTrigger,
+    76→  SelectValue,
+    77→} from '@/components/ui/select'
+    78→import { ScrollArea } from '@/components/ui/scroll-area'
+    79→import { TAX_SOFTWARE, COUNTRIES, PRICING_TIERS, CLIENT_TYPES, ENGAGEMENT_TYPES } from '@/lib/constants'
+    80→import { toast } from 'sonner'
+    81→import { format } from 'date-fns'
+    82→import { cn } from '@/lib/utils'
+    83→
+    84→// ─── Types ──────────────────────────────────────────────────────
+    85→
+    86→interface TeamMemberRow {
+    87→  id: string
+    88→  firmId: string
+    89→  name: string
+    90→  role: string
+    91→  email: string
+    92→  capacity: number
+    93→  currentLoad: number
+    94→  color: string
+    95→  avatar?: string | null
+    96→}
+    97→
+    98→interface PbcTemplateItem {
+    99→  documentType: string
+   100→  description: string
+   101→  category: string
+   102→  required: boolean
+   103→  priority: string
+   104→}
+   105→
+   106→interface PbcTemplateRow {
+   107→  id: string
+   108→  firmId: string
+   109→  name: string
+   110→  description?: string | null
+   111→  clientType: string
+   112→  engagementType: string
+   113→  items: PbcTemplateItem[]
+   114→  isDefault: boolean
+   115→  createdAt: string
+   116→}
+   117→
+   118→interface AuditLogRow {
+   119→  id: string
+   120→  firmId: string
+   121→  userId?: string | null
+   122→  action: string
+   123→  resourceType?: string | null
+   124→  resourceId?: string | null
+   125→  details: Record<string, unknown> | string
+   126→  ipAddress?: string | null
+   127→  createdAt: string
+   128→}
+   129→
+   130→// ─── Color helpers ─────────────────────────────────────────────
+   131→
+   132→const TEAM_COLOR_HEX: Record<string, string> = {
+   133→  emerald: '#10b981',
+   134→  blue: '#3b82f6',
+   135→  amber: '#f59e0b',
+   136→  violet: '#8b5cf6',
+   137→  cyan: '#06b6d4',
+   138→  rose: '#f43f5e',
+   139→  teal: '#14b8a6',
+   140→  indigo: '#6366f1',
+   141→  pink: '#ec4899',
+   142→  green: '#22c55e',
+   143→}
+   144→
+   145→const TEAM_COLOR_CLASSES: Record<string, string> = {
+   146→  emerald: 'bg-emerald-500',
+   147→  blue: 'bg-blue-500',
+   148→  amber: 'bg-amber-500',
+   149→  violet: 'bg-violet-500',
+   150→  cyan: 'bg-cyan-500',
+   151→  rose: 'bg-rose-500',
+   152→  teal: 'bg-teal-500',
+   153→  indigo: 'bg-indigo-500',
+   154→  pink: 'bg-pink-500',
+   155→  green: 'bg-green-500',
+   156→}
+   157→
+   158→const ROLE_BADGE: Record<string, { label: string; classes: string }> = {
+   159→  partner: { label: 'Partner', classes: 'bg-primary/10 text-primary border-primary/20' },
+   160→  manager: { label: 'Manager', classes: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900' },
+   161→  preparer: { label: 'Preparer', classes: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900' },
+   162→  admin: { label: 'Admin', classes: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900' },
+   163→  'read-only': { label: 'Read-only', classes: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300' },
+   164→}
+   165→
+   166→function initials(name: string) {
+   167→  return name
+   168→    .split(' ')
+   169→    .map((p) => p[0])
+   170→    .filter(Boolean)
+   171→    .slice(0, 2)
+   172→    .join('')
+   173→    .toUpperCase()
+   174→}
+   175→
+   176→function getRoleKey(role: string): keyof typeof ROLE_BADGE | 'read-only' {
+   177→  const r = role.toLowerCase()
+   178→  if (r.includes('partner')) return 'partner'
+   179→  if (r.includes('manager')) return 'manager'
+   180→  if (r.includes('preparer')) return 'preparer'
+   181→  if (r.includes('admin')) return 'admin'
+   182→  return 'read-only'
+   183→}
+   184→
+   185→function getCountryFlag(code: string) {
+   186→  const found = COUNTRIES.find((c) => c.code === code)
+   187→  return found?.flag || '🌐'
+   188→}
+   189→
+   190→function getCountryLabel(code: string) {
+   191→  const found = COUNTRIES.find((c) => c.code === code)
+   192→  return found?.label || code
+   193→}
+   194→
+   195→// ─── Settings View ─────────────────────────────────────────────
+   196→
+   197→export function SettingsView() {
+   198→  const [activeTab, setActiveTab] = useState('general')
+   199→  const [loading, setLoading] = useState(true)
+   200→  const [refreshing, setRefreshing] = useState(false)
+   201→
+   202→  const [team, setTeam] = useState<TeamMemberRow[]>([])
+   203→  const [templates, setTemplates] = useState<PbcTemplateRow[]>([])
+   204→  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([])
+   205→
+   206→  // Firm info (derived from API responses; fall back to seeded defaults if needed)
+   207→  const [firm, setFirm] = useState({
+   208→    id: '',
+   209→    name: 'Meridian CPA Group',
+   210→    subscriptionTier: 'business',
+   211→    country: 'US',
+   212→    settings: { taxSoftware: ['ultratax', 'cch'], multiCountry: true } as Record<string, unknown>,
+   213→  })
+   214→
+   215→  const [showAddMember, setShowAddMember] = useState(false)
+   216→  const [showCreateTemplate, setShowCreateTemplate] = useState(false)
+   217→
+   218→  const loadData = async (silent = false) => {
+   219→    if (!silent) setLoading(true)
+   220→    try {
+   221→      const [teamRes, templatesRes, auditRes] = await Promise.all([
+   222→        fetch('/api/settings/team'),
+   223→        fetch('/api/settings/templates'),
+   224→        fetch('/api/audit-logs'),
+   225→      ])
+   226→
+   227→      if (teamRes.ok) {
+   228→        const teamData = await teamRes.json()
+   229→        const teamList: TeamMemberRow[] = teamData.team || []
+   230→        setTeam(teamList)
+   231→        if (teamList[0]?.firmId) {
+   232→          setFirm((f) => ({ ...f, id: teamList[0].firmId }))
+   233→        }
+   234→      }
+   235→      if (templatesRes.ok) {
+   236→        const tplData = await templatesRes.json()
+   237→        setTemplates(tplData.templates || [])
+   238→      }
+   239→      if (auditRes.ok) {
+   240→        const auditData = await auditRes.json()
+   241→        setAuditLogs(auditData.logs || [])
+   242→      }
+   243→    } catch (err) {
+   244→      console.error('Failed to load settings data:', err)
+   245→      toast.error('Failed to load settings data')
+   246→    } finally {
+   247→      setLoading(false)
+   248→      setRefreshing(false)
+   249→    }
+   250→  }
+   251→
+   252→  useEffect(() => {
+   253→    loadData()
+   254→  }, [])
+   255→
+   256→  const handleRefresh = () => {
+   257→    setRefreshing(true)
+   258→    loadData(true).then(() => toast.success('Settings refreshed'))
+   259→  }
+   260→
+   261→  // Derived stats
+   262→  const usageStats = useMemo(
+   263→    () => ({
+   264→      teamMembers: team.length,
+   265→      templates: templates.length,
+   266→      connectedSoftware: TAX_SOFTWARE.filter((s) => s.connected).length,
+   267→      auditEvents: auditLogs.length,
+   268→    }),
+   269→    [team, templates, auditLogs]
+   270→  )
+   271→
+   272→  if (loading) {
+   273→    return <SettingsSkeleton />
+   274→  }
+   275→
+   276→  return (
+   277→    <div className="space-y-6 p-4 md:p-6">
+   278→      {/* Header */}
+   279→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   280→        <div className="flex items-start gap-3">
+   281→          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+   282→            <SettingsIcon className="h-5 w-5" />
+   283→          </div>
+   284→          <div>
+   285→            <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+   286→            <p className="text-sm text-muted-foreground">
+   287→              Manage your firm, team, templates, integrations, billing, and audit trail.
+   288→            </p>
+   289→          </div>
+   290→        </div>
+   291→        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+   292→          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+   293→          Refresh
+   294→        </Button>
+   295→      </div>
+   296→
+   297→      {/* Quick stats */}
+   298→      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+   299→        <StatCard
+   300→          label="Team Members"
+   301→          value={usageStats.teamMembers}
+   302→          icon={Users}
+   303→          accent="primary"
+   304→        />
+   305→        <StatCard
+   306→          label="PBC Templates"
+   307→          value={usageStats.templates}
+   308→          icon={FileSpreadsheet}
+   309→          accent="info"
+   310→        />
+   311→        <StatCard
+   312→          label="Connected Tax Software"
+   313→          value={usageStats.connectedSoftware}
+   314→          icon={Plug}
+   315→          accent="success"
+   316→        />
+   317→        <StatCard
+   318→          label="Audit Events (30d)"
+   319→          value={usageStats.auditEvents}
+   320→          icon={ScrollText}
+   321→          accent="warning"
+   322→        />
+   323→      </div>
+   324→
+   325→      {/* Tabs */}
+   326→      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+   327→        <div className="overflow-x-auto">
+   328→          <TabsList className="h-auto w-fit">
+   329→            <TabsTrigger value="general" className="gap-1.5">
+   330→              <Building2 className="h-3.5 w-3.5" /> General
+   331→            </TabsTrigger>
+   332→            <TabsTrigger value="team" className="gap-1.5">
+   333→              <Users className="h-3.5 w-3.5" /> Team
+   334→            </TabsTrigger>
+   335→            <TabsTrigger value="templates" className="gap-1.5">
+   336→              <FileSpreadsheet className="h-3.5 w-3.5" /> Templates
+   337→            </TabsTrigger>
+   338→            <TabsTrigger value="emails" className="gap-1.5">
+   339→              <Mail className="h-3.5 w-3.5" /> Emails
+   340→            </TabsTrigger>
+   341→            <TabsTrigger value="integrations" className="gap-1.5">
+   342→              <Plug className="h-3.5 w-3.5" /> Integrations
+   343→            </TabsTrigger>
+   344→            <TabsTrigger value="billing" className="gap-1.5">
+   345→              <CreditCard className="h-3.5 w-3.5" /> Billing
+   346→            </TabsTrigger>
+   347→            <TabsTrigger value="audit" className="gap-1.5">
+   348→              <ScrollText className="h-3.5 w-3.5" /> Audit Log
+   349→            </TabsTrigger>
+   350→          </TabsList>
+   351→        </div>
+   352→
+   353→        {/* GENERAL */}
+   354→        <TabsContent value="general" className="mt-6">
+   355→          <GeneralSection firm={firm} setFirm={setFirm} />
+   356→        </TabsContent>
+   357→
+   358→        {/* TEAM */}
+   359→        <TabsContent value="team" className="mt-6">
+   360→          <TeamSection
+   361→            team={team}
+   362→            onAdd={() => setShowAddMember(true)}
+   363→            firmId={firm.id}
+   364→            onMemberAdded={(m) => setTeam((prev) => [...prev, m].sort((a, b) => a.name.localeCompare(b.name)))}
+   365→          />
+   366→        </TabsContent>
+   367→
+   368→        {/* TEMPLATES */}
+   369→        <TabsContent value="templates" className="mt-6">
+   370→          <TemplatesSection templates={templates} onCreate={() => setShowCreateTemplate(true)} />
+   371→        </TabsContent>
+   372→
+   373→        {/* EMAILS */}
+   374→        <TabsContent value="emails" className="mt-6">
+   375→          <EmailTemplatesSection />
+   376→        </TabsContent>
+   377→
+   378→        {/* INTEGRATIONS */}
+   379→        <TabsContent value="integrations" className="mt-6">
+   380→          <IntegrationsSection firm={firm} />
+   381→        </TabsContent>
+   382→
+   383→        {/* BILLING */}
+   384→        <TabsContent value="billing" className="mt-6">
+   385→          <BillingSection firm={firm} usageStats={usageStats} />
+   386→        </TabsContent>
+   387→
+   388→        {/* AUDIT LOG */}
+   389→        <TabsContent value="audit" className="mt-6">
+   390→          <AuditLogSection logs={auditLogs} />
+   391→        </TabsContent>
+   392→      </Tabs>
+   393→
+   394→      {/* Add Team Member dialog */}
+   395→      <AddTeamMemberDialog
+   396→        open={showAddMember}
+   397→        onOpenChange={setShowAddMember}
+   398→        firmId={firm.id}
+   399→        onCreated={(m) => {
+   400→          setTeam((prev) => [...prev, m].sort((a, b) => a.name.localeCompare(b.name)))
+   401→        }}
+   402→      />
+   403→
+   404→      {/* Create Template dialog */}
+   405→      <CreateTemplateDialog
+   406→        open={showCreateTemplate}
+   407→        onOpenChange={setShowCreateTemplate}
+   408→        firmId={firm.id}
+   409→        onCreated={(t) => setTemplates((prev) => [...prev, t])}
+   410→      />
+   411→    </div>
+   412→  )
+   413→}
+   414→
+   415→// ─── General Section ───────────────────────────────────────────
+   416→
+   417→function GeneralSection({
+   418→  firm,
+   419→  setFirm,
+   420→}: {
+   421→  firm: {
+   422→    id: string
+   423→    name: string
+   424→    subscriptionTier: string
+   425→    country: string
+   426→    settings: Record<string, unknown>
+   427→  }
+   428→  setFirm: React.Dispatch<
+   429→    React.SetStateAction<{
+   430→      id: string
+   431→      name: string
+   432→      subscriptionTier: string
+   433→      country: string
+   434→      settings: Record<string, unknown>
+   435→    }>
+   436→  >
+   437→}) {
+   438→  const [editing, setEditing] = useState(false)
+   439→  const [form, setForm] = useState({
+   440→    name: firm.name,
+   441→    subscriptionTier: firm.subscriptionTier,
+   442→    country: firm.country,
+   443→  })
+   444→  const [runningReminders, setRunningReminders] = useState(false)
+   445→
+   446→  const tierLabel = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)?.name || firm.subscriptionTier
+   447→  const tierInfo = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)
+   448→
+   449→  const handleSave = () => {
+   450→    setFirm((f) => ({ ...f, ...form }))
+   451→    setEditing(false)
+   452→    toast.success('Firm settings updated (cosmetic)')
+   453→  }
+   454→
+   455→  // Trigger the cron-style reminder sweep manually. The default API
+   456→  // key is exposed to the client as NEXT_PUBLIC_CRON_API_KEY so the
+   457→  // button works in development without server-side configuration;
+   458→  // fall back to the same default key the cron route uses.
+   459→  const handleRunReminders = async () => {
+   460→    setRunningReminders(true)
+   461→    try {
+   462→      const cronKey =
+   463→        process.env.NEXT_PUBLIC_CRON_API_KEY || 'taxdox-cron-key'
+   464→      const res = await fetch(
+   465→        `/api/cron/reminders?key=${encodeURIComponent(cronKey)}`
+   466→      )
+   467→      if (!res.ok) {
+   468→        throw new Error(`Request failed (${res.status})`)
+   469→      }
+   470→      const data = await res.json()
+   471→      const sent = data.processed ?? 0
+   472→      const skipped = data.skipped ?? 0
+   473→      toast.success(
+   474→        `Reminder check complete — ${sent} sent${
+   475→          skipped > 0 ? `, ${skipped} skipped` : ''
+   476→        }`,
+   477→        {
+   478→          description:
+   479→            sent > 0
+   480→              ? 'Deadline reminders queued for delivery.'
+   481→              : 'No new reminders were due.',
+   482→        }
+   483→      )
+   484→    } catch (err) {
+   485→      console.error('Reminder check failed:', err)
+   486→      toast.error('Failed to run reminder check', {
+   487→        description:
+   488→          'Check the console — the cron endpoint may be unreachable.',
+   489→      })
+   490→    } finally {
+   491→      setRunningReminders(false)
+   492→    }
+   493→  }
+   494→
+   495→  return (
+   496→    <div className="space-y-6">
+   497→      <Card>
+   498→        <CardHeader className="border-b">
+   499→          <div className="flex items-start justify-between">
+   500→            <div>
+   501→              <CardTitle className="text-base">Firm Information</CardTitle>
+   502→              <CardDescription>Manage your firm profile and primary settings.</CardDescription>
+   503→            </div>
+   504→            {!editing ? (
+   505→              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+   506→                <Pencil className="h-3.5 w-3.5" /> Edit
+   507→              </Button>
+   508→            ) : (
+   509→              <div className="flex gap-2">
+   510→                <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+   511→                  Cancel
+   512→                </Button>
+   513→                <Button size="sm" onClick={handleSave}>
+   514→                  <Check className="h-3.5 w-3.5" /> Save
+   515→                </Button>
+   516→              </div>
+   517→            )}
+   518→          </div>
+   519→        </CardHeader>
+   520→        <CardContent className="grid gap-5 pt-6 md:grid-cols-2">
+   521→          {/* Firm identity preview */}
+   522→          <div className="md:col-span-2 flex items-center gap-4 rounded-xl bg-gradient-primary p-5 text-white shadow-lg shadow-primary/20">
+   523→            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
+   524→              <Building2 className="h-7 w-7" />
+   525→            </div>
+   526→            <div className="min-w-0 flex-1">
+   527→              <p className="text-xs font-medium uppercase tracking-wider text-white/70">Firm</p>
+   528→              <p className="truncate text-xl font-bold">{form.name}</p>
+   529→              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/80">
+   530→                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5">
+   531→                  <Crown className="h-3 w-3" /> {tierLabel} plan
+   532→                </span>
+   533→                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5">
+   534→                  <span>{getCountryFlag(form.country)}</span> {getCountryLabel(form.country)}
+   535→                </span>
+   536→                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5">
+   537→                  <Shield className="h-3 w-3" /> SOC 2
+   538→                </span>
+   539→              </div>
+   540→            </div>
+   541→          </div>
+   542→
+   543→          {/* Editable fields */}
+   544→          <div className="space-y-2">
+   545→            <Label htmlFor="firm-name">Firm Name</Label>
+   546→            <Input
+   547→              id="firm-name"
+   548→              value={form.name}
+   549→              disabled={!editing}
+   550→              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+   551→            />
+   552→          </div>
+   553→
+   554→          <div className="space-y-2">
+   555→            <Label htmlFor="firm-tier">Subscription Tier</Label>
+   556→            <Select
+   557→              value={form.subscriptionTier}
+   558→              disabled={!editing}
+   559→              onValueChange={(v) => setForm((f) => ({ ...f, subscriptionTier: v }))}
+   560→            >
+   561→              <SelectTrigger id="firm-tier">
+   562→                <SelectValue />
+   563→              </SelectTrigger>
+   564→              <SelectContent>
+   565→                {PRICING_TIERS.map((t) => (
+   566→                  <SelectItem key={t.id} value={t.id}>
+   567→                    {t.name}
+   568→                    {t.id === firm.subscriptionTier ? ' (current)' : ''}
+   569→                  </SelectItem>
+   570→                ))}
+   571→              </SelectContent>
+   572→            </Select>
+   573→          </div>
+   574→
+   575→          <div className="space-y-2">
+   576→            <Label htmlFor="firm-country">Country</Label>
+   577→            <Select
+   578→              value={form.country}
+   579→              disabled={!editing}
+   580→              onValueChange={(v) => setForm((f) => ({ ...f, country: v }))}
+   581→            >
+   582→              <SelectTrigger id="firm-country">
+   583→                <SelectValue />
+   584→              </SelectTrigger>
+   585→              <SelectContent>
+   586→                {COUNTRIES.map((c) => (
+   587→                  <SelectItem key={c.code} value={c.code}>
+   588→                    {c.flag} {c.label}
+   589→                  </SelectItem>
+   590→                ))}
+   591→              </SelectContent>
+   592→            </Select>
+   593→          </div>
+   594→
+   595→          <div className="space-y-2">
+   596→            <Label htmlFor="firm-firmid">Firm ID</Label>
+   597→            <Input id="firm-firmid" value={firm.id} disabled className="font-mono text-xs" />
+   598→          </div>
+   599→        </CardContent>
+   600→      </Card>
+   601→
+   602→      {/* Plan + Preferences summary */}
+   603→      <div className="grid gap-6 md:grid-cols-2">
+   604→        <Card>
+   605→          <CardHeader className="border-b">
+   606→            <CardTitle className="text-base">Plan Summary</CardTitle>
+   607→            <CardDescription>Your current subscription details.</CardDescription>
+   608→          </CardHeader>
+   609→          <CardContent className="space-y-4 pt-6">
+   610→            <div className="flex items-center justify-between">
+   611→              <span className="text-sm text-muted-foreground">Current Plan</span>
+   612→              <Badge className="bg-primary/10 text-primary border-primary/20">{tierLabel}</Badge>
+   613→            </div>
+   614→            <div className="flex items-center justify-between">
+   615→              <span className="text-sm text-muted-foreground">Price</span>
+   616→              <span className="text-sm font-semibold">
+   617→                {tierInfo?.price ? `$${tierInfo.price}/${tierInfo.period}` : 'Custom'}
+   618→              </span>
+   619→            </div>
+   620→            <div className="flex items-center justify-between">
+   621→              <span className="text-sm text-muted-foreground">Doc Limit / Month</span>
+   622→              <span className="text-sm font-semibold">
+   623→                {tierInfo?.docsPerMonth === -1 ? 'Unlimited' : tierInfo?.docsPerMonth ?? '—'}
+   624→              </span>
+   625→            </div>
+   626→            <div className="flex items-center justify-between">
+   627→              <span className="text-sm text-muted-foreground">Multi-country</span>
+   628→              <Badge variant="outline" className="gap-1">
+   629→                <Globe className="h-3 w-3" /> {firm.settings.multiCountry ? 'Enabled' : 'Disabled'}
+   630→              </Badge>
+   631→            </div>
+   632→          </CardContent>
+   633→        </Card>
+   634→
+   635→        <Card>
+   636→          <CardHeader className="border-b">
+   637→            <CardTitle className="text-base">Preferences</CardTitle>
+   638→            <CardDescription>Workspace-wide preferences (cosmetic).</CardDescription>
+   639→          </CardHeader>
+   640→          <CardContent className="space-y-4 pt-6">
+   641→            <PreferenceRow label="Auto-classify documents on upload" value="On" />
+   642→            <PreferenceRow label="Send PBC reminders every" value="3 days" />
+   643→            <PreferenceRow label="Default PBC template" value="Standard 1040 Individual" />
+   644→            <PreferenceRow label="Confidence review threshold" value="90%" />
+   645→            <PreferenceRow label="Daily AI usage report" value="Email · 8:00 AM" />
+   646→          </CardContent>
+   647→        </Card>
+   648→      </div>
+   649→
+   650→      {/* Automation */}
+   651→      <Card>
+   652→        <CardHeader className="border-b">
+   653→          <div className="flex items-start justify-between gap-3">
+   654→            <div>
+   655→              <CardTitle className="flex items-center gap-2 text-base">
+   656→                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   657→                  <Zap className="h-4 w-4" />
+   658→                </span>
+   659→                Automation
+   660→              </CardTitle>
+   661→              <CardDescription className="mt-1">
+   662→                Run scheduled workflows on demand. These normally run on a
+   663→                fixed cron schedule.
+   664→              </CardDescription>
+   665→            </div>
+   666→          </div>
+   667→        </CardHeader>
+   668→        <CardContent className="pt-6">
+   669→          <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+   670→            <div className="flex items-start gap-3">
+   671→              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+   672→                <CalendarClock className="h-5 w-5" />
+   673→              </span>
+   674→              <div className="min-w-0">
+   675→                <p className="text-sm font-semibold">Deadline Reminder Sweep</p>
+   676→                <p className="mt-0.5 text-xs text-muted-foreground">
+   677→                  Scans engagements due within the next 14 days and sends a
+   678→                  deadline reminder to each client who hasn't received one
+   679→                  in the last 3 days.
+   680→                </p>
+   681→                <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
+   682→                  <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+   683→                    <Clock className="h-3 w-3" /> Window: 14 days
+   684→                  </Badge>
+   685→                  <Badge variant="outline" className="gap-1 border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
+   686→                    <Send className="h-3 w-3" /> Cooldown: 3 days
+   687→                  </Badge>
+   688→                </div>
+   689→              </div>
+   690→            </div>
+   691→            <Button
+   692→              size="sm"
+   693→              onClick={handleRunReminders}
+   694→              disabled={runningReminders}
+   695→              className="shrink-0"
+   696→            >
+   697→              {runningReminders ? (
+   698→                <Loader2 className="h-4 w-4 animate-spin" />
+   699→              ) : (
+   700→                <Zap className="h-4 w-4" />
+   701→              )}
+   702→              Run Reminder Check
+   703→            </Button>
+   704→          </div>
+   705→        </CardContent>
+   706→      </Card>
+   707→    </div>
+   708→  )
+   709→}
+   710→
+   711→function PreferenceRow({ label, value }: { label: string; value: string }) {
+   712→  return (
+   713→    <div className="flex items-center justify-between border-b border-border/60 pb-3 last:border-0 last:pb-0">
+   714→      <span className="text-sm text-muted-foreground">{label}</span>
+   715→      <span className="text-sm font-medium">{value}</span>
+   716→    </div>
+   717→  )
+   718→}
+   719→
+   720→// ─── Team Section ──────────────────────────────────────────────
+   721→
+   722→function TeamSection({
+   723→  team,
+   724→  onAdd,
+   725→}: {
+   726→  team: TeamMemberRow[]
+   727→  onAdd: () => void
+   728→  firmId: string
+   729→  onMemberAdded: (m: TeamMemberRow) => void
+   730→}) {
+   731→  return (
+   732→    <Card>
+   733→      <CardHeader className="border-b">
+   734→        <div className="flex items-center justify-between">
+   735→          <div>
+   736→            <CardTitle className="text-base">Team Members</CardTitle>
+   737→            <CardDescription>
+   738→              {team.length} member{team.length === 1 ? '' : 's'} · manage roles, capacity, and workload.
+   739→            </CardDescription>
+   740→          </div>
+   741→          <Button size="sm" onClick={onAdd}>
+   742→            <Plus className="h-4 w-4" /> Add Team Member
+   743→          </Button>
+   744→        </div>
+   745→      </CardHeader>
+   746→      <CardContent className="pt-0">
+   747→        {team.length === 0 ? (
+   748→          <div className="flex flex-col items-center justify-center py-12 text-center">
+   749→            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+   750→              <Users className="h-6 w-6 text-muted-foreground" />
+   751→            </div>
+   752→            <p className="mt-3 text-sm font-medium">No team members yet</p>
+   753→            <p className="text-xs text-muted-foreground">Add your first team member to get started.</p>
+   754→          </div>
+   755→        ) : (
+   756→          <div className="-mx-6 overflow-x-auto">
+   757→            <Table>
+   758→              <TableHeader>
+   759→                <TableRow className="hover:bg-transparent">
+   760→                  <TableHead>Member</TableHead>
+   761→                  <TableHead>Role</TableHead>
+   762→                  <TableHead className="hidden md:table-cell">Email</TableHead>
+   763→                  <TableHead className="text-center">Capacity</TableHead>
+   764→                  <TableHead className="hidden sm:table-cell">Current Load</TableHead>
+   765→                  <TableHead className="min-w-[160px]">Utilization</TableHead>
+   766→                </TableRow>
+   767→              </TableHeader>
+   768→              <TableBody>
+   769→                {team.map((m) => {
+   770→                  const util = m.capacity > 0 ? Math.round((m.currentLoad / m.capacity) * 100) : 0
+   771→                  const utilColor =
+   772→                    util >= 90
+   773→                      ? 'text-red-600'
+   774→                      : util >= 75
+   775→                      ? 'text-amber-600'
+   776→                      : util >= 50
+   777→                      ? 'text-primary'
+   778→                      : 'text-emerald-600'
+   779→                  const barColor =
+   780→                    util >= 90
+   781→                      ? 'bg-red-500'
+   782→                      : util >= 75
+   783→                      ? 'bg-amber-500'
+   784→                      : util >= 50
+   785→                      ? 'bg-primary'
+   786→                      : 'bg-emerald-500'
+   787→                  const roleKey = getRoleKey(m.role)
+   788→                  const roleCfg = ROLE_BADGE[roleKey]
+   789→                  return (
+   790→                    <TableRow key={m.id} className="group">
+   791→                      <TableCell>
+   792→                        <div className="flex items-center gap-3">
+   793→                          <div
+   794→                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+   795→                            style={{ backgroundColor: TEAM_COLOR_HEX[m.color] || '#64748b' }}
+   796→                          >
+   797→                            {initials(m.name)}
+   798→                          </div>
+   799→                          <div className="min-w-0">
+   800→                            <p className="truncate text-sm font-semibold">{m.name}</p>
+   801→                            <p className="truncate text-xs text-muted-foreground md:hidden">{m.email}</p>
+   802→                          </div>
+   803→                        </div>
+   804→                      </TableCell>
+   805→                      <TableCell>
+   806→                        <Badge variant="outline" className={cn('font-medium', roleCfg.classes)}>
+   807→                          {roleCfg.label}
+   808→                        </Badge>
+   809→                      </TableCell>
+   810→                      <TableCell className="hidden md:table-cell">
+   811→                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+   812→                          <Mail className="h-3.5 w-3.5 shrink-0" />
+   813→                          <span className="truncate">{m.email}</span>
+   814→                        </div>
+   815→                      </TableCell>
+   816→                      <TableCell className="text-center">
+   817→                        <span className="text-sm font-medium tabular-nums">{m.capacity}</span>
+   818→                      </TableCell>
+   819→                      <TableCell className="hidden sm:table-cell">
+   820→                        <span className="text-sm tabular-nums text-muted-foreground">
+   821→                          {m.currentLoad} / {m.capacity}
+   822→                        </span>
+   823→                      </TableCell>
+   824→                      <TableCell>
+   825→                        <div className="flex items-center gap-2">
+   826→                          <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
+   827→                            <div
+   828→                              className={cn('h-full rounded-full transition-all', barColor)}
+   829→                              style={{ width: `${Math.min(100, util)}%` }}
+   830→                            />
+   831→                          </div>
+   832→                          <span className={cn('w-9 text-right text-xs font-semibold tabular-nums', utilColor)}>
+   833→                            {util}%
+   834→                          </span>
+   835→                        </div>
+   836→                      </TableCell>
+   837→                    </TableRow>
+   838→                  )
+   839→                })}
+   840→              </TableBody>
+   841→            </Table>
+   842→          </div>
+   843→        )}
+   844→      </CardContent>
+   845→    </Card>
+   846→  )
+   847→}
+   848→
+   849→// ─── Templates Section ─────────────────────────────────────────
+   850→
+   851→function TemplatesSection({
+   852→  templates,
+   853→  onCreate,
+   854→}: {
+   855→  templates: PbcTemplateRow[]
+   856→  onCreate: () => void
+   857→}) {
+   858→  return (
+   859→    <div className="space-y-4">
+   860→      <div className="flex items-center justify-between">
+   861→        <div>
+   862→          <h2 className="text-lg font-semibold">PBC Templates</h2>
+   863→          <p className="text-sm text-muted-foreground">
+   864→            Reusable document request lists for different engagement types.
+   865→          </p>
+   866→        </div>
+   867→        <Button size="sm" onClick={onCreate}>
+   868→          <Plus className="h-4 w-4" /> Create Template
+   869→        </Button>
+   870→      </div>
+   871→
+   872→      {templates.length === 0 ? (
+   873→        <Card>
+   874→          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+   875→            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+   876→              <FileSpreadsheet className="h-6 w-6 text-muted-foreground" />
+   877→            </div>
+   878→            <p className="mt-3 text-sm font-medium">No templates yet</p>
+   879→            <p className="text-xs text-muted-foreground">Create a template to standardize your PBC lists.</p>
+   880→          </CardContent>
+   881→        </Card>
+   882→      ) : (
+   883→        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   884→          {templates.map((t) => {
+   885→            const requiredCount = t.items.filter((i) => i.required).length
+   886→            const clientTypeLabel =
+   887→              CLIENT_TYPES.find((c) => c.value === t.clientType)?.label || t.clientType
+   888→            const clientTypeIcon =
+   889→              CLIENT_TYPES.find((c) => c.value === t.clientType)?.icon || '📄'
+   890→            const engLabel =
+   891→              ENGAGEMENT_TYPES.find((e) => e.value === t.engagementType)?.label || t.engagementType
+   892→            return (
+   893→              <Card
+   894→                key={t.id}
+   895→                className="group relative overflow-hidden transition-all hover:shadow-md hover:border-primary/30"
+   896→              >
+   897→                <div className="absolute right-0 top-0 h-20 w-20 -translate-y-6 translate-x-6 rounded-full bg-primary/5" />
+   898→                <CardHeader className="border-b pb-4">
+   899→                  <div className="flex items-start justify-between gap-2">
+   900→                    <div className="flex items-start gap-2.5">
+   901→                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   902→                        <FileSpreadsheet className="h-4.5 w-4.5" />
+   903→                      </div>
+   904→                      <div className="min-w-0">
+   905→                        <CardTitle className="text-sm leading-tight">{t.name}</CardTitle>
+   906→                        {t.isDefault && (
+   907→                          <Badge className="mt-1 gap-1 bg-primary/10 text-primary border-primary/20" variant="outline">
+   908→                            <Star className="h-3 w-3" /> Default
+   909→                          </Badge>
+   910→                        )}
+   911→                      </div>
+   912→                    </div>
+   913→                  </div>
+   914→                  {t.description && (
+   915→                    <CardDescription className="mt-2 line-clamp-2">{t.description}</CardDescription>
+   916→                  )}
+   917→                </CardHeader>
+   918→                <CardContent className="space-y-3 pt-4">
+   919→                  <div className="flex flex-wrap items-center gap-1.5">
+   920→                    <Badge variant="outline" className="gap-1 text-xs">
+   921→                      <span>{clientTypeIcon}</span> {clientTypeLabel}
+   922→                    </Badge>
+   923→                    <Badge variant="outline" className="text-xs">
+   924→                      {engLabel}
+   925→                    </Badge>
+   926→                  </div>
+   927→
+   928→                  <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-3 text-center">
+   929→                    <div>
+   930→                      <p className="text-lg font-bold tabular-nums">{t.items.length}</p>
+   931→                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Items</p>
+   932→                    </div>
+   933→                    <div className="border-x border-border">
+   934→                      <p className="text-lg font-bold tabular-nums text-primary">{requiredCount}</p>
+   935→                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Required</p>
+   936→                    </div>
+   937→                    <div>
+   938→                      <p className="text-lg font-bold tabular-nums text-muted-foreground">
+   939→                        {t.items.length - requiredCount}
+   940→                      </p>
+   941→                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Optional</p>
+   942→                    </div>
+   943→                  </div>
+   944→
+   945→                  <div className="flex gap-2 pt-1">
+   946→                    <Button size="sm" className="flex-1">
+   947→                      Use Template
+   948→                    </Button>
+   949→                    <Button size="sm" variant="outline">
+   950→                      <Pencil className="h-3.5 w-3.5" />
+   951→                    </Button>
+   952→                  </div>
+   953→                </CardContent>
+   954→              </Card>
+   955→            )
+   956→          })}
+   957→        </div>
+   958→      )}
+   959→    </div>
+   960→  )
+   961→}
+   962→
+   963→// ─── Email Templates Section ───────────────────────────────────
+   964→
+   965→interface EmailTemplateMeta {
+   966→  key: EmailTemplate
+   967→  label: string
+   968→  description: string
+   969→  icon: typeof Mail
+   970→  accent: 'blue' | 'amber' | 'teal' | 'violet' | 'emerald'
+   971→  generator: () => EmailContent
+   972→}
+   973→
+   974→const EMAIL_TEMPLATE_META: EmailTemplateMeta[] = [
+   975→  {
+   976→    key: 'pbc_request',
+   977→    label: 'PBC Document Request',
+   978→    description: 'Sent when a PBC list is dispatched to the client.',
+   979→    icon: Mail,
+   980→    accent: 'blue',
+   981→    generator: () => pbcRequestEmail('John Smith', '1040', 2025, 'April 15, 2026'),
+   982→  },
+   983→  {
+   984→    key: 'deadline_reminder',
+   985→    label: 'Deadline Reminder',
+   986→    description: 'Sent when an engagement deadline is approaching.',
+   987→    icon: Clock,
+   988→    accent: 'amber',
+   989→    generator: () => deadlineReminderEmail('John Smith', '1040', 2025, 7, 'April 15, 2026'),
+   990→  },
+   991→  {
+   992→    key: 'document_received',
+   993→    label: 'Document Received',
+   994→    description: 'Sent when the client uploads a new document.',
+   995→    icon: FileText,
+   996→    accent: 'teal',
+   997→    generator: () => documentReceivedEmail('John Smith', 'W-2', 'W2_2025.pdf'),
+   998→  },
+   999→  {
+  1000→    key: 'extraction_complete',
+  1001→    label: 'Extraction Complete',
+  1002→    description: 'Sent when AI extraction finishes on a document.',
+  1003→    icon: Sparkles,
+  1004→    accent: 'violet',
+  1005→    generator: () => extractionCompleteEmail('John Smith', 'W-2', 10, 97),
+  1006→  },
+  1007→  {
+  1008→    key: 'welcome',
+  1009→    label: 'Welcome Email',
+  1010→    description: 'Sent to a newly created client.',
+  1011→    icon: Gift,
+  1012→    accent: 'emerald',
+  1013→    generator: () => welcomeEmail('John Smith', 'Meridian CPA Group'),
+  1014→  },
+  1015→]
+  1016→
+  1017→const EMAIL_ACCENT_CLASSES: Record<
+  1018→  EmailTemplateMeta['accent'],
+  1019→  { border: string; bg: string; text: string; badge: string }
+  1020→> = {
+  1021→  blue: {
+  1022→    border: 'border-l-blue-500',
+  1023→    bg: 'bg-blue-50 dark:bg-blue-950/40',
+  1024→    text: 'text-blue-600 dark:text-blue-400',
+  1025→    badge: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
+  1026→  },
+  1027→  amber: {
+  1028→    border: 'border-l-amber-500',
+  1029→    bg: 'bg-amber-50 dark:bg-amber-950/40',
+  1030→    text: 'text-amber-600 dark:text-amber-400',
+  1031→    badge:
+  1032→      'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
+  1033→  },
+  1034→  teal: {
+  1035→    border: 'border-l-teal-500',
+  1036→    bg: 'bg-teal-50 dark:bg-teal-950/40',
+  1037→    text: 'text-teal-600 dark:text-teal-400',
+  1038→    badge: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900',
+  1039→  },
+  1040→  violet: {
+  1041→    border: 'border-l-violet-500',
+  1042→    bg: 'bg-violet-50 dark:bg-violet-950/40',
+  1043→    text: 'text-violet-600 dark:text-violet-400',
+  1044→    badge:
+  1045→      'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900',
+  1046→  },
+  1047→  emerald: {
+  1048→    border: 'border-l-emerald-500',
+  1049→    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+  1050→    text: 'text-emerald-600 dark:text-emerald-400',
+  1051→    badge:
+  1052→      'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+  1053→  },
+  1054→}
+  1055→
+  1056→function EmailTemplatesSection() {
+  1057→  const [previewKey, setPreviewKey] = useState<EmailTemplate | null>(null)
+  1058→  const previewMeta = EMAIL_TEMPLATE_META.find((t) => t.key === previewKey) || null
+  1059→  const previewContent = previewMeta?.generator() ?? null
+  1060→
+  1061→  return (
+  1062→    <div className="space-y-4">
+  1063→      <div className="flex items-start justify-between gap-4">
+  1064→        <div>
+  1065→          <h2 className="text-lg font-semibold">Email Templates</h2>
+  1066→          <p className="text-sm text-muted-foreground">
+  1067→            Preview the automated client communications sent by TaxDox AI.
+  1068→          </p>
+  1069→        </div>
+  1070→        <Badge variant="outline" className="gap-1.5 shrink-0">
+  1071→          <Mail className="h-3.5 w-3.5" />
+  1072→          {EMAIL_TEMPLATE_META.length} templates
+  1073→        </Badge>
+  1074→      </div>
+  1075→
+  1076→      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  1077→        {EMAIL_TEMPLATE_META.map((meta) => {
+  1078→          const content = meta.generator()
+  1079→          const accent = EMAIL_ACCENT_CLASSES[meta.accent]
+  1080→          const Icon = meta.icon
+  1081→          const bodyLines = content.body.split('\n').filter((l) => l.trim().length > 0)
+  1082→          const previewLines = bodyLines.slice(0, 2).join(' ')
+  1083→          return (
+  1084→            <Card
+  1085→              key={meta.key}
+  1086→              className={cn(
+  1087→                'group relative overflow-hidden rounded-xl border-l-4 transition-all hover:shadow-md hover:-translate-y-0.5',
+  1088→                accent.border
+  1089→              )}
+  1090→            >
+  1091→              <CardContent className="space-y-3 p-4">
+  1092→                <div className="flex items-start justify-between gap-2">
+  1093→                  <div className="flex items-center gap-2.5">
+  1094→                    <div
+  1095→                      className={cn(
+  1096→                        'flex h-9 w-9 items-center justify-center rounded-lg',
+  1097→                        accent.bg,
+  1098→                        accent.text
+  1099→                      )}
+  1100→                    >
+  1101→                      <Icon className="h-4.5 w-4.5" />
+  1102→                    </div>
+  1103→                    <div className="min-w-0">
+  1104→                      <p className="text-sm font-semibold leading-tight">{meta.label}</p>
+  1105→                      <p className="text-[11px] text-muted-foreground">{meta.description}</p>
+  1106→                    </div>
+  1107→                  </div>
+  1108→                </div>
+  1109→
+  1110→                <div>
+  1111→                  <Badge variant="outline" className={cn('text-[10px] font-medium', accent.badge)}>
+  1112→                    {EMAIL_TEMPLATE_LABELS[meta.key]}
+  1113→                  </Badge>
+  1114→                </div>
+  1115→
+  1116→                <div className="space-y-1 rounded-lg bg-muted/40 p-2.5">
+  1117→                  <p className="truncate text-xs font-medium" title={content.subject}>
+  1118→                    <span className="text-muted-foreground">Subject:</span>{' '}
+  1119→                    <span className="text-foreground">{content.subject}</span>
+  1120→                  </p>
+  1121→                  <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+  1122→                    {previewLines}
+  1123→                  </p>
+  1124→                </div>
+  1125→
+  1126→                <Button
+  1127→                  size="sm"
+  1128→                  variant="outline"
+  1129→                  className="w-full"
+  1130→                  onClick={() => setPreviewKey(meta.key)}
+  1131→                >
+  1132→                  <Mail className="h-3.5 w-3.5" />
+  1133→                  Preview
+  1134→                </Button>
+  1135→              </CardContent>
+  1136→            </Card>
+  1137→          )
+  1138→        })}
+  1139→      </div>
+  1140→
+  1141→      <EmailPreviewDialog
+  1142→        open={previewKey !== null}
+  1143→        onOpenChange={(open) => {
+  1144→          if (!open) setPreviewKey(null)
+  1145→        }}
+  1146→        meta={previewMeta}
+  1147→        content={previewContent}
+  1148→      />
+  1149→    </div>
+  1150→  )
+  1151→}
+  1152→
+  1153→function EmailPreviewDialog({
+  1154→  open,
+  1155→  onOpenChange,
+  1156→  meta,
+  1157→  content,
+  1158→}: {
+  1159→  open: boolean
+  1160→  onOpenChange: (open: boolean) => void
+  1161→  meta: EmailTemplateMeta | null
+  1162→  content: EmailContent | null
+  1163→}) {
+  1164→  if (!meta || !content) {
+  1165→    return (
+  1166→      <Dialog open={open} onOpenChange={onOpenChange}>
+  1167→        <DialogContent className="max-w-2xl" />
+  1168→      </Dialog>
+  1169→    )
+  1170→  }
+  1171→
+  1172→  const Icon = meta.icon
+  1173→  const accent = EMAIL_ACCENT_CLASSES[meta.accent]
+  1174→
+  1175→  return (
+  1176→    <Dialog open={open} onOpenChange={onOpenChange}>
+  1177→      <DialogContent className="max-w-2xl gap-0 p-0">
+  1178→        <DialogHeader className="border-b p-5 pb-4">
+  1179→          <DialogTitle className="flex items-center gap-2.5 text-base">
+  1180→            <div
+  1181→              className={cn(
+  1182→                'flex h-8 w-8 items-center justify-center rounded-lg',
+  1183→                accent.bg,
+  1184→                accent.text
+  1185→              )}
+  1186→            >
+  1187→              <Icon className="h-4 w-4" />
+  1188→            </div>
+  1189→            {meta.label}
+  1190→            <Badge variant="outline" className={cn('ml-1 text-[10px]', accent.badge)}>
+  1191→              {EMAIL_TEMPLATE_LABELS[meta.key]}
+  1192→            </Badge>
+  1193→          </DialogTitle>
+  1194→          <DialogDescription>{meta.description}</DialogDescription>
+  1195→        </DialogHeader>
+  1196→
+  1197→        <div className="max-h-[60vh] overflow-y-auto">
+  1198→          {/* Email client-style header */}
+  1199→          <div className="space-y-2 border-b bg-muted/30 p-5 text-sm">
+  1200→            <div className="flex items-start gap-2">
+  1201→              <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">From</span>
+  1202→              <span className="min-w-0 flex-1">
+  1203→                <span className="font-medium">Meridian CPA Group</span>{' '}
+  1204→                <span className="text-muted-foreground">&lt;notifications@meridiancpa.com&gt;</span>
+  1205→              </span>
+  1206→            </div>
+  1207→            <div className="flex items-start gap-2">
+  1208→              <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">To</span>
+  1209→              <span className="min-w-0 flex-1">
+  1210→                John Smith <span className="text-muted-foreground">&lt;john.smith@example.com&gt;</span>
+  1211→              </span>
+  1212→            </div>
+  1213→            <div className="flex items-start gap-2">
+  1214→              <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">Subject</span>
+  1215→              <span className="min-w-0 flex-1 font-medium">{content.subject}</span>
+  1216→            </div>
+  1217→          </div>
+  1218→
+  1219→          {/* Email body */}
+  1220→          <div className="p-5">
+  1221→            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+  1222→              {content.body}
+  1223→            </pre>
+  1224→          </div>
+  1225→        </div>
+  1226→
+  1227→        <DialogFooter className="border-t p-4">
+  1228→          <Button variant="outline" onClick={() => onOpenChange(false)}>
+  1229→            <X className="h-4 w-4" />
+  1230→            Close
+  1231→          </Button>
+  1232→        </DialogFooter>
+  1233→      </DialogContent>
+  1234→    </Dialog>
+  1235→  )
+  1236→}
+  1237→
+  1238→// ─── Integrations Section ──────────────────────────────────────
+  1239→
+  1240→function IntegrationsSection({
+  1241→  firm,
+  1242→}: {
+  1243→  firm: { settings: Record<string, unknown> }
+  1244→}) {
+  1245→  const storageProviders = [
+  1246→    { id: 'box', name: 'Box', vendor: 'Box, Inc.', connected: false, icon: Cloud, color: 'text-blue-500' },
+  1247→    { id: 'gdrive', name: 'Google Drive', vendor: 'Google', connected: true, icon: HardDrive, color: 'text-emerald-500' },
+  1248→    { id: 'onedrive', name: 'OneDrive', vendor: 'Microsoft', connected: false, icon: Cloud, color: 'text-cyan-500' },
+  1249→  ]
+  1250→
+  1251→  return (
+  1252→    <div className="space-y-6">
+  1253→      {/* Tax Software */}
+  1254→      <Card>
+  1255→        <CardHeader className="border-b">
+  1256→          <div className="flex items-center gap-2">
+  1257→            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1258→              <Zap className="h-4 w-4" />
+  1259→            </div>
+  1260→            <div>
+  1261→              <CardTitle className="text-base">Tax Software Integrations</CardTitle>
+  1262→              <CardDescription>Connect your tax preparation software for one-click import.</CardDescription>
+  1263→            </div>
+  1264→          </div>
+  1265→        </CardHeader>
+  1266→        <CardContent className="pt-6">
+  1267→          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  1268→            {TAX_SOFTWARE.map((sw) => {
+  1269→              const initials_ = sw.name
+  1270→                .split(' ')
+  1271→                .map((p) => p[0])
+  1272→                .slice(0, 2)
+  1273→                .join('')
+  1274→                .toUpperCase()
+  1275→              return (
+  1276→                <div
+  1277→                  key={sw.id}
+  1278→                  className={cn(
+  1279→                    'flex flex-col gap-3 rounded-xl border p-4 transition-all',
+  1280→                    sw.connected
+  1281→                      ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+  1282→                      : 'border-border bg-card hover:border-primary/30'
+  1283→                  )}
+  1284→                >
+  1285→                  <div className="flex items-start justify-between">
+  1286→                    <div className="flex items-center gap-3">
+  1287→                      <div
+  1288→                        className={cn(
+  1289→                          'flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold',
+  1290→                          sw.connected
+  1291→                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+  1292→                            : 'bg-primary/10 text-primary'
+  1293→                        )}
+  1294→                      >
+  1295→                        {initials_}
+  1296→                      </div>
+  1297→                      <div>
+  1298→                        <p className="text-sm font-semibold leading-tight">{sw.name}</p>
+  1299→                        <p className="text-xs text-muted-foreground">{sw.vendor}</p>
+  1300→                      </div>
+  1301→                    </div>
+  1302→                    {sw.connected ? (
+  1303→                      <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900">
+  1304→                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Connected
+  1305→                      </Badge>
+  1306→                    ) : (
+  1307→                      <Badge variant="outline" className="gap-1 text-muted-foreground">
+  1308→                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" /> Disconnected
+  1309→                      </Badge>
+  1310→                    )}
+  1311→                  </div>
+  1312→                  <Button
+  1313→                    size="sm"
+  1314→                    variant={sw.connected ? 'outline' : 'default'}
+  1315→                    className="mt-auto w-full"
+  1316→                    onClick={() =>
+  1317→                      toast.info(
+  1318→                        sw.connected ? `Configure ${sw.name} integration` : `Connect ${sw.name}`,
+  1319→                        { description: 'Integration setup is coming soon.' }
+  1320→                      )
+  1321→                    }
+  1322→                  >
+  1323→                    {sw.connected ? (
+  1324→                      <>
+  1325→                        <SettingsIcon className="h-3.5 w-3.5" /> Configure
+  1326→                      </>
+  1327→                    ) : (
+  1328→                      <>
+  1329→                        <Plug className="h-3.5 w-3.5" /> Connect
+  1330→                      </>
+  1331→                    )}
+  1332→                  </Button>
+  1333→                </div>
+  1334→              )
+  1335→            })}
+  1336→          </div>
+  1337→        </CardContent>
+  1338→      </Card>
+  1339→
+  1340→      {/* Storage */}
+  1341→      <Card>
+  1342→        <CardHeader className="border-b">
+  1343→          <div className="flex items-center gap-2">
+  1344→            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1345→              <HardDrive className="h-4 w-4" />
+  1346→            </div>
+  1347→            <div>
+  1348→              <CardTitle className="text-base">Document Storage</CardTitle>
+  1349→              <CardDescription>Connect cloud storage providers for document import.</CardDescription>
+  1350→            </div>
+  1351→          </div>
+  1352→        </CardHeader>
+  1353→        <CardContent className="pt-6">
+  1354→          <div className="grid gap-3 sm:grid-cols-3">
+  1355→            {storageProviders.map((sp) => {
+  1356→              const Icon = sp.icon
+  1357→              return (
+  1358→                <div
+  1359→                  key={sp.id}
+  1360→                  className={cn(
+  1361→                    'flex items-center justify-between rounded-xl border p-4',
+  1362→                    sp.connected
+  1363→                      ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+  1364→                      : 'border-border'
+  1365→                  )}
+  1366→                >
+  1367→                  <div className="flex items-center gap-3">
+  1368→                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+  1369→                      <Icon className={cn('h-4.5 w-4.5', sp.color)} />
+  1370→                    </div>
+  1371→                    <div>
+  1372→                      <p className="text-sm font-semibold leading-tight">{sp.name}</p>
+  1373→                      <p className="text-xs text-muted-foreground">{sp.vendor}</p>
+  1374→                    </div>
+  1375→                  </div>
+  1376→                  {sp.connected ? (
+  1377→                    <Check className="h-4 w-4 text-emerald-500" />
+  1378→                  ) : (
+  1379→                    <Button
+  1380→                      size="sm"
+  1381→                      variant="ghost"
+  1382→                      onClick={() => toast.info(`Connect ${sp.name}`, { description: 'Coming soon.' })}
+  1383→                    >
+  1384→                      Connect
+  1385→                    </Button>
+  1386→                  )}
+  1387→                </div>
+  1388→              )
+  1389→            })}
+  1390→          </div>
+  1391→        </CardContent>
+  1392→      </Card>
+  1393→
+  1394→      {/* Multi-country */}
+  1395→      <Card>
+  1396→        <CardHeader className="border-b">
+  1397→          <div className="flex items-center gap-2">
+  1398→            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1399→              <Globe className="h-4 w-4" />
+  1400→            </div>
+  1401→            <div>
+  1402→              <CardTitle className="text-base">Multi-Country Support</CardTitle>
+  1403→              <CardDescription>
+  1404→                TaxDox AI supports tax jurisdictions in the following countries.
+  1405→              </CardDescription>
+  1406→            </div>
+  1407→          </div>
+  1408→        </CardHeader>
+  1409→        <CardContent className="pt-6">
+  1410→          <div className="flex flex-wrap gap-3">
+  1411→            {COUNTRIES.map((c) => (
+  1412→              <div
+  1413→                key={c.code}
+  1414→                className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-2.5"
+  1415→              >
+  1416→                <span className="text-2xl leading-none">{c.flag}</span>
+  1417→                <div>
+  1418→                  <p className="text-sm font-semibold leading-tight">{c.label}</p>
+  1419→                  <p className="text-xs text-muted-foreground">{c.code}</p>
+  1420→                </div>
+  1421→                <Badge variant="outline" className="ml-1 gap-1 text-emerald-600 border-emerald-200 dark:border-emerald-900">
+  1422→                  <Check className="h-3 w-3" /> Active
+  1423→                </Badge>
+  1424→              </div>
+  1425→            ))}
+  1426→          </div>
+  1427→        </CardContent>
+  1428→      </Card>
+  1429→    </div>
+  1430→  )
+  1431→}
+  1432→
+  1433→// ─── Billing Section ───────────────────────────────────────────
+  1434→
+  1435→function BillingSection({
+  1436→  firm,
+  1437→  usageStats,
+  1438→}: {
+  1439→  firm: { subscriptionTier: string }
+  1440→  usageStats: { teamMembers: number; templates: number; connectedSoftware: number; auditEvents: number }
+  1441→}) {
+  1442→  const currentTier = PRICING_TIERS.find((t) => t.id === firm.subscriptionTier)
+  1443→  // Mocked usage numbers (real data would come from a usage endpoint)
+  1444→  const usage = {
+  1445→    documentsThisMonth: 312,
+  1446→    documentsLimit: currentTier?.docsPerMonth === -1 ? null : currentTier?.docsPerMonth ?? 0,
+  1447→    clients: 12,
+  1448→    clientsLimit: 100,
+  1449→    teamMembers: usageStats.teamMembers,
+  1450→    teamLimit: 50,
+  1451→  }
+  1452→
+  1453→  const docUtil = usage.documentsLimit ? Math.round((usage.documentsThisMonth / usage.documentsLimit) * 100) : 0
+  1454→
+  1455→  return (
+  1456→    <div className="space-y-6">
+  1457→      {/* Current plan banner */}
+  1458→      <Card className="overflow-hidden border-primary/30">
+  1459→        <div className="relative bg-gradient-primary p-6 text-white">
+  1460→          <div className="absolute right-0 top-0 h-32 w-32 -translate-y-8 translate-x-8 rounded-full bg-white/10" />
+  1461→          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+  1462→            <div>
+  1463→              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-white/70">
+  1464→                <Crown className="h-3.5 w-3.5" /> Current Plan
+  1465→              </div>
+  1466→              <h3 className="mt-1 text-2xl font-bold">{currentTier?.name} Plan</h3>
+  1467→              <p className="mt-0.5 text-sm text-white/80">{currentTier?.description}</p>
+  1468→              <div className="mt-2 text-sm">
+  1469→                <span className="text-2xl font-bold">
+  1470→                  {currentTier?.price ? `$${currentTier.price}` : 'Custom'}
+  1471→                </span>
+  1472→                {currentTier?.price && <span className="text-white/70">/{currentTier.period}</span>}
+  1473→              </div>
+  1474→            </div>
+  1475→            <div className="flex flex-wrap gap-2">
+  1476→              <Button
+  1477→                variant="secondary"
+  1478→                size="sm"
+  1479→                className="bg-white/15 text-white hover:bg-white/25"
+  1480→                onClick={() => toast.info('Manage plan', { description: 'Billing portal coming soon.' })}
+  1481→              >
+  1482→                Manage Plan
+  1483→              </Button>
+  1484→              <Button
+  1485→                size="sm"
+  1486→                className="bg-white text-primary hover:bg-white/90"
+  1487→                onClick={() => toast.info('Contact sales', { description: 'We will reach out shortly.' })}
+  1488→              >
+  1489→                Upgrade
+  1490→              </Button>
+  1491→            </div>
+  1492→          </div>
+  1493→        </div>
+  1494→        <CardContent className="grid gap-6 pt-6 sm:grid-cols-3">
+  1495→          <UsageStat
+  1496→            label="Documents This Month"
+  1497→            value={usage.documentsThisMonth}
+  1498→            limit={usage.documentsLimit}
+  1499→            util={docUtil}
+  1500→            icon={FileSpreadsheet}
+  1501→            accent="primary"
+  1502→          />
+  1503→          <UsageStat
+  1504→            label="Clients"
+  1505→            value={usage.clients}
+  1506→            limit={usage.clientsLimit}
+  1507→            util={Math.round((usage.clients / usage.clientsLimit) * 100)}
+  1508→            icon={Users}
+  1509→            accent="info"
+  1510→          />
+  1511→          <UsageStat
+  1512→            label="Team Members"
+  1513→            value={usage.teamMembers}
+  1514→            limit={usage.teamLimit}
+  1515→            util={Math.round((usage.teamMembers / usage.teamLimit) * 100)}
+  1516→            icon={Users}
+  1517→            accent="success"
+  1518→          />
+  1519→        </CardContent>
+  1520→      </Card>
+  1521→
+  1522→      {/* Pricing tiers */}
+  1523→      <div>
+  1524→        <h3 className="text-lg font-semibold">Available Plans</h3>
+  1525→        <p className="text-sm text-muted-foreground">Compare and choose the right plan for your firm.</p>
+  1526→      </div>
+  1527→      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+  1528→        {PRICING_TIERS.map((tier) => {
+  1529→          const isCurrent = tier.id === firm.subscriptionTier
+  1530→          const isHighlight = tier.highlight
+  1531→          return (
+  1532→            <Card
+  1533→              key={tier.id}
+  1534→              className={cn(
+  1535→                'relative flex flex-col overflow-hidden transition-all',
+  1536→                isCurrent
+  1537→                  ? 'border-primary ring-2 ring-primary/30'
+  1538→                  : isHighlight
+  1539→                  ? 'border-primary/40 ring-1 ring-primary/20'
+  1540→                  : 'hover:border-primary/30'
+  1541→              )}
+  1542→            >
+  1543→              {isHighlight && (
+  1544→                <div className="bg-gradient-primary px-4 py-1 text-center text-xs font-semibold uppercase tracking-wide text-white">
+  1545→                  Most Popular
+  1546→                </div>
+  1547→              )}
+  1548→              {isCurrent && !isHighlight && (
+  1549→                <div className="bg-primary px-4 py-1 text-center text-xs font-semibold uppercase tracking-wide text-primary-foreground">
+  1550→                  Current Plan
+  1551→                </div>
+  1552→              )}
+  1553→              <CardHeader className="pb-3">
+  1554→                <CardTitle className="text-base">{tier.name}</CardTitle>
+  1555→                <CardDescription className="line-clamp-2">{tier.description}</CardDescription>
+  1556→              </CardHeader>
+  1557→              <CardContent className="flex flex-1 flex-col gap-4 pt-0">
+  1558→                <div className="flex items-baseline gap-1">
+  1559→                  {tier.price !== null ? (
+  1560→                    <>
+  1561→                      <span className="text-3xl font-bold tracking-tight">${tier.price}</span>
+  1562→                      <span className="text-sm text-muted-foreground">/{tier.period}</span>
+  1563→                    </>
+  1564→                  ) : (
+  1565→                    <span className="text-2xl font-bold tracking-tight">Custom</span>
+  1566→                  )}
+  1567→                </div>
+  1568→                <div className="rounded-lg bg-muted/50 px-3 py-2 text-center">
+  1569→                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Doc limit / month</p>
+  1570→                  <p className="text-sm font-semibold">
+  1571→                    {tier.docsPerMonth === -1 ? 'Unlimited' : tier.docsPerMonth.toLocaleString()}
+  1572→                  </p>
+  1573→                </div>
+  1574→                <ul className="flex-1 space-y-2">
+  1575→                  {tier.features.map((f) => (
+  1576→                    <li key={f} className="flex items-start gap-2 text-sm">
+  1577→                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+  1578→                      <span className="text-foreground/80">{f}</span>
+  1579→                    </li>
+  1580→                  ))}
+  1581→                </ul>
+  1582→                <Button
+  1583→                  className="w-full"
+  1584→                  variant={isCurrent ? 'outline' : isHighlight ? 'default' : 'outline'}
+  1585→                  disabled={isCurrent}
+  1586→                  onClick={() =>
+  1587→                    toast.info(
+  1588→                      isCurrent
+  1589→                        ? 'You are on this plan'
+  1590→                        : tier.price === null
+  1591→                        ? 'Contact sales'
+  1592→                        : `Upgrade to ${tier.name}`,
+  1593→                      { description: isCurrent ? undefined : 'Billing portal coming soon.' }
+  1594→                    )
+  1595→                  }
+  1596→                >
+  1597→                  {isCurrent ? (
+  1598→                    <>
+  1599→                      <Check className="h-4 w-4" /> Current
+  1600→                    </>
+  1601→                  ) : tier.price === null ? (
+  1602→                    'Contact Sales'
+  1603→                  ) : (
+  1604→                    `Upgrade to ${tier.name}`
+  1605→                  )}
+  1606→                </Button>
+  1607→              </CardContent>
+  1608→            </Card>
+  1609→          )
+  1610→        })}
+  1611→      </div>
+  1612→    </div>
+  1613→  )
+  1614→}
+  1615→
+  1616→function UsageStat({
+  1617→  label,
+  1618→  value,
+  1619→  limit,
+  1620→  util,
+  1621→  icon: Icon,
+  1622→  accent,
+  1623→}: {
+  1624→  label: string
+  1625→  value: number
+  1626→  limit: number | null
+  1627→  util: number
+  1628→  icon: typeof FileSpreadsheet
+  1629→  accent: 'primary' | 'success' | 'info'
+  1630→}) {
+  1631→  const accentClass =
+  1632→    accent === 'primary'
+  1633→      ? 'bg-primary/10 text-primary'
+  1634→      : accent === 'success'
+  1635→      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+  1636→      : 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400'
+  1637→  return (
+  1638→    <div className="space-y-2">
+  1639→      <div className="flex items-center justify-between">
+  1640→        <span className="text-sm font-medium text-muted-foreground">{label}</span>
+  1641→        <div className={cn('flex h-7 w-7 items-center justify-center rounded-md', accentClass)}>
+  1642→          <Icon className="h-3.5 w-3.5" />
+  1643→        </div>
+  1644→      </div>
+  1645→      <div className="flex items-baseline gap-1">
+  1646→        <span className="text-2xl font-bold tabular-nums">{value.toLocaleString()}</span>
+  1647→        <span className="text-sm text-muted-foreground">
+  1648→          / {limit === null ? '∞' : limit.toLocaleString()}
+  1649→        </span>
+  1650→      </div>
+  1651→      <Progress value={Math.min(100, util)} className="h-1.5" />
+  1652→      <p className="text-xs text-muted-foreground">{util}% used</p>
+  1653→    </div>
+  1654→  )
+  1655→}
+  1656→
+  1657→// ─── Audit Log Section ─────────────────────────────────────────
+  1658→
+  1659→function AuditLogSection({ logs }: { logs: AuditLogRow[] }) {
+  1660→  const actionColor = (action: string) => {
+  1661→    if (action.includes('login') || action.includes('auth')) return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400'
+  1662→    if (action.includes('create')) return 'text-primary bg-primary/10'
+  1663→    if (action.includes('delete')) return 'text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400'
+  1664→    if (action.includes('update') || action.includes('patch')) return 'text-amber-600 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400'
+  1665→    return 'text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-300'
+  1666→  }
+  1667→
+  1668→  const formatDetails = (details: Record<string, unknown> | string) => {
+  1669→    if (typeof details === 'string') {
+  1670→      try {
+  1671→        return JSON.stringify(JSON.parse(details), null, 0)
+  1672→      } catch {
+  1673→        return details
+  1674→      }
+  1675→    }
+  1676→    return JSON.stringify(details)
+  1677→  }
+  1678→
+  1679→  return (
+  1680→    <Card>
+  1681→      <CardHeader className="border-b">
+  1682→        <div className="flex items-center justify-between">
+  1683→          <div className="flex items-center gap-2">
+  1684→            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1685→              <History className="h-4 w-4" />
+  1686→            </div>
+  1687→            <div>
+  1688→              <CardTitle className="text-base">Audit Log</CardTitle>
+  1689→              <CardDescription>
+  1690→                Last {logs.length} event{logs.length === 1 ? '' : 's'} across your firm.
+  1691→              </CardDescription>
+  1692→            </div>
+  1693→          </div>
+  1694→          <Badge variant="outline" className="gap-1">
+  1695→            <ActivityIcon className="h-3 w-3" /> {logs.length} events
+  1696→          </Badge>
+  1697→        </div>
+  1698→      </CardHeader>
+  1699→      <CardContent className="pt-0">
+  1700→        {logs.length === 0 ? (
+  1701→          <div className="flex flex-col items-center justify-center py-12 text-center">
+  1702→            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+  1703→              <ScrollText className="h-6 w-6 text-muted-foreground" />
+  1704→            </div>
+  1705→            <p className="mt-3 text-sm font-medium">No audit events yet</p>
+  1706→            <p className="text-xs text-muted-foreground">Actions taken in TaxDox will appear here.</p>
+  1707→          </div>
+  1708→        ) : (
+  1709→          <ScrollArea className="h-[calc(100vh-22rem)] min-h-[320px]">
+  1710→            <Table>
+  1711→              <TableHeader className="sticky top-0 z-10 bg-card">
+  1712→                <TableRow className="hover:bg-transparent">
+  1713→                  <TableHead className="w-[180px]">Timestamp</TableHead>
+  1714→                  <TableHead>Action</TableHead>
+  1715→                  <TableHead>Resource</TableHead>
+  1716→                  <TableHead className="hidden md:table-cell">IP Address</TableHead>
+  1717→                  <TableHead className="hidden lg:table-cell">Details</TableHead>
+  1718→                </TableRow>
+  1719→              </TableHeader>
+  1720→              <TableBody>
+  1721→                {logs.map((log) => (
+  1722→                  <TableRow key={log.id}>
+  1723→                    <TableCell>
+  1724→                      <div className="flex flex-col">
+  1725→                        <span className="text-sm font-medium tabular-nums">
+  1726→                          {format(new Date(log.createdAt), 'MMM d, yyyy')}
+  1727→                        </span>
+  1728→                        <span className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+  1729→                          <Clock12 /> {format(new Date(log.createdAt), 'HH:mm:ss')}
+  1730→                        </span>
+  1731→                      </div>
+  1732→                    </TableCell>
+  1733→                    <TableCell>
+  1734→                      <code
+  1735→                        className={cn(
+  1736→                          'inline-flex rounded-md px-2 py-0.5 text-xs font-medium',
+  1737→                          actionColor(log.action)
+  1738→                        )}
+  1739→                      >
+  1740→                        {log.action}
+  1741→                      </code>
+  1742→                    </TableCell>
+  1743→                    <TableCell>
+  1744→                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+  1745→                        <Hash className="h-3 w-3" />
+  1746→                        {log.resourceType || '—'}
+  1747→                      </div>
+  1748→                    </TableCell>
+  1749→                    <TableCell className="hidden md:table-cell">
+  1750→                      <code className="text-xs text-muted-foreground tabular-nums">
+  1751→                        {log.ipAddress || '—'}
+  1752→                      </code>
+  1753→                    </TableCell>
+  1754→                    <TableCell className="hidden lg:table-cell">
+  1755→                      <code className="line-clamp-1 max-w-md text-xs text-muted-foreground">
+  1756→                        {formatDetails(log.details)}
+  1757→                      </code>
+  1758→                    </TableCell>
+  1759→                  </TableRow>
+  1760→                ))}
+  1761→              </TableBody>
+  1762→            </Table>
+  1763→          </ScrollArea>
+  1764→        )}
+  1765→      </CardContent>
+  1766→    </Card>
+  1767→  )
+  1768→}
+  1769→
+  1770→// Small clock icon (since lucide Clock may conflict with naming)
+  1771→function Clock12(props: React.SVGProps<SVGSVGElement>) {
+  1772→  return (
+  1773→    <svg
+  1774→      xmlns="http://www.w3.org/2000/svg"
+  1775→      width="12"
+  1776→      height="12"
+  1777→      viewBox="0 0 24 24"
+  1778→      fill="none"
+  1779→      stroke="currentColor"
+  1780→      strokeWidth="2"
+  1781→      strokeLinecap="round"
+  1782→      strokeLinejoin="round"
+  1783→      {...props}
+  1784→    >
+  1785→      <circle cx="12" cy="12" r="10" />
+  1786→      <polyline points="12 6 12 12 16 14" />
+  1787→    </svg>
+  1788→  )
+  1789→}
+  1790→
+  1791→// ─── Add Team Member Dialog ────────────────────────────────────
+  1792→
+  1793→function AddTeamMemberDialog({
+  1794→  open,
+  1795→  onOpenChange,
+  1796→  firmId,
+  1797→  onCreated,
+  1798→}: {
+  1799→  open: boolean
+  1800→  onOpenChange: (v: boolean) => void
+  1801→  firmId: string
+  1802→  onCreated: (m: TeamMemberRow) => void
+  1803→}) {
+  1804→  const [form, setForm] = useState({
+  1805→    name: '',
+  1806→    role: 'preparer',
+  1807→    email: '',
+  1808→    capacity: 10,
+  1809→    color: 'emerald',
+  1810→  })
+  1811→  const [saving, setSaving] = useState(false)
+  1812→
+  1813→  const reset = () => {
+  1814→    setForm({ name: '', role: 'preparer', email: '', capacity: 10, color: 'emerald' })
+  1815→  }
+  1816→
+  1817→  const handleSubmit = async () => {
+  1818→    if (!form.name.trim()) {
+  1819→      toast.error('Name is required')
+  1820→      return
+  1821→    }
+  1822→    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+  1823→      toast.error('Valid email is required')
+  1824→      return
+  1825→    }
+  1826→    if (!firmId) {
+  1827→      toast.error('Firm not loaded yet — try again')
+  1828→      return
+  1829→    }
+  1830→    setSaving(true)
+  1831→    try {
+  1832→      const res = await fetch('/api/settings/team', {
+  1833→        method: 'POST',
+  1834→        headers: { 'Content-Type': 'application/json' },
+  1835→        body: JSON.stringify({ ...form, firmId }),
+  1836→      })
+  1837→      if (!res.ok) throw new Error('Failed to create team member')
+  1838→      const data = await res.json()
+  1839→      onCreated(data.member)
+  1840→      toast.success(`${form.name} added to the team`)
+  1841→      reset()
+  1842→      onOpenChange(false)
+  1843→    } catch (err) {
+  1844→      console.error(err)
+  1845→      toast.error('Failed to add team member')
+  1846→    } finally {
+  1847→      setSaving(false)
+  1848→    }
+  1849→  }
+  1850→
+  1851→  return (
+  1852→    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
+  1853→      <DialogContent className="sm:max-w-md">
+  1854→        <DialogHeader>
+  1855→          <DialogTitle>Add Team Member</DialogTitle>
+  1856→          <DialogDescription>
+  1857→            Create a new team member record. Role controls permissions and capacity sets max concurrent load.
+  1858→          </DialogDescription>
+  1859→        </DialogHeader>
+  1860→        <div className="grid gap-4 py-2">
+  1861→          <div className="space-y-2">
+  1862→            <Label htmlFor="tm-name">Name *</Label>
+  1863→            <Input
+  1864→              id="tm-name"
+  1865→              value={form.name}
+  1866→              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+  1867→              placeholder="e.g. Jordan Smith"
+  1868→              autoFocus
+  1869→            />
+  1870→          </div>
+  1871→          <div className="grid grid-cols-2 gap-3">
+  1872→            <div className="space-y-2">
+  1873→              <Label htmlFor="tm-role">Role</Label>
+  1874→              <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
+  1875→                <SelectTrigger id="tm-role">
+  1876→                  <SelectValue />
+  1877→                </SelectTrigger>
+  1878→                <SelectContent>
+  1879→                  <SelectItem value="partner">Partner</SelectItem>
+  1880→                  <SelectItem value="manager">Manager</SelectItem>
+  1881→                  <SelectItem value="preparer">Preparer</SelectItem>
+  1882→                  <SelectItem value="admin">Admin</SelectItem>
+  1883→                  <SelectItem value="read-only">Read-only</SelectItem>
+  1884→                </SelectContent>
+  1885→              </Select>
+  1886→            </div>
+  1887→            <div className="space-y-2">
+  1888→              <Label htmlFor="tm-capacity">Capacity</Label>
+  1889→              <Input
+  1890→                id="tm-capacity"
+  1891→                type="number"
+  1892→                min={1}
+  1893→                max={50}
+  1894→                value={form.capacity}
+  1895→                onChange={(e) => setForm((f) => ({ ...f, capacity: parseInt(e.target.value) || 0 }))}
+  1896→              />
+  1897→            </div>
+  1898→          </div>
+  1899→          <div className="space-y-2">
+  1900→            <Label htmlFor="tm-email">Email *</Label>
+  1901→            <Input
+  1902→              id="tm-email"
+  1903→              type="email"
+  1904→              value={form.email}
+  1905→              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+  1906→              placeholder="name@firm.com"
+  1907→            />
+  1908→          </div>
+  1909→          <div className="space-y-2">
+  1910→            <Label>Avatar Color</Label>
+  1911→            <div className="flex flex-wrap gap-2">
+  1912→              {Object.entries(TEAM_COLOR_HEX).map(([key, hex]) => (
+  1913→                <button
+  1914→                  key={key}
+  1915→                  type="button"
+  1916→                  onClick={() => setForm((f) => ({ ...f, color: key }))}
+  1917→                  className={cn(
+  1918→                    'flex h-8 w-8 items-center justify-center rounded-full text-white transition-all',
+  1919→                    form.color === key ? 'ring-2 ring-offset-2 ring-offset-background ring-primary scale-110' : 'opacity-80 hover:opacity-100'
+  1920→                  )}
+  1921→                  style={{ backgroundColor: hex }}
+  1922→                  aria-label={key}
+  1923→                >
+  1924→                  {form.color === key && <Check className="h-4 w-4" />}
+  1925→                </button>
+  1926→              ))}
+  1927→            </div>
+  1928→          </div>
+  1929→        </div>
+  1930→        <DialogFooter>
+  1931→          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+  1932→            Cancel
+  1933→          </Button>
+  1934→          <Button onClick={handleSubmit} disabled={saving}>
+  1935→            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+  1936→            Add Member
+  1937→          </Button>
+  1938→        </DialogFooter>
+  1939→      </DialogContent>
+  1940→    </Dialog>
+  1941→  )
+  1942→}
+  1943→
+  1944→// ─── Create Template Dialog ────────────────────────────────────
+  1945→
+  1946→function CreateTemplateDialog({
+  1947→  open,
+  1948→  onOpenChange,
+  1949→  firmId,
+  1950→  onCreated,
+  1951→}: {
+  1952→  open: boolean
+  1953→  onOpenChange: (v: boolean) => void
+  1954→  firmId: string
+  1955→  onCreated: (t: PbcTemplateRow) => void
+  1956→}) {
+  1957→  const [form, setForm] = useState({
+  1958→    name: '',
+  1959→    description: '',
+  1960→    clientType: 'individual',
+  1961→    engagementType: '1040',
+  1962→  })
+  1963→  const [saving, setSaving] = useState(false)
+  1964→
+  1965→  const reset = () => {
+  1966→    setForm({ name: '', description: '', clientType: 'individual', engagementType: '1040' })
+  1967→  }
+  1968→
+  1969→  const handleSubmit = async () => {
+  1970→    if (!form.name.trim()) {
+  1971→      toast.error('Template name is required')
+  1972→      return
+  1973→    }
+  1974→    if (!firmId) {
+  1975→      toast.error('Firm not loaded yet — try again')
+  1976→      return
+  1977→    }
+  1978→    setSaving(true)
+  1979→    try {
+  1980→      const res = await fetch('/api/settings/templates', {
+  1981→        method: 'POST',
+  1982→        headers: { 'Content-Type': 'application/json' },
+  1983→        body: JSON.stringify({ ...form, firmId, items: [] }),
+  1984→      })
+  1985→      if (!res.ok) throw new Error('Failed to create template')
+  1986→      const data = await res.json()
+  1987→      onCreated({ ...data.template, items: [] })
+  1988→      toast.success(`Template "${form.name}" created`)
+  1989→      reset()
+  1990→      onOpenChange(false)
+  1991→    } catch (err) {
+  1992→      console.error(err)
+  1993→      toast.error('Failed to create template')
+  1994→    } finally {
+  1995→      setSaving(false)
+  1996→    }
+  1997→  }
+  1998→
+  1999→  return (
+  2000→    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
+
+[showing lines 1-2000 of 2110; use offset=2001 with limit to continue reading]

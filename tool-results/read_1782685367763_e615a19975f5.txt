@@ -1,0 +1,1348 @@
+     1→'use client'
+     2→
+     3→import { useCallback, useEffect, useMemo, useState } from 'react'
+     4→import {
+     5→  BarChart3,
+     6→  Clock,
+     7→  Target,
+     8→  Star,
+     9→  TrendingUp,
+    10→  DollarSign,
+    11→  Download,
+    12→  RefreshCw,
+    13→  Gauge,
+    14→  Timer,
+    15→  CalendarClock,
+    16→  CheckCircle2,
+    17→  Users,
+    18→  MessageSquare,
+    19→  Wallet,
+    20→  Briefcase,
+    21→  Award,
+    22→  Sparkles,
+    23→  AlertTriangle,
+    24→  FileSearch,
+    25→  ListChecks,
+    26→  ArrowUpRight,
+    27→  ArrowDownRight,
+    28→  Activity,
+    29→} from 'lucide-react'
+    30→import { StatCard } from '@/components/shared/stat-card'
+    31→import { ProgressRing } from '@/components/shared/progress-ring'
+    32→import { Card } from '@/components/ui/card'
+    33→import { Button } from '@/components/ui/button'
+    34→import { Badge } from '@/components/ui/badge'
+    35→import {
+    36→  Table,
+    37→  TableBody,
+    38→  TableCell,
+    39→  TableHead,
+    40→  TableHeader,
+    41→  TableRow,
+    42→} from '@/components/ui/table'
+    43→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    44→import { Skeleton } from '@/components/ui/skeleton'
+    45→import {
+    46→  AreaChart,
+    47→  Area,
+    48→  BarChart,
+    49→  Bar,
+    50→  LineChart,
+    51→  Line,
+    52→  PieChart,
+    53→  Pie,
+    54→  Cell,
+    55→  XAxis,
+    56→  YAxis,
+    57→  CartesianGrid,
+    58→  Tooltip,
+    59→  ResponsiveContainer,
+    60→  Legend,
+    61→} from 'recharts'
+    62→import { toast } from 'sonner'
+    63→import { DOCUMENT_TYPE_MAP } from '@/lib/constants'
+    64→import { cn } from '@/lib/utils'
+    65→
+    66→/* ------------------------------------------------------------------ */
+    67→/* Types                                                              */
+    68→/* ------------------------------------------------------------------ */
+    69→
+    70→interface OperationalMetrics {
+    71→  avgProcessingMin: number
+    72→  avgCollectionDays: number
+    73→  onTimeRate: number
+    74→  teamUtilization: number
+    75→  clientResponseRate: number
+    76→}
+    77→
+    78→interface FinancialMetrics {
+    79→  totalRevenue: number
+    80→  collectedRevenue: number
+    81→  outstandingRevenue: number
+    82→  revenuePerEngagement: number
+    83→  avgHourlyRate: number
+    84→  outsourcingSavings: number
+    85→}
+    86→
+    87→interface QualityMetrics {
+    88→  avgConfidence: number
+    89→  manualCorrections: number
+    90→  issuesFound: number
+    91→  clientSatisfaction: number
+    92→  totalExtractions: number
+    93→}
+    94→
+    95→interface TrendPoint {
+    96→  date: string
+    97→  documents: number
+    98→  extractions: number
+    99→  accuracy: number
+   100→}
+   101→
+   102→interface TypeCount {
+   103→  type: string
+   104→  count: number
+   105→}
+   106→
+   107→interface TeamPerf {
+   108→  name: string
+   109→  role: string
+   110→  engagements: number
+   111→  completed: number
+   112→  revenue: number
+   113→  utilization: number
+   114→  color: string
+   115→}
+   116→
+   117→interface EngagementStatusBreakdown {
+   118→  active: number
+   119→  completed: number
+   120→  pending: number
+   121→}
+   122→
+   123→interface ReportsData {
+   124→  operational: OperationalMetrics
+   125→  financial: FinancialMetrics
+   126→  quality: QualityMetrics
+   127→  trendData: TrendPoint[]
+   128→  typeDistribution: TypeCount[]
+   129→  teamPerformance: TeamPerf[]
+   130→  engagementStatusBreakdown: EngagementStatusBreakdown
+   131→}
+   132→
+   133→/* ------------------------------------------------------------------ */
+   134→/* Constants & helpers                                               */
+   135→/* ------------------------------------------------------------------ */
+   136→
+   137→const RANGE_OPTIONS = [
+   138→  { value: '7d', label: '7D' },
+   139→  { value: '30d', label: '30D' },
+   140→  { value: '90d', label: '90D' },
+   141→  { value: '1y', label: '1Y' },
+   142→] as const
+   143→
+   144→type RangeValue = (typeof RANGE_OPTIONS)[number]['value']
+   145→
+   146→const CHART_COLORS = {
+   147→  primary: '#0ea5e9',
+   148→  emerald: '#10b981',
+   149→  amber: '#f59e0b',
+   150→  violet: '#8b5cf6',
+   151→  pink: '#ec4899',
+   152→  cyan: '#06b6d4',
+   153→  red: '#ef4444',
+   154→  slate: '#64748b',
+   155→  orange: '#f97316',
+   156→}
+   157→
+   158→const TYPE_BAR_COLORS = [
+   159→  '#0ea5e9',
+   160→  '#10b981',
+   161→  '#f59e0b',
+   162→  '#8b5cf6',
+   163→  '#ec4899',
+   164→  '#06b6d4',
+   165→  '#f97316',
+   166→  '#64748b',
+   167→  '#14b8a6',
+   168→  '#a855f7',
+   169→  '#ef4444',
+   170→  '#84cc16',
+   171→]
+   172→
+   173→const TEAM_COLOR_HEX: Record<string, string> = {
+   174→  emerald: '#10b981',
+   175→  blue: '#3b82f6',
+   176→  amber: '#f59e0b',
+   177→  violet: '#8b5cf6',
+   178→  cyan: '#06b6d4',
+   179→  rose: '#f43f5e',
+   180→  sky: '#0ea5e9',
+   181→  teal: '#14b8a6',
+   182→  orange: '#f97316',
+   183→  green: '#22c55e',
+   184→  pink: '#ec4899',
+   185→  red: '#ef4444',
+   186→}
+   187→
+   188→function teamHex(color: string): string {
+   189→  return TEAM_COLOR_HEX[color] || '#0ea5e9'
+   190→}
+   191→
+   192→const currency = new Intl.NumberFormat('en-US', {
+   193→  style: 'currency',
+   194→  currency: 'USD',
+   195→  maximumFractionDigits: 0,
+   196→})
+   197→
+   198→const currencyCompact = new Intl.NumberFormat('en-US', {
+   199→  style: 'currency',
+   200→  currency: 'USD',
+   201→  notation: 'compact',
+   202→  maximumFractionDigits: 1,
+   203→})
+   204→
+   205→const numberCompact = new Intl.NumberFormat('en-US', {
+   206→  notation: 'compact',
+   207→  maximumFractionDigits: 1,
+   208→})
+   209→
+   210→function formatDateShort(iso: string): string {
+   211→  const d = new Date(iso)
+   212→  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+   213→}
+   214→
+   215→function docTypeLabel(type: string): string {
+   216→  return DOCUMENT_TYPE_MAP[type]?.label || type.replace(/-/g, ' ')
+   217→}
+   218→
+   219→function utilizationColor(u: number): string {
+   220→  if (u >= 90) return '#ef4444'
+   221→  if (u >= 75) return '#f59e0b'
+   222→  if (u >= 50) return '#0ea5e9'
+   223→  return '#10b981'
+   224→}
+   225→
+   226→function performanceTier(utilization: number, completed: number, engagements: number):
+   227→  | { label: string; color: string; bg: string }
+   228→  | null {
+   229→  if (engagements === 0) return null
+   230→  const completionRate = engagements > 0 ? completed / engagements : 0
+   231→  if (completionRate >= 0.75 && utilization >= 70)
+   232→    return { label: 'Top', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900' }
+   233→  if (completionRate >= 0.5)
+   234→    return { label: 'Solid', color: 'text-sky-700', bg: 'bg-sky-50 border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900' }
+   235→  if (completionRate >= 0.25)
+   236→    return { label: 'Building', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900' }
+   237→  return { label: 'New', color: 'text-slate-600', bg: 'bg-slate-50 border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800' }
+   238→}
+   239→
+   240→function initials(name: string): string {
+   241→  return name
+   242→    .split(' ')
+   243→    .map((n) => n[0])
+   244→    .filter(Boolean)
+   245→    .slice(0, 2)
+   246→    .join('')
+   247→    .toUpperCase()
+   248→}
+   249→
+   250→/* ------------------------------------------------------------------ */
+   251→/* Chart tooltip                                                      */
+   252→/* ------------------------------------------------------------------ */
+   253→
+   254→const tooltipStyle = {
+   255→  borderRadius: 12,
+   256→  border: '1px solid hsl(var(--border))',
+   257→  background: 'hsl(var(--popover))',
+   258→  color: 'hsl(var(--popover-foreground))',
+   259→  fontSize: 12,
+   260→  boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+   261→  padding: '8px 12px',
+   262→}
+   263→
+   264→/* ------------------------------------------------------------------ */
+   265→/* Component                                                          */
+   266→/* ------------------------------------------------------------------ */
+   267→
+   268→export function ReportsView() {
+   269→  const [data, setData] = useState<ReportsData | null>(null)
+   270→  const [loading, setLoading] = useState(true)
+   271→  const [range, setRange] = useState<RangeValue>('30d')
+   272→  const [refreshing, setRefreshing] = useState(false)
+   273→
+   274→  const fetchData = useCallback(
+   275→    async (r: RangeValue, silent = false) => {
+   276→      if (!silent) setLoading(true)
+   277→      setRefreshing(true)
+   278→      try {
+   279→        const res = await fetch(`/api/reports?range=${r}`)
+   280→        if (!res.ok) throw new Error('Failed to load reports')
+   281→        const json = (await res.json()) as ReportsData
+   282→        setData(json)
+   283→      } catch (e) {
+   284→        console.error(e)
+   285→        toast.error('Could not load report data')
+   286→      } finally {
+   287→        setLoading(false)
+   288→        setRefreshing(false)
+   289→      }
+   290→    },
+   291→    []
+   292→  )
+   293→
+   294→  useEffect(() => {
+   295→    fetchData(range)
+   296→  }, [range, fetchData])
+   297→
+   298→  const handleRangeChange = (r: RangeValue) => {
+   299→    setRange(r)
+   300→    toast.info(`Range updated to ${r.toUpperCase()}`, { duration: 1500 })
+   301→  }
+   302→
+   303→  const handleRefresh = () => {
+   304→    fetchData(range, true)
+   305→    toast.success('Reports refreshed', { duration: 1500 })
+   306→  }
+   307→
+   308→  const handleExport = () => {
+   309→    if (!data) return
+   310→    // Build a CSV summary export
+   311→    const rows: string[][] = []
+   312→    rows.push(['TaxDox AI — Firm Analytics Report'])
+   313→    rows.push([`Range: ${range.toUpperCase()}`, `Generated: ${new Date().toISOString()}`])
+   314→    rows.push([])
+   315→    rows.push(['OPERATIONAL METRICS'])
+   316→    rows.push(['Avg Processing Time (min)', String(data.operational.avgProcessingMin)])
+   317→    rows.push(['Avg Collection Days', String(data.operational.avgCollectionDays)])
+   318→    rows.push(['On-time Filing Rate (%)', String(data.operational.onTimeRate)])
+   319→    rows.push(['Team Utilization (%)', String(data.operational.teamUtilization)])
+   320→    rows.push(['Client Response Rate (%)', String(data.operational.clientResponseRate)])
+   321→    rows.push([])
+   322→    rows.push(['FINANCIAL METRICS'])
+   323→    rows.push(['Total Revenue', String(data.financial.totalRevenue)])
+   324→    rows.push(['Collected Revenue', String(data.financial.collectedRevenue)])
+   325→    rows.push(['Outstanding Revenue', String(data.financial.outstandingRevenue)])
+   326→    rows.push(['Revenue per Engagement', String(data.financial.revenuePerEngagement)])
+   327→    rows.push(['Avg Hourly Rate', String(data.financial.avgHourlyRate)])
+   328→    rows.push(['Outsourcing Savings', String(data.financial.outsourcingSavings)])
+   329→    rows.push([])
+   330→    rows.push(['QUALITY METRICS'])
+   331→    rows.push(['AI Accuracy (%)', String(data.quality.avgConfidence)])
+   332→    rows.push(['Manual Corrections', String(data.quality.manualCorrections)])
+   333→    rows.push(['Issues Found', String(data.quality.issuesFound)])
+   334→    rows.push(['Client Satisfaction (/5)', String(data.quality.clientSatisfaction)])
+   335→    rows.push(['Total Extractions', String(data.quality.totalExtractions)])
+   336→    rows.push([])
+   337→    rows.push(['TEAM PERFORMANCE'])
+   338→    rows.push(['Name', 'Role', 'Engagements', 'Completed', 'Revenue', 'Utilization %'])
+   339→    data.teamPerformance.forEach((t) =>
+   340→      rows.push([t.name, t.role, String(t.engagements), String(t.completed), String(t.revenue), String(t.utilization)])
+   341→    )
+   342→    rows.push([])
+   343→    rows.push(['DOCUMENT TYPE DISTRIBUTION'])
+   344→    rows.push(['Type', 'Count'])
+   345→    data.typeDistribution.forEach((d) => rows.push([d.type, String(d.count)]))
+   346→
+   347→    const csv = rows
+   348→      .map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(','))
+   349→      .join('\n')
+   350→    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+   351→    const url = URL.createObjectURL(blob)
+   352→    const link = document.createElement('a')
+   353→    link.href = url
+   354→    link.download = `taxdox-report-${range}-${new Date().toISOString().split('T')[0]}.csv`
+   355→    document.body.appendChild(link)
+   356→    link.click()
+   357→    document.body.removeChild(link)
+   358→    URL.revokeObjectURL(url)
+   359→    toast.success('Report exported as CSV')
+   360→  }
+   361→
+   362→  /* ----------------------------- Loading ----------------------------- */
+   363→  if (loading || !data) {
+   364→    return <ReportsSkeleton />
+   365→  }
+   366→
+   367→  const { operational, financial, quality, trendData, typeDistribution, teamPerformance, engagementStatusBreakdown } =
+   368→    data
+   369→
+   370→  /* ----------------------- Derived chart data ------------------------ */
+   371→
+   372→  const revenueTrend =
+   373→      trendData.map((p) => ({
+   374→        date: formatDateShort(p.date),
+   375→        documents: p.documents,
+   376→        extractions: p.extractions,
+   377→        revenue: p.extractions * financial.avgHourlyRate,
+   378→      }))
+   379→
+   380→  const accuracyTrend =
+   381→      trendData.map((p) => ({
+   382→        date: formatDateShort(p.date),
+   383→        accuracy: p.accuracy,
+   384→      }))
+   385→
+   386→  const totalTypeCount = typeDistribution.reduce((s, t) => s + t.count, 0) || 1
+   387→  const typeChartData = typeDistribution
+   388→    .slice(0, 10)
+   389→    .map((t, i) => ({
+   390→      type: docTypeLabel(t.type),
+   391→      shortType: t.type,
+   392→      count: t.count,
+   393→      pct: Math.round((t.count / totalTypeCount) * 100),
+   394→      fill: TYPE_BAR_COLORS[i % TYPE_BAR_COLORS.length],
+   395→    }))
+   396→
+   397→  const statusPieData = [
+   398→    { name: 'Active', value: engagementStatusBreakdown.active, color: CHART_COLORS.primary },
+   399→    { name: 'Completed', value: engagementStatusBreakdown.completed, color: CHART_COLORS.emerald },
+   400→    { name: 'Pending', value: engagementStatusBreakdown.pending, color: CHART_COLORS.amber },
+   401→  ].filter((s) => s.value > 0)
+   402→  const statusTotal =
+   403→    engagementStatusBreakdown.active +
+   404→    engagementStatusBreakdown.completed +
+   405→    engagementStatusBreakdown.pending
+   406→
+   407→  /* --------------------------- Render ------------------------------- */
+   408→
+   409→  return (
+   410→    <div className="space-y-6 p-4 lg:p-6">
+   411→      {/* ----------------------- Header ----------------------- */}
+   412→      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+   413→        <div>
+   414→          <div className="flex items-center gap-2">
+   415→            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+   416→              <BarChart3 className="h-5 w-5" />
+   417→            </div>
+   418→            <div>
+   419→              <h1 className="text-2xl font-bold tracking-tight">Reports &amp; Analytics</h1>
+   420→              <p className="text-sm text-muted-foreground">
+   421→                Firm-wide operational, financial, and quality metrics at a glance.
+   422→              </p>
+   423→            </div>
+   424→          </div>
+   425→        </div>
+   426→
+   427→        <div className="flex flex-wrap items-center gap-2">
+   428→          {/* Date range selector */}
+   429→          <div className="inline-flex h-9 items-center rounded-lg border bg-muted/40 p-[3px]">
+   430→            {RANGE_OPTIONS.map((opt) => (
+   431→              <button
+   432→                key={opt.value}
+   433→                onClick={() => handleRangeChange(opt.value)}
+   434→                className={cn(
+   435→                  'inline-flex h-[calc(100%-1px)] items-center justify-center rounded-md px-3 text-xs font-medium transition-colors',
+   436→                  range === opt.value
+   437→                    ? 'bg-background text-foreground shadow-sm'
+   438→                    : 'text-muted-foreground hover:text-foreground'
+   439→                )}
+   440→              >
+   441→                {opt.label}
+   442→              </button>
+   443→            ))}
+   444→          </div>
+   445→
+   446→          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+   447→            <RefreshCw className={cn('mr-1.5 h-4 w-4', refreshing && 'animate-spin')} />
+   448→            Refresh
+   449→          </Button>
+   450→          <Button size="sm" onClick={handleExport}>
+   451→            <Download className="mr-1.5 h-4 w-4" />
+   452→            Export Report
+   453→          </Button>
+   454→        </div>
+   455→      </div>
+   456→
+   457→      {/* --------------------- Key Metrics Row -------------------- */}
+   458→      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   459→        <StatCard
+   460→          label="Total Revenue"
+   461→          value={currency.format(financial.totalRevenue)}
+   462→          icon={DollarSign}
+   463→          trend={{ value: 12.4, label: 'vs last period' }}
+   464→          accent="primary"
+   465→        />
+   466→        <StatCard
+   467→          label="Avg Processing Time"
+   468→          value={`${operational.avgProcessingMin}m`}
+   469→          icon={Clock}
+   470→          trend={{ value: -8.2, label: 'per document' }}
+   471→          accent="info"
+   472→        />
+   473→        <StatCard
+   474→          label="AI Accuracy"
+   475→          value={`${quality.avgConfidence}%`}
+   476→          icon={Target}
+   477→          trend={{ value: 3.1, label: 'extraction confidence' }}
+   478→          accent="success"
+   479→        />
+   480→        <StatCard
+   481→          label="Client Satisfaction"
+   482→          value={`${quality.clientSatisfaction} / 5`}
+   483→          icon={Star}
+   484→          trend={{ value: 2.5, label: 'avg rating' }}
+   485→          accent="warning"
+   486→        />
+   487→      </div>
+   488→
+   489→      {/* ------------------------- Tabs for metric sections ------------------------- */}
+   490→      <Tabs defaultValue="operational" className="w-full">
+   491→        <TabsList className="h-9">
+   492→          <TabsTrigger value="operational">
+   493→            <Gauge className="mr-1.5 h-3.5 w-3.5" />
+   494→            Operational
+   495→          </TabsTrigger>
+   496→          <TabsTrigger value="financial">
+   497→            <Wallet className="mr-1.5 h-3.5 w-3.5" />
+   498→            Financial
+   499→          </TabsTrigger>
+   500→          <TabsTrigger value="quality">
+   501→            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+   502→            Quality
+   503→          </TabsTrigger>
+   504→        </TabsList>
+   505→
+   506→        {/* ----------------------- Operational ----------------------- */}
+   507→        <TabsContent value="operational" className="mt-4">
+   508→          <Card className="rounded-xl p-5">
+   509→            <div className="mb-4 flex items-center justify-between">
+   510→              <div>
+   511→                <h2 className="text-base font-semibold">Operational Metrics</h2>
+   512→                <p className="text-xs text-muted-foreground">
+   513→                  Throughput, collection speed, and team utilization across the firm.
+   514→                </p>
+   515→              </div>
+   516→              <Badge variant="outline" className="gap-1">
+   517→                <Activity className="h-3 w-3" />
+   518→                Live
+   519→              </Badge>
+   520→            </div>
+   521→
+   522→            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+   523→              <OperationalMetricCard
+   524→                icon={Timer}
+   525→                accent="primary"
+   526→                label="Avg Processing / Doc"
+   527→                value={`${operational.avgProcessingMin}m`}
+   528→                trend={{ value: -8.2, label: 'faster' }}
+   529→              />
+   530→              <OperationalMetricCard
+   531→                icon={CalendarClock}
+   532→                accent="info"
+   533→                label="Avg Collection Days"
+   534→                value={`${operational.avgCollectionDays}d`}
+   535→                trend={{ value: -4.5, label: 'faster' }}
+   536→              />
+   537→              <OperationalMetricCard
+   538→                icon={CheckCircle2}
+   539→                accent="success"
+   540→                label="On-time Filing Rate"
+   541→                value={`${operational.onTimeRate}%`}
+   542→                trend={{ value: 2.1, label: 'vs target' }}
+   543→              />
+   544→              <OperationalMetricCard
+   545→                icon={Users}
+   546→                accent="warning"
+   547→                label="Team Utilization"
+   548→                value={`${operational.teamUtilization}%`}
+   549→                trend={{ value: 5.6, label: 'capacity' }}
+   550→              />
+   551→              <OperationalMetricCard
+   552→                icon={MessageSquare}
+   553→                accent="violet"
+   554→                label="Client Response Rate"
+   555→                value={`${operational.clientResponseRate}%`}
+   556→                trend={{ value: 1.8, label: 'engagement' }}
+   557→              />
+   558→            </div>
+   559→
+   560→            {/* Mini area chart showing document/extraction throughput */}
+   561→            <div className="mt-6 border-t pt-5">
+   562→              <div className="mb-2 flex items-center justify-between">
+   563→                <div>
+   564→                  <h3 className="text-sm font-semibold">Processing Throughput</h3>
+   565→                  <p className="text-xs text-muted-foreground">Daily documents &amp; extractions over the selected range</p>
+   566→                </div>
+   567→                <div className="flex items-center gap-3 text-xs">
+   568→                  <span className="inline-flex items-center gap-1.5">
+   569→                    <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART_COLORS.primary }} />
+   570→                    Documents
+   571→                  </span>
+   572→                  <span className="inline-flex items-center gap-1.5">
+   573→                    <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART_COLORS.emerald }} />
+   574→                    Extractions
+   575→                  </span>
+   576→                </div>
+   577→              </div>
+   578→              <ResponsiveContainer width="100%" height={220}>
+   579→                <AreaChart data={revenueTrend} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
+   580→                  <defs>
+   581→                    <linearGradient id="opDocsGrad" x1="0" y1="0" x2="0" y2="1">
+   582→                      <stop offset="0%" stopColor={CHART_COLORS.primary} stopOpacity={0.4} />
+   583→                      <stop offset="100%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
+   584→                    </linearGradient>
+   585→                    <linearGradient id="opExtGrad" x1="0" y1="0" x2="0" y2="1">
+   586→                      <stop offset="0%" stopColor={CHART_COLORS.emerald} stopOpacity={0.4} />
+   587→                      <stop offset="100%" stopColor={CHART_COLORS.emerald} stopOpacity={0} />
+   588→                    </linearGradient>
+   589→                  </defs>
+   590→                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+   591→                  <XAxis
+   592→                    dataKey="date"
+   593→                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+   594→                    axisLine={false}
+   595→                    tickLine={false}
+   596→                  />
+   597→                  <YAxis
+   598→                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+   599→                    axisLine={false}
+   600→                    tickLine={false}
+   601→                    width={36}
+   602→                  />
+   603→                  <Tooltip contentStyle={tooltipStyle} />
+   604→                  <Area
+   605→                    type="monotone"
+   606→                    dataKey="documents"
+   607→                    stroke={CHART_COLORS.primary}
+   608→                    strokeWidth={2}
+   609→                    fill="url(#opDocsGrad)"
+   610→                    name="Documents"
+   611→                  />
+   612→                  <Area
+   613→                    type="monotone"
+   614→                    dataKey="extractions"
+   615→                    stroke={CHART_COLORS.emerald}
+   616→                    strokeWidth={2}
+   617→                    fill="url(#opExtGrad)"
+   618→                    name="Extractions"
+   619→                  />
+   620→                </AreaChart>
+   621→              </ResponsiveContainer>
+   622→            </div>
+   623→          </Card>
+   624→        </TabsContent>
+   625→
+   626→        {/* ----------------------- Financial ----------------------- */}
+   627→        <TabsContent value="financial" className="mt-4">
+   628→          <Card className="rounded-xl p-5">
+   629→            <div className="mb-4 flex items-center justify-between">
+   630→              <div>
+   631→                <h2 className="text-base font-semibold">Financial Metrics</h2>
+   632→                <p className="text-xs text-muted-foreground">Revenue, collections, and rate analysis.</p>
+   633→              </div>
+   634→              <Badge variant="outline" className="gap-1">
+   635→                <Wallet className="h-3 w-3" />
+   636→                {range.toUpperCase()} snapshot
+   637→              </Badge>
+   638→            </div>
+   639→
+   640→            {/* Three big numbers */}
+   641→            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+   642→              <FinancialBigCard
+   643→                label="Total Revenue"
+   644→                value={currency.format(financial.totalRevenue)}
+   645→                icon={DollarSign}
+   646→                accent="primary"
+   647→                subtitle={`Across ${teamPerformance.reduce((s, t) => s + t.engagements, 0)} engagements`}
+   648→              />
+   649→              <FinancialBigCard
+   650→                label="Collected Revenue"
+   651→                value={currency.format(financial.collectedRevenue)}
+   652→                icon={CheckCircle2}
+   653→                accent="success"
+   654→                subtitle={`${Math.round((financial.collectedRevenue / (financial.totalRevenue || 1)) * 100)}% of total`}
+   655→              />
+   656→              <FinancialBigCard
+   657→                label="Outstanding Revenue"
+   658→                value={currency.format(financial.outstandingRevenue)}
+   659→                icon={AlertTriangle}
+   660→                accent="warning"
+   661→                subtitle={`${Math.round((financial.outstandingRevenue / (financial.totalRevenue || 1)) * 100)}% of total`}
+   662→              />
+   663→            </div>
+   664→
+   665→            {/* Smaller financial stats */}
+   666→            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+   667→              <SmallStat
+   668→                icon={Briefcase}
+   669→                accent="primary"
+   670→                label="Revenue per Engagement"
+   671→                value={currency.format(financial.revenuePerEngagement)}
+   672→              />
+   673→              <SmallStat
+   674→                icon={Timer}
+   675→                accent="violet"
+   676→                label="Avg Hourly Rate"
+   677→                value={`${currency.format(financial.avgHourlyRate)}/hr`}
+   678→              />
+   679→              <SmallStat
+   680→                icon={TrendingUp}
+   681→                accent="success"
+   682→                label="Outsourcing Savings"
+   683→                value={currency.format(financial.outsourcingSavings)}
+   684→                trend={{ value: 18.3, label: 'YoY' }}
+   685→              />
+   686→            </div>
+   687→
+   688→            {/* Revenue trend area chart */}
+   689→            <div className="mt-6 border-t pt-5">
+   690→              <div className="mb-2 flex items-center justify-between">
+   691→                <div>
+   692→                  <h3 className="text-sm font-semibold">Revenue Trend</h3>
+   693→                  <p className="text-xs text-muted-foreground">
+   694→                    Derived from extraction volume × avg hourly rate
+   695→                  </p>
+   696→                </div>
+   697→                <div className="flex items-center gap-3 text-xs">
+   698→                  <span className="inline-flex items-center gap-1.5">
+   699→                    <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART_COLORS.primary }} />
+   700→                    Revenue
+   701→                  </span>
+   702→                </div>
+   703→              </div>
+   704→              <ResponsiveContainer width="100%" height={260}>
+   705→                <AreaChart data={revenueTrend} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
+   706→                  <defs>
+   707→                    <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+   708→                      <stop offset="0%" stopColor={CHART_COLORS.primary} stopOpacity={0.45} />
+   709→                      <stop offset="100%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
+   710→                    </linearGradient>
+   711→                  </defs>
+   712→                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+   713→                  <XAxis
+   714→                    dataKey="date"
+   715→                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+   716→                    axisLine={false}
+   717→                    tickLine={false}
+   718→                  />
+   719→                  <YAxis
+   720→                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+   721→                    axisLine={false}
+   722→                    tickLine={false}
+   723→                    width={48}
+   724→                    tickFormatter={(v) => currencyCompact.format(v as number)}
+   725→                  />
+   726→                  <Tooltip
+   727→                    contentStyle={tooltipStyle}
+   728→                    formatter={(v: number) => [currency.format(v), 'Revenue']}
+   729→                  />
+   730→                  <Area
+   731→                    type="monotone"
+   732→                    dataKey="revenue"
+   733→                    stroke={CHART_COLORS.primary}
+   734→                    strokeWidth={2.5}
+   735→                    fill="url(#revGrad)"
+   736→                    name="Revenue"
+   737→                  />
+   738→                </AreaChart>
+   739→              </ResponsiveContainer>
+   740→            </div>
+   741→          </Card>
+   742→        </TabsContent>
+   743→
+   744→        {/* ----------------------- Quality ----------------------- */}
+   745→        <TabsContent value="quality" className="mt-4">
+   746→          <Card className="rounded-xl p-5">
+   747→            <div className="mb-4 flex items-center justify-between">
+   748→              <div>
+   749→                <h2 className="text-base font-semibold">Quality Metrics</h2>
+   750→                <p className="text-xs text-muted-foreground">AI extraction accuracy, corrections, and client sentiment.</p>
+   751→              </div>
+   752→              <Badge variant="outline" className="gap-1">
+   753→                <Sparkles className="h-3 w-3" />
+   754→                AI Quality
+   755→              </Badge>
+   756→            </div>
+   757→
+   758→            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+   759→              {/* Accuracy ring (large) */}
+   760→              <div className="flex flex-col items-center justify-center rounded-xl border bg-muted/20 p-6">
+   761→                <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+   762→                  AI Extraction Accuracy
+   763→                </p>
+   764→                <ProgressRing
+   765→                  value={quality.avgConfidence}
+   766→                  size={160}
+   767→                  strokeWidth={12}
+   768→                  color={CHART_COLORS.emerald}
+   769→                />
+   770→                <p className="mt-3 text-sm font-medium text-emerald-600">
+   771→                  {quality.avgConfidence >= 95
+   772→                    ? 'Excellent'
+   773→                    : quality.avgConfidence >= 90
+   774→                      ? 'Strong'
+   775→                      : quality.avgConfidence >= 80
+   776→                        ? 'Good'
+   777→                        : 'Needs review'}
+   778→                </p>
+   779→                <p className="mt-0.5 text-xs text-muted-foreground">
+   780→                  across {numberCompact.format(quality.totalExtractions)} extractions
+   781→                </p>
+   782→              </div>
+   783→
+   784→              {/* Quality side metrics */}
+   785→              <div className="grid grid-cols-2 gap-3 lg:col-span-2">
+   786→                <QualityStatCard
+   787→                  icon={FileSearch}
+   788→                  accent="primary"
+   789→                  label="Total Extractions"
+   790→                  value={numberCompact.format(quality.totalExtractions)}
+   791→                  subtitle="fields extracted"
+   792→                />
+   793→                <QualityStatCard
+   794→                  icon={AlertTriangle}
+   795→                  accent="warning"
+   796→                  label="Manual Corrections"
+   797→                  value={String(quality.manualCorrections)}
+   798→                  subtitle="unverified fields"
+   799→                />
+   800→                <QualityStatCard
+   801→                  icon={ListChecks}
+   802→                  accent="danger"
+   803→                  label="Issues Found"
+   804→                  value={String(quality.issuesFound)}
+   805→                  subtitle="low-confidence docs"
+   806→                />
+   807→                <QualityStatCard
+   808→                  icon={Star}
+   809→                  accent="violet"
+   810→                  label="Client Satisfaction"
+   811→                  value={`${quality.clientSatisfaction} / 5`}
+   812→                  subtitle={<StarRating value={quality.clientSatisfaction} />}
+   813→                />
+   814→              </div>
+   815→            </div>
+   816→
+   817→            {/* Accuracy trend line chart */}
+   818→            <div className="mt-6 border-t pt-5">
+   819→              <div className="mb-2 flex items-center justify-between">
+   820→                <div>
+   821→                  <h3 className="text-sm font-semibold">Accuracy Trend</h3>
+   822→                  <p className="text-xs text-muted-foreground">Daily AI extraction confidence over the selected range</p>
+   823→                </div>
+   824→                <div className="flex items-center gap-3 text-xs">
+   825→                  <span className="inline-flex items-center gap-1.5">
+   826→                    <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART_COLORS.emerald }} />
+   827→                    Accuracy %
+   828→                  </span>
+   829→                </div>
+   830→              </div>
+   831→              <ResponsiveContainer width="100%" height={240}>
+   832→                <LineChart data={accuracyTrend} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
+   833→                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+   834→                  <XAxis
+   835→                    dataKey="date"
+   836→                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+   837→                    axisLine={false}
+   838→                    tickLine={false}
+   839→                  />
+   840→                  <YAxis
+   841→                    domain={[80, 100]}
+   842→                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+   843→                    axisLine={false}
+   844→                    tickLine={false}
+   845→                    width={36}
+   846→                    tickFormatter={(v) => `${v}%`}
+   847→                  />
+   848→                  <Tooltip
+   849→                    contentStyle={tooltipStyle}
+   850→                    formatter={(v: number) => [`${v}%`, 'Accuracy']}
+   851→                  />
+   852→                  <Line
+   853→                    type="monotone"
+   854→                    dataKey="accuracy"
+   855→                    stroke={CHART_COLORS.emerald}
+   856→                    strokeWidth={2.5}
+   857→                    dot={{ r: 3, fill: CHART_COLORS.emerald, strokeWidth: 0 }}
+   858→                    activeDot={{ r: 5 }}
+   859→                    name="Accuracy"
+   860→                  />
+   861→                </LineChart>
+   862→              </ResponsiveContainer>
+   863→            </div>
+   864→          </Card>
+   865→        </TabsContent>
+   866→      </Tabs>
+   867→
+   868→      {/* ----------------------- Document Type Distribution + Engagement Status ----------------------- */}
+   869→      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+   870→        {/* Document Type Distribution (2/3 width) */}
+   871→        <Card className="rounded-xl p-5 lg:col-span-2">
+   872→          <div className="mb-4 flex items-center justify-between">
+   873→            <div>
+   874→              <h2 className="text-base font-semibold">Document Type Distribution</h2>
+   875→              <p className="text-xs text-muted-foreground">
+   876→                Top {typeChartData.length} document types processed by the AI
+   877→              </p>
+   878→            </div>
+   879→            <Badge variant="outline" className="gap-1">
+   880→              <FileSearch className="h-3 w-3" />
+   881→              {typeDistribution.length} types
+   882→            </Badge>
+   883→          </div>
+   884→
+   885→          <ResponsiveContainer width="100%" height={Math.max(240, typeChartData.length * 36)}>
+   886→            <BarChart
+   887→              data={typeChartData}
+   888→              layout="vertical"
+   889→              margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
+   890→              barCategoryGap={8}
+   891→            >
+   892→              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+   893→              <XAxis
+   894→                type="number"
+   895→                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+   896→                axisLine={false}
+   897→                tickLine={false}
+   898→                allowDecimals={false}
+   899→              />
+   900→              <YAxis
+   901→                type="category"
+   902→                dataKey="shortType"
+   903→                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+   904→                axisLine={false}
+   905→                tickLine={false}
+   906→                width={92}
+   907→              />
+   908→              <Tooltip
+   909→                contentStyle={tooltipStyle}
+   910→                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
+   911→                formatter={(v: number, _name, props) => [
+   912→                  `${v} (${props.payload.pct}%)`,
+   913→                  props.payload.type,
+   914→                ]}
+   915→              />
+   916→              <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+   917→                {typeChartData.map((entry, i) => (
+   918→                  <Cell key={i} fill={entry.fill} />
+   919→                ))}
+   920→              </Bar>
+   921→            </BarChart>
+   922→          </ResponsiveContainer>
+   923→
+   924→          {/* Percentage legend list */}
+   925→          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-t pt-4 sm:grid-cols-3">
+   926→            {typeChartData.map((t) => (
+   927→              <div key={t.shortType} className="flex items-center gap-2 text-xs">
+   928→                <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: t.fill }} />
+   929→                <span className="truncate text-muted-foreground" title={t.type}>
+   930→                  {t.shortType}
+   931→                </span>
+   932→                <span className="ml-auto font-semibold tabular-nums">{t.pct}%</span>
+   933→              </div>
+   934→            ))}
+   935→          </div>
+   936→        </Card>
+   937→
+   938→        {/* Engagement Status Breakdown (1/3 width) */}
+   939→        <Card className="rounded-xl p-5">
+   940→          <div className="mb-4">
+   941→            <h2 className="text-base font-semibold">Engagement Status</h2>
+   942→            <p className="text-xs text-muted-foreground">Active pipeline distribution</p>
+   943→          </div>
+   944→
+   945→          <div className="relative flex items-center justify-center">
+   946→            <ResponsiveContainer width="100%" height={220}>
+   947→              <PieChart>
+   948→                <Pie
+   949→                  data={statusPieData}
+   950→                  cx="50%"
+   951→                  cy="50%"
+   952→                  innerRadius={62}
+   953→                  outerRadius={92}
+   954→                  paddingAngle={3}
+   955→                  dataKey="value"
+   956→                  stroke="none"
+   957→                >
+   958→                  {statusPieData.map((entry, i) => (
+   959→                    <Cell key={i} fill={entry.color} />
+   960→                  ))}
+   961→                </Pie>
+   962→                <Tooltip
+   963→                  contentStyle={tooltipStyle}
+   964→                  formatter={(v: number, name) => [v, name]}
+   965→                />
+   966→              </PieChart>
+   967→            </ResponsiveContainer>
+   968→            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+   969→              <span className="text-2xl font-bold tabular-nums">{statusTotal}</span>
+   970→              <span className="text-xs text-muted-foreground">Total</span>
+   971→            </div>
+   972→          </div>
+   973→
+   974→          <div className="mt-4 space-y-2">
+   975→            {statusPieData.map((s) => {
+   976→              const pct = Math.round((s.value / (statusTotal || 1)) * 100)
+   977→              return (
+   978→                <div
+   979→                  key={s.name}
+   980→                  className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2"
+   981→                >
+   982→                  <span
+   983→                    className="h-2.5 w-2.5 rounded-full"
+   984→                    style={{ backgroundColor: s.color }}
+   985→                  />
+   986→                  <span className="text-sm font-medium">{s.name}</span>
+   987→                  <span className="ml-auto text-sm font-semibold tabular-nums">{s.value}</span>
+   988→                  <span className="text-xs text-muted-foreground tabular-nums">{pct}%</span>
+   989→                </div>
+   990→              )
+   991→            })}
+   992→          </div>
+   993→        </Card>
+   994→      </div>
+   995→
+   996→      {/* ----------------------- Team Performance Table ----------------------- */}
+   997→      <Card className="rounded-xl p-5">
+   998→        <div className="mb-4 flex items-center justify-between">
+   999→          <div>
+  1000→            <h2 className="text-base font-semibold">Team Performance</h2>
+  1001→            <p className="text-xs text-muted-foreground">
+  1002→              Individual contributor metrics across all engagements
+  1003→            </p>
+  1004→          </div>
+  1005→          <Badge variant="outline" className="gap-1">
+  1006→            <Users className="h-3 w-3" />
+  1007→            {teamPerformance.length} members
+  1008→          </Badge>
+  1009→        </div>
+  1010→
+  1011→        <div className="overflow-x-auto">
+  1012→          <Table>
+  1013→            <TableHeader>
+  1014→              <TableRow className="bg-muted/40 hover:bg-muted/40">
+  1015→                <TableHead className="pl-3">Team Member</TableHead>
+  1016→                <TableHead className="text-center">Engagements</TableHead>
+  1017→                <TableHead className="text-center">Completed</TableHead>
+  1018→                <TableHead className="text-right">Revenue</TableHead>
+  1019→                <TableHead className="min-w-[160px]">Utilization</TableHead>
+  1020→                <TableHead className="text-center">Performance</TableHead>
+  1021→              </TableRow>
+  1022→            </TableHeader>
+  1023→            <TableBody>
+  1024→              {teamPerformance.map((m, i) => {
+  1025→                const hex = teamHex(m.color)
+  1026→                const tier = performanceTier(m.utilization, m.completed, m.engagements)
+  1027→                const completionRate =
+  1028→                  m.engagements > 0 ? Math.round((m.completed / m.engagements) * 100) : 0
+  1029→                return (
+  1030→                  <TableRow key={`${m.name}-${i}`} className="text-sm">
+  1031→                    <TableCell className="pl-3 py-3">
+  1032→                      <div className="flex items-center gap-3">
+  1033→                        <div
+  1034→                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+  1035→                          style={{ backgroundColor: hex }}
+  1036→                        >
+  1037→                          {initials(m.name)}
+  1038→                        </div>
+  1039→                        <div className="min-w-0">
+  1040→                          <p className="truncate font-semibold">{m.name}</p>
+  1041→                          <p className="truncate text-xs text-muted-foreground">{m.role}</p>
+  1042→                        </div>
+  1043→                      </div>
+  1044→                    </TableCell>
+  1045→                    <TableCell className="text-center">
+  1046→                      <span className="inline-flex h-7 min-w-[28px] items-center justify-center rounded-md bg-muted px-2 text-sm font-semibold tabular-nums">
+  1047→                        {m.engagements}
+  1048→                      </span>
+  1049→                    </TableCell>
+  1050→                    <TableCell className="text-center">
+  1051→                      <div className="flex flex-col items-center gap-0.5">
+  1052→                        <span className="text-sm font-semibold tabular-nums">{m.completed}</span>
+  1053→                        <span className="text-[10px] text-muted-foreground">{completionRate}% rate</span>
+  1054→                      </div>
+  1055→                    </TableCell>
+  1056→                    <TableCell className="text-right">
+  1057→                      <div className="flex flex-col items-end">
+  1058→                        <span className="font-semibold tabular-nums">{currency.format(m.revenue)}</span>
+  1059→                        <span className="text-[10px] text-muted-foreground">
+  1060→                          {m.engagements > 0
+  1061→                            ? `${currencyCompact.format(m.revenue / m.engagements)}/eng`
+  1062→                            : '—'}
+  1063→                        </span>
+  1064→                      </div>
+  1065→                    </TableCell>
+  1066→                    <TableCell>
+  1067→                      <div className="flex items-center gap-2">
+  1068→                        <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
+  1069→                          <div
+  1070→                            className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
+  1071→                            style={{
+  1072→                              width: `${Math.min(100, m.utilization)}%`,
+  1073→                              backgroundColor: utilizationColor(m.utilization),
+  1074→                            }}
+  1075→                          />
+  1076→                        </div>
+  1077→                        <span
+  1078→                          className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums"
+  1079→                          style={{ color: utilizationColor(m.utilization) }}
+  1080→                        >
+  1081→                          {m.utilization}%
+  1082→                        </span>
+  1083→                      </div>
+  1084→                    </TableCell>
+  1085→                    <TableCell className="text-center">
+  1086→                      {tier ? (
+  1087→                        <Badge
+  1088→                          variant="outline"
+  1089→                          className={cn('gap-1 font-medium', tier.bg, tier.color)}
+  1090→                        >
+  1091→                          <Award className="h-3 w-3" />
+  1092→                          {tier.label}
+  1093→                        </Badge>
+  1094→                      ) : (
+  1095→                        <span className="text-xs text-muted-foreground">—</span>
+  1096→                      )}
+  1097→                    </TableCell>
+  1098→                  </TableRow>
+  1099→                )
+  1100→              })}
+  1101→              {teamPerformance.length === 0 && (
+  1102→                <TableRow>
+  1103→                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+  1104→                    No team performance data available
+  1105→                  </TableCell>
+  1106→                </TableRow>
+  1107→              )}
+  1108→            </TableBody>
+  1109→          </Table>
+  1110→        </div>
+  1111→      </Card>
+  1112→    </div>
+  1113→  )
+  1114→}
+  1115→
+  1116→/* ------------------------------------------------------------------ */
+  1117→/* Subcomponents                                                      */
+  1118→/* ------------------------------------------------------------------ */
+  1119→
+  1120→function OperationalMetricCard({
+  1121→  icon: Icon,
+  1122→  accent,
+  1123→  label,
+  1124→  value,
+  1125→  trend,
+  1126→}: {
+  1127→  icon: typeof Clock
+  1128→  accent: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'violet'
+  1129→  label: string
+  1130→  value: string
+  1131→  trend?: { value: number; label: string }
+  1132→}) {
+  1133→  const accentClasses: Record<string, string> = {
+  1134→    primary: 'bg-primary/10 text-primary',
+  1135→    success: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  1136→    warning: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+  1137→    danger: 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400',
+  1138→    info: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400',
+  1139→    violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
+  1140→  }
+  1141→  return (
+  1142→    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+  1143→      <div className="flex items-center justify-between">
+  1144→        <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', accentClasses[accent])}>
+  1145→          <Icon className="h-4 w-4" />
+  1146→        </div>
+  1147→        {trend && (
+  1148→          <span
+  1149→            className={cn(
+  1150→              'inline-flex items-center gap-0.5 text-xs font-medium',
+  1151→              trend.value >= 0 ? 'text-emerald-600' : 'text-red-600'
+  1152→            )}
+  1153→          >
+  1154→            {trend.value >= 0 ? (
+  1155→              <ArrowUpRight className="h-3 w-3" />
+  1156→            ) : (
+  1157→              <ArrowDownRight className="h-3 w-3" />
+  1158→            )}
+  1159→            {Math.abs(trend.value)}%
+  1160→          </span>
+  1161→        )}
+  1162→      </div>
+  1163→      <div>
+  1164→        <p className="text-2xl font-bold tabular-nums tracking-tight">{value}</p>
+  1165→        <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+  1166→        {trend && <p className="mt-0.5 text-[10px] text-muted-foreground">{trend.label}</p>}
+  1167→      </div>
+  1168→    </div>
+  1169→  )
+  1170→}
+  1171→
+  1172→function FinancialBigCard({
+  1173→  label,
+  1174→  value,
+  1175→  icon: Icon,
+  1176→  accent,
+  1177→  subtitle,
+  1178→}: {
+  1179→  label: string
+  1180→  value: string
+  1181→  icon: typeof DollarSign
+  1182→  accent: 'primary' | 'success' | 'warning'
+  1183→  subtitle: string
+  1184→}) {
+  1185→  const accentClasses: Record<string, string> = {
+  1186→    primary: 'bg-primary/10 text-primary',
+  1187→    success: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  1188→    warning: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+  1189→  }
+  1190→  return (
+  1191→    <div className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-card to-muted/20 p-5">
+  1192→      <div className="flex items-start justify-between">
+  1193→        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+  1194→        <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', accentClasses[accent])}>
+  1195→          <Icon className="h-4 w-4" />
+  1196→        </div>
+  1197→      </div>
+  1198→      <p className="mt-3 text-3xl font-bold tabular-nums tracking-tight">{value}</p>
+  1199→      <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+  1200→    </div>
+  1201→  )
+  1202→}
+  1203→
+  1204→function SmallStat({
+  1205→  icon: Icon,
+  1206→  accent,
+  1207→  label,
+  1208→  value,
+  1209→  trend,
+  1210→}: {
+  1211→  icon: typeof DollarSign
+  1212→  accent: 'primary' | 'success' | 'warning' | 'violet'
+  1213→  label: string
+  1214→  value: string
+  1215→  trend?: { value: number; label: string }
+  1216→}) {
+  1217→  const accentClasses: Record<string, string> = {
+  1218→    primary: 'bg-primary/10 text-primary',
+  1219→    success: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  1220→    warning: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+  1221→    violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
+  1222→  }
+  1223→  return (
+  1224→    <div className="flex items-center gap-3 rounded-xl border bg-card p-4">
+  1225→      <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', accentClasses[accent])}>
+  1226→        <Icon className="h-5 w-5" />
+  1227→      </div>
+  1228→      <div className="min-w-0 flex-1">
+  1229→        <p className="text-xs text-muted-foreground">{label}</p>
+  1230→        <p className="text-lg font-bold tabular-nums">{value}</p>
+  1231→      </div>
+  1232→      {trend && (
+  1233→        <span
+  1234→          className={cn(
+  1235→            'inline-flex items-center gap-0.5 text-xs font-medium',
+  1236→            trend.value >= 0 ? 'text-emerald-600' : 'text-red-600'
+  1237→          )}
+  1238→        >
+  1239→          {trend.value >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+  1240→          {Math.abs(trend.value)}%
+  1241→        </span>
+  1242→      )}
+  1243→    </div>
+  1244→  )
+  1245→}
+  1246→
+  1247→function QualityStatCard({
+  1248→  icon: Icon,
+  1249→  accent,
+  1250→  label,
+  1251→  value,
+  1252→  subtitle,
+  1253→}: {
+  1254→  icon: typeof Star
+  1255→  accent: 'primary' | 'success' | 'warning' | 'danger' | 'violet'
+  1256→  label: string
+  1257→  value: string
+  1258→  subtitle: React.ReactNode
+  1259→}) {
+  1260→  const accentClasses: Record<string, string> = {
+  1261→    primary: 'bg-primary/10 text-primary',
+  1262→    success: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+  1263→    warning: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+  1264→    danger: 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400',
+  1265→    violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
+  1266→  }
+  1267→  return (
+  1268→    <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+  1269→      <div className="flex items-center gap-2">
+  1270→        <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', accentClasses[accent])}>
+  1271→          <Icon className="h-4 w-4" />
+  1272→        </div>
+  1273→        <p className="text-xs text-muted-foreground">{label}</p>
+  1274→      </div>
+  1275→      <p className="text-2xl font-bold tabular-nums tracking-tight">{value}</p>
+  1276→      <div className="text-xs text-muted-foreground">{subtitle}</div>
+  1277→    </div>
+  1278→  )
+  1279→}
+  1280→
+  1281→function StarRating({ value }: { value: number }) {
+  1282→  const full = Math.floor(value)
+  1283→  const hasHalf = value - full >= 0.5
+  1284→  return (
+  1285→    <span className="inline-flex items-center gap-0.5">
+  1286→      {Array.from({ length: 5 }).map((_, i) => {
+  1287→        const isFull = i < full
+  1288→        const isHalf = i === full && hasHalf
+  1289→        return (
+  1290→          <Star
+  1291→            key={i}
+  1292→            className={cn(
+  1293→              'h-3.5 w-3.5',
+  1294→              isFull
+  1295→                ? 'fill-amber-400 text-amber-400'
+  1296→                : isHalf
+  1297→                  ? 'fill-amber-200 text-amber-400'
+  1298→                  : 'fill-transparent text-muted-foreground/40'
+  1299→            )}
+  1300→          />
+  1301→        )
+  1302→      })}
+  1303→      <span className="ml-1 text-xs font-medium tabular-nums">{value.toFixed(1)}</span>
+  1304→    </span>
+  1305→  )
+  1306→}
+  1307→
+  1308→/* ------------------------------------------------------------------ */
+  1309→/* Loading skeleton                                                   */
+  1310→/* ------------------------------------------------------------------ */
+  1311→
+  1312→function ReportsSkeleton() {
+  1313→  return (
+  1314→    <div className="space-y-6 p-4 lg:p-6">
+  1315→      <div className="flex items-center justify-between">
+  1316→        <div className="flex items-center gap-2">
+  1317→          <Skeleton className="h-9 w-9 rounded-xl" />
+  1318→          <div className="space-y-2">
+  1319→            <Skeleton className="h-6 w-52" />
+  1320→            <Skeleton className="h-3 w-72" />
+  1321→          </div>
+  1322→        </div>
+  1323→        <div className="flex gap-2">
+  1324→          <Skeleton className="h-9 w-40 rounded-lg" />
+  1325→          <Skeleton className="h-9 w-24 rounded-md" />
+  1326→          <Skeleton className="h-9 w-32 rounded-md" />
+  1327→        </div>
+  1328→      </div>
+  1329→
+  1330→      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  1331→        {Array.from({ length: 4 }).map((_, i) => (
+  1332→          <Skeleton key={i} className="h-28 rounded-xl" />
+  1333→        ))}
+  1334→      </div>
+  1335→
+  1336→      <Skeleton className="h-9 w-72 rounded-lg" />
+  1337→      <Skeleton className="h-96 rounded-xl" />
+  1338→
+  1339→      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+  1340→        <Skeleton className="h-80 rounded-xl lg:col-span-2" />
+  1341→        <Skeleton className="h-80 rounded-xl" />
+  1342→      </div>
+  1343→
+  1344→      <Skeleton className="h-96 rounded-xl" />
+  1345→    </div>
+  1346→  )
+  1347→}
+  1348→
