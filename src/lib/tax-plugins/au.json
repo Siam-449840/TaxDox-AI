@@ -1,0 +1,98 @@
+{
+  "code": "AU",
+  "name": "Australia",
+  "flag": "🇦🇺",
+  "taxYearLabel": "FY 2025-26 (Jul 1 – Jun 30)",
+  "taxYearStart": "July 1",
+  "currency": "AUD",
+  "currencySymbol": "A$",
+  "locale": "en-AU",
+  "dateFormat": "DD/MM/YYYY",
+  "numberFormat": "1,234.56",
+  "identifierName": "TFN",
+  "identifierFormat": "^\\d{3}-\\d{3}-\\d{3}$",
+  "identifierMaskPattern": "***-***-123",
+  "supportTier": "partial",
+  "supportTierDescription": "Extraction only — no filing integration with ATO yet",
+  "filingDeadlines": [
+    { "returnType": "Individual", "deadline": "October 31", "description": "Individual Tax Return (self-lodge)" },
+    { "returnType": "Company", "deadline": "May 15", "description": "Company Tax Return (via tax agent)" },
+    { "returnType": "BAS", "deadline": "Quarterly: 28th after quarter end", "description": "Business Activity Statement" },
+    { "returnType": "IAS", "deadline": "Monthly: 21st of next month", "description": "Instalment Activity Statement" }
+  ],
+  "documentTypes": [
+    {
+      "type": "PAYG-Summary",
+      "label": "PAYG Payment Summary",
+      "category": "income",
+      "description": "Annual pay-as-you-go employment income statement",
+      "fields": [
+        { "name": "employer_name", "label": "Employer Name", "group": "employer", "required": true },
+        { "name": "employer_abn", "label": "Employer ABN", "group": "employer" },
+        { "name": "employee_name", "label": "Employee Name", "group": "employee", "required": true },
+        { "name": "employee_tfn", "label": "TFN", "group": "employee", "required": true },
+        { "name": "gross_payments", "label": "Gross Payments", "group": "income", "format": "currency", "required": true },
+        { "name": "tax_withheld", "label": "Tax Withheld", "group": "tax", "format": "currency", "required": true },
+        { "name": "reportable_fringe", "label": "Reportable Fringe Benefits", "group": "income", "format": "currency" },
+        { "name": "reportable_super", "label": "Reportable Employer Super Contributions", "group": "income", "format": "currency" }
+      ]
+    },
+    {
+      "type": "BAS",
+      "label": "Business Activity Statement (BAS)",
+      "category": "business",
+      "description": "GST and PAYG withholding return",
+      "fields": [
+        { "name": "business_name", "label": "Business Name", "group": "business", "required": true },
+        { "name": "abn", "label": "ABN", "group": "business", "required": true },
+        { "name": "reporting_period", "label": "Reporting Period", "group": "period", "required": true },
+        { "name": "gst_on_sales", "label": "GST on Sales (1A)", "group": "tax", "format": "currency" },
+        { "name": "gst_on_purchases", "label": "GST on Purchases (1B)", "group": "tax", "format": "currency" },
+        { "name": "payg_withholding", "label": "PAYG Withholding (W1)", "group": "tax", "format": "currency" },
+        { "name": "total_payable", "label": "Total Payable/Refundable", "group": "tax", "format": "currency" }
+      ]
+    },
+    {
+      "type": "Bank-Statement",
+      "label": "Bank Statement",
+      "category": "business",
+      "description": "Monthly bank account statement",
+      "fields": [
+        { "name": "bank_name", "label": "Bank Name", "group": "bank", "required": true },
+        { "name": "account_holder", "label": "Account Holder", "group": "account", "required": true },
+        { "name": "bsb", "label": "BSB", "group": "account" },
+        { "name": "account_number", "label": "Account Number (masked)", "group": "account" },
+        { "name": "period", "label": "Statement Period", "group": "period" },
+        { "name": "ending_balance", "label": "Ending Balance", "group": "balance", "format": "currency" }
+      ]
+    }
+  ],
+  "taxSoftware": [
+    { "id": "myob", "name": "MYOB", "vendor": "MYOB" },
+    { "id": "xero-au", "name": "Xero", "vendor": "Xero" },
+    { "id": "quickbooks-au", "name": "QuickBooks Online", "vendor": "Intuit" },
+    { "id": "reckon", "name": "Reckon", "vendor": "Reckon" }
+  ],
+  "taxBrackets": [
+    { "rate": "0%", "label": "Tax-free threshold", "single": "0 – 18,200" },
+    { "rate": "16%", "label": "16% bracket (Stage 3 cuts)", "single": "18,201 – 45,000" },
+    { "rate": "30%", "label": "30% bracket", "single": "45,001 – 135,000" },
+    { "rate": "37%", "label": "37% bracket", "single": "135,001 – 190,000" },
+    { "rate": "45%", "label": "45% bracket", "single": "190,000+" }
+  ],
+  "standardDeduction": [
+    { "status": "Tax-free threshold", "amount": 18200 }
+  ],
+  "keyCredits": [
+    { "name": "Low Income Tax Offset", "amount": "Up to A$700" },
+    { "name": "Senior Australians Offset", "amount": "Up to A$2,230" },
+    { "name": "Private Health Insurance Rebate", "amount": "Up to 32.9% of premium" },
+    { "name": "Small Business Energy Incentive", "amount": "20% deduction on electrification" }
+  ],
+  "keyLimits": [
+    { "name": "Superannuation Guarantee", "amount": "12% of OTE (2025-26)" },
+    { "name": "Super Concessional Cap", "amount": "A$30,000" },
+    { "name": "Super Non-Concessional Cap", "amount": "A$120,000 (or A$360,000 bring-forward)" },
+    { "name": "GST Registration Threshold", "amount": "A$75,000" }
+  ]
+}

@@ -143,6 +143,9 @@ model Client {
   documents   Document[]
   messages    Message[]
   emails      EmailLog[]
+
+  @@index([firmId, clientType])
+  @@index([firmId, status])
 }
 
 model Engagement {
@@ -170,6 +173,12 @@ model Engagement {
   messages   Message[]
   activities Activity[]
   emails     EmailLog[]
+
+  @@index([firmId, taxYear])
+  @@index([firmId, status])
+  @@index([clientId, status])
+  @@index([assignedToId])
+  @@index([deadline])
 }
 
 // ─── PBC Lists ─────────────────────────────────────────────────

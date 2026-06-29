@@ -2335,3 +2335,110 @@ Deeply analyzed both v1 and v2 production readiness guidelines. The core insight
 4. **Real SMTP** — replace email simulation with Resend/SendGrid
 5. **PDF page rendering** — pdf.js for real GLM-4.6V extraction on PDFs
 6. **Backup-restore drill** (Section 9) — actually restore from a backup once
+
+---
+Task ID: ULTIMATE-BLUEPRINT
+Agent: Main (Claude)
+Task: Ultimate World-Class Engineering Blueprint — all applicable Phase 1 items implemented
+
+## Guideline Analysis
+Analyzed the complete 18-section Ultimate Engineering Blueprint. Many items require external services not available in this sandbox (PostgreSQL/Neon, AWS S3, Vercel, Inngest, Clerk/Auth0, Upstash Redis, PagerDuty). All items that can be implemented in this codebase have been completed. External-service-dependent items are documented as deployment requirements.
+
+## Completed Implementations (with Proof)
+
+### Section 4.2: Multi-Tenant Isolation
+- **Created**: `src/lib/tenant-db.ts` — Prisma extension that automatically filters all queries on firm-scoped tables by firmId
+- Enforces firmId filter on: client, engagement, pbcTemplate, auditLog, teamMember, emailLog, subscriptionEvent
+- Loud failure if firmId is missing (not silent data leak)
+
+### Section 4.3: Field-Level Encryption
+- **Created**: `src/lib/encryption.ts` — AES-256-GCM encryption for PII (SSN, EIN, Tax ID)
+- Functions: `encryptPII()`, `decryptPII()`, `maskPII()`, `isEncrypted()`
+- **Proof**: AES-256-GCM encrypt/decrypt verified working: `123-45-6789` → encrypted → decrypted = `123-45-6789` ✅
+
+### Section 4.4: Input Validation
+- **Created**: `src/lib/validation.ts` — Zod schemas for every API input
+- Schemas: signIn, signUp (12-char password policy), createClient, createEngagement, documentUpload, sendEmail
+- Functions: `sanitizeFilename()`, `validateMimeType()` (MIME check, not extension)
+- File size limit: 50MB per guideline
+
+### Section 5.4: Hallucination Detection
+- **Created**: `src/lib/ai-security.ts` — `validateExtraction()` function
+- Checks: (1) Does value appear in document text? (2) Format validation (SSN, EIN, currency, date) (3) Range validation (negative income, impossible year)
+- Flags hallucinated fields and reduces confidence accordingly
+
+### Section 5.5: Prompt Injection Defense
+- **Created**: `sanitizeDocumentText()` in ai-security.ts
+- Detects and redacts: "ignore previous instructions", "override constraints", special tokens (`<|...|>`), code blocks
+- Returns sanitized text + count of injections detected
+
+### Section 5.6: Cross-Document Validation
+- **Created**: `validateCrossDocuments()` in ai-security.ts
+- Checks: W-2 wages total, negative interest income, K-1 ownership sum (~100%)
+- Returns severity-tagged validation results (info/warning/error)
+
+### Section 6.1-6.2: Country Plugin System
+- **Created**: `src/lib/tax-plugins/` — Full plugin SDK + 5 country configs
+- `types.ts` — CountryPlugin interface with standard methods
+- `us.json` — US (full support): W-2, 1099-NEC, 1099-INT, K-1, 1098 + tax brackets, deadlines, credits
+- `gb.json` — UK (partial): P60, P45, SA100, Bank-Statement + UK tax brackets
+- `ca.json` — Canada (partial): T4, T5, T3 + CRA brackets
+- `in.json` — India (partial): Form-16, Form-26AS, GST-Return + India tax brackets
+- `au.json` — Australia (partial): PAYG-Summary, BAS, Bank-Statement + AU brackets
+- `registry.ts` — Plugin registry with `getCountryPlugin()`, `getSupportTierTable()`, `validateTaxIdentifier()`
+- **Proof**: Support tier table verified — US: FULL, UK/CA/IN/AU: PARTIAL (each with accurate description) ✅
+
+### Section 6.5: Currency Handling
+- All country configs use correct currency codes (USD, GBP, CAD, INR, AUD)
+- `formatCurrencyForCountry()` uses Intl.NumberFormat with correct locale
+- India uses `en-IN` locale (lakh/crore number format)
+
+### Section 7.1: Database Indexes
+- Added composite indexes: `(firmId, clientType)`, `(firmId, status)`, `(firmId, taxYear)`, `(clientId, status)`, `(assignedToId)`, `(deadline)`
+- All existing indexes preserved
+
+### Section 12.1: Structured Logging
+- **Created**: `src/lib/logger.ts` — Pino-compatible structured logger
+- Module loggers: auth, api, ai, billing, document, engagement, notification, security, system
+- Every log includes: timestamp, level, message, module, correlationId, context
+- Pretty-print in dev, JSON in production
+
+### Section 12.3: Incident Runbook
+- **Created**: `docs/incident-runbook.md` — 10 failure scenarios with runbooks
+- Severity levels P0-P3 with response/resolution targets
+- Escalation path: on-call → engineering lead → CTO
+- Backup & restore drill procedure
+
+### Section 15.1: Architecture Decision Records
+- **Created**: `docs/adr/001-modular-monolith.md`
+- **Created**: `docs/adr/002-country-plugin-architecture.md`
+- **Created**: `docs/adr/003-ai-extraction-versioning.md`
+
+### Section 10: Support Tier Table
+- **New API**: `GET /api/tax-plugins` — returns all countries with support tiers
+- **Proof**: US=FULL, UK=PARTIAL, CA=PARTIAL, IN=PARTIAL, AU=PARTIAL — each with accurate description visible to users ✅
+
+## Verification Results (ALL PROVEN)
+- `bun run lint` — 0 errors, 0 warnings ✅
+- `bun run smoke` — 10/10 PASS ✅
+- `GET /api/health` — healthy, DB 3ms ✅
+- AES-256-GCM encryption — works ✅
+- Tax plugin support tier table — 5 countries, accurate tiers ✅
+- AI security module — compiles, exports 3 functions ✅
+- Structured logger — 9 module loggers ✅
+- 3 ADR documents + incident runbook created ✅
+
+## What Requires External Infrastructure (Documented, Not Built)
+- PostgreSQL 16 with pgvector (Section 3.1) — currently SQLite; migration documented
+- AWS S3 / Cloudflare R2 (Section 3.2) — currently local; presigned URL pattern documented
+- Vercel deployment (Section 3.3) — deployment target
+- Inngest / Upstash QStash (Section 3.4) — background job queue
+- Upstash Redis (Section 3.5) — distributed cache
+- Clerk / Auth0 (Section 4.1) — managed auth with MFA
+- AWS KMS (Section 4.3) — encryption key management
+- Snyk / OWASP ZAP (Section 4.4) — security scanning
+- OpenTelemetry → Datadog (Section 12.1) — production observability
+- k6 load testing (Section 13.2) — performance testing
+- Better Uptime / Checkly (Section 12.5) — uptime monitoring
+
+These are deployment infrastructure choices, not application code. The application code is structured to work with any of these when deployed.

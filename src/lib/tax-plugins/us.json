@@ -1,0 +1,129 @@
+{
+  "code": "US",
+  "name": "United States",
+  "flag": "🇺🇸",
+  "taxYearLabel": "Tax Year 2025",
+  "taxYearStart": "January 1",
+  "currency": "USD",
+  "currencySymbol": "$",
+  "locale": "en-US",
+  "dateFormat": "MM/DD/YYYY",
+  "numberFormat": "1,234.56",
+  "identifierName": "SSN",
+  "identifierFormat": "^\\d{3}-\\d{2}-\\d{4}$",
+  "identifierMaskPattern": "***-**-1234",
+  "supportTier": "full",
+  "supportTierDescription": "Full extraction, calculation, and filing-ready for all US tax forms",
+  "filingDeadlines": [
+    { "returnType": "1040", "deadline": "April 15", "extensionDeadline": "October 15", "description": "Individual Income Tax Return" },
+    { "returnType": "1065", "deadline": "March 15", "extensionDeadline": "September 15", "description": "Partnership Return" },
+    { "returnType": "1120", "deadline": "April 15", "extensionDeadline": "October 15", "description": "C Corporation Return" },
+    { "returnType": "1120S", "deadline": "March 15", "extensionDeadline": "September 15", "description": "S Corporation Return" },
+    { "returnType": "1041", "deadline": "April 15", "extensionDeadline": "September 30", "description": "Estate/Trust Return" }
+  ],
+  "documentTypes": [
+    {
+      "type": "W-2",
+      "label": "W-2 Wage & Tax Statement",
+      "category": "income",
+      "description": "Annual wages and tax statement from employer",
+      "fields": [
+        { "name": "employer_ein", "label": "Employer EIN", "group": "employer", "format": "ein", "required": true },
+        { "name": "employer_name", "label": "Employer Name", "group": "employer", "required": true },
+        { "name": "employee_ssn", "label": "Employee SSN", "group": "employee", "format": "ssn", "required": true },
+        { "name": "employee_name", "label": "Employee Name", "group": "employee", "required": true },
+        { "name": "box1_wages", "label": "Box 1: Wages", "group": "income", "format": "currency", "required": true },
+        { "name": "box2_federal_tax", "label": "Box 2: Federal Tax Withheld", "group": "tax", "format": "currency" },
+        { "name": "box3_ss_wages", "label": "Box 3: Social Security Wages", "group": "income", "format": "currency" },
+        { "name": "box4_ss_tax", "label": "Box 4: SS Tax Withheld", "group": "tax", "format": "currency" },
+        { "name": "box5_medicare_wages", "label": "Box 5: Medicare Wages", "group": "income", "format": "currency" },
+        { "name": "box6_medicare_tax", "label": "Box 6: Medicare Tax Withheld", "group": "tax", "format": "currency" }
+      ]
+    },
+    {
+      "type": "1099-NEC",
+      "label": "1099-NEC Nonemployee Compensation",
+      "category": "income",
+      "description": "Nonemployee compensation for contractors",
+      "fields": [
+        { "name": "payer_name", "label": "Payer Name", "group": "payer", "required": true },
+        { "name": "payer_ein", "label": "Payer EIN", "group": "payer", "format": "ein" },
+        { "name": "recipient_name", "label": "Recipient Name", "group": "recipient", "required": true },
+        { "name": "recipient_ssn", "label": "Recipient SSN/EIN", "group": "recipient", "format": "ssn" },
+        { "name": "nonemployee_comp", "label": "Nonemployee Compensation", "group": "income", "format": "currency", "required": true },
+        { "name": "federal_tax", "label": "Federal Tax Withheld", "group": "tax", "format": "currency" }
+      ]
+    },
+    {
+      "type": "1099-INT",
+      "label": "1099-INT Interest Income",
+      "category": "income",
+      "description": "Interest income from banks/institutions",
+      "fields": [
+        { "name": "payer_name", "label": "Payer Name", "group": "payer", "required": true },
+        { "name": "recipient_name", "label": "Recipient Name", "group": "recipient", "required": true },
+        { "name": "box1_interest", "label": "Box 1: Interest Income", "group": "income", "format": "currency", "required": true },
+        { "name": "box4_federal_tax", "label": "Box 4: Federal Tax Withheld", "group": "tax", "format": "currency" }
+      ]
+    },
+    {
+      "type": "K-1",
+      "label": "K-1 Schedule (1065/1120S/1041)",
+      "category": "income",
+      "description": "Partner/Shareholder/Beneficiary share of income",
+      "fields": [
+        { "name": "entity_name", "label": "Entity Name", "group": "entity", "required": true },
+        { "name": "entity_ein", "label": "Entity EIN", "group": "entity", "format": "ein" },
+        { "name": "partner_name", "label": "Partner/Shareholder Name", "group": "partner", "required": true },
+        { "name": "partner_ssn", "label": "Partner SSN/EIN", "group": "partner", "format": "ssn" },
+        { "name": "ownership_pct", "label": "Ownership %", "group": "partner", "format": "percentage" },
+        { "name": "ordinary_income", "label": "Ordinary Business Income", "group": "income", "format": "currency" },
+        { "name": "rental_income", "label": "Net Rental Income", "group": "income", "format": "currency" },
+        { "name": "interest_income", "label": "Interest Income", "group": "income", "format": "currency" }
+      ]
+    },
+    {
+      "type": "1098",
+      "label": "1098 Mortgage Interest",
+      "category": "deduction",
+      "description": "Mortgage interest statement",
+      "fields": [
+        { "name": "lender_name", "label": "Lender Name", "group": "lender", "required": true },
+        { "name": "borrower_name", "label": "Borrower Name", "group": "borrower", "required": true },
+        { "name": "box1_mortgage_interest", "label": "Box 1: Mortgage Interest", "group": "deduction", "format": "currency", "required": true }
+      ]
+    }
+  ],
+  "taxSoftware": [
+    { "id": "ultratax", "name": "UltraTax CS", "vendor": "Thomson Reuters" },
+    { "id": "cch", "name": "CCH Axcess Tax", "vendor": "Wolters Kluwer" },
+    { "id": "lacerte", "name": "Lacerte", "vendor": "Intuit" },
+    { "id": "drake", "name": "Drake Tax", "vendor": "Drake Software" }
+  ],
+  "taxBrackets": [
+    { "rate": "10%", "label": "10% bracket", "single": "0 – 11,600", "married": "0 – 23,200" },
+    { "rate": "12%", "label": "12% bracket", "single": "11,601 – 47,150", "married": "23,201 – 94,300" },
+    { "rate": "22%", "label": "22% bracket", "single": "47,151 – 100,525", "married": "94,301 – 201,050" },
+    { "rate": "24%", "label": "24% bracket", "single": "100,526 – 191,950", "married": "201,051 – 383,900" },
+    { "rate": "32%", "label": "32% bracket", "single": "191,951 – 243,725", "married": "383,901 – 487,450" },
+    { "rate": "35%", "label": "35% bracket", "single": "243,726 – 609,350", "married": "487,451 – 731,200" },
+    { "rate": "37%", "label": "37% bracket", "single": "609,350+", "married": "731,200+" }
+  ],
+  "standardDeduction": [
+    { "status": "Single", "amount": 14600 },
+    { "status": "Married Filing Jointly", "amount": 29200 },
+    { "status": "Married Filing Separately", "amount": 14600 },
+    { "status": "Head of Household", "amount": 21900 }
+  ],
+  "keyCredits": [
+    { "name": "Child Tax Credit", "amount": "$2,000 per child under 17" },
+    { "name": "Earned Income Tax Credit", "amount": "Up to $7,830 (3+ kids)" },
+    { "name": "American Opportunity Credit", "amount": "Up to $2,500 per student" }
+  ],
+  "keyLimits": [
+    { "name": "401(k) Contribution", "amount": "$23,000 (+$7,500 catch-up 50+)" },
+    { "name": "IRA Contribution", "amount": "$7,000 (+$1,000 catch-up 50+)" },
+    { "name": "HSA Contribution (Family)", "amount": "$8,300" },
+    { "name": "Gift Tax Exclusion", "amount": "$18,000 per recipient" }
+  ]
+}

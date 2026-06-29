@@ -1,0 +1,104 @@
+{
+  "code": "GB",
+  "name": "United Kingdom",
+  "flag": "🇬🇧",
+  "taxYearLabel": "2025/26 (Apr 6 – Apr 5)",
+  "taxYearStart": "April 6",
+  "currency": "GBP",
+  "currencySymbol": "£",
+  "locale": "en-GB",
+  "dateFormat": "DD/MM/YYYY",
+  "numberFormat": "1,234.56",
+  "identifierName": "NINO",
+  "identifierFormat": "^[A-Z]{2}\\d{6}[A-Z]$",
+  "identifierMaskPattern": "********A",
+  "supportTier": "partial",
+  "supportTierDescription": "Extraction only — no filing integration with HMRC yet",
+  "filingDeadlines": [
+    { "returnType": "SA100", "deadline": "January 31", "description": "Self-Assessment Tax Return (online)" },
+    { "returnType": "CT600", "deadline": "12 months after accounting period end", "description": "Company Tax Return" },
+    { "returnType": "P35", "deadline": "May 19", "description": "Employer Annual Return" }
+  ],
+  "documentTypes": [
+    {
+      "type": "P60",
+      "label": "P60 End of Year Certificate",
+      "category": "income",
+      "description": "Annual pay and tax statement from employer",
+      "fields": [
+        { "name": "employer_name", "label": "Employer Name", "group": "employer", "required": true },
+        { "name": "employee_name", "label": "Employee Name", "group": "employee", "required": true },
+        { "name": "employee_nino", "label": "NINO", "group": "employee", "required": true },
+        { "name": "gross_pay", "label": "Gross Pay", "group": "income", "format": "currency", "required": true },
+        { "name": "tax_deducted", "label": "Tax Deducted", "group": "tax", "format": "currency", "required": true },
+        { "name": "ni_contributions", "label": "National Insurance Contributions", "group": "tax", "format": "currency" }
+      ]
+    },
+    {
+      "type": "P45",
+      "label": "P45 Details of Employee Leaving",
+      "category": "income",
+      "description": "Statement when leaving employment",
+      "fields": [
+        { "name": "employer_name", "label": "Employer Name", "group": "employer", "required": true },
+        { "name": "employee_name", "label": "Employee Name", "group": "employee", "required": true },
+        { "name": "employee_nino", "label": "NINO", "group": "employee", "required": true },
+        { "name": "leaving_date", "label": "Leaving Date", "group": "employment", "format": "date" },
+        { "name": "total_pay", "label": "Total Pay to Date", "group": "income", "format": "currency" },
+        { "name": "total_tax", "label": "Total Tax to Date", "group": "tax", "format": "currency" }
+      ]
+    },
+    {
+      "type": "SA100",
+      "label": "SA100 Self-Assessment Return",
+      "category": "income",
+      "description": "Self-assessment tax return",
+      "fields": [
+        { "name": "taxpayer_name", "label": "Taxpayer Name", "group": "identity", "required": true },
+        { "name": "taxpayer_nino", "label": "NINO", "group": "identity", "required": true },
+        { "name": "utr", "label": "UTR Number", "group": "identity" },
+        { "name": "total_income", "label": "Total Income", "group": "income", "format": "currency", "required": true },
+        { "name": "tax_due", "label": "Tax Due", "group": "tax", "format": "currency" }
+      ]
+    },
+    {
+      "type": "Bank-Statement",
+      "label": "Bank Statement",
+      "category": "business",
+      "description": "Monthly bank account statement",
+      "fields": [
+        { "name": "bank_name", "label": "Bank Name", "group": "bank", "required": true },
+        { "name": "account_holder", "label": "Account Holder", "group": "account", "required": true },
+        { "name": "account_number", "label": "Account Number (masked)", "group": "account" },
+        { "name": "sort_code", "label": "Sort Code", "group": "account" },
+        { "name": "period", "label": "Statement Period", "group": "period" },
+        { "name": "ending_balance", "label": "Ending Balance", "group": "balance", "format": "currency" }
+      ]
+    }
+  ],
+  "taxSoftware": [
+    { "id": "sage", "name": "Sage", "vendor": "Sage Group" },
+    { "id": "quickbooks-uk", "name": "QuickBooks UK", "vendor": "Intuit" },
+    { "id": "xero-uk", "name": "Xero", "vendor": "Xero" }
+  ],
+  "taxBrackets": [
+    { "rate": "0%", "label": "Personal Allowance", "single": "0 – 12,570", "notes": "Reduced by £1 for every £2 over £100,000" },
+    { "rate": "20%", "label": "Basic Rate", "single": "12,571 – 50,270" },
+    { "rate": "40%", "label": "Higher Rate", "single": "50,271 – 125,140" },
+    { "rate": "45%", "label": "Additional Rate", "single": "125,140+" }
+  ],
+  "standardDeduction": [
+    { "status": "Personal Allowance", "amount": 12570 }
+  ],
+  "keyCredits": [
+    { "name": "Marriage Allowance", "amount": "Transfer £1,260 of Personal Allowance" },
+    { "name": "Blind Person's Allowance", "amount": "£3,070" },
+    { "name": "Married Couple's Allowance", "amount": "Up to £11,080 (born before Apr 1935)" }
+  ],
+  "keyLimits": [
+    { "name": "ISA Annual Limit", "amount": "£20,000" },
+    { "name": "Pension Annual Allowance", "amount": "£60,000" },
+    { "name": "Capital Gains Annual Exempt Amount", "amount": "£3,000" },
+    { "name": "Inheritance Tax Threshold", "amount": "£325,000" }
+  ]
+}

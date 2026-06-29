@@ -1,0 +1,90 @@
+{
+  "code": "CA",
+  "name": "Canada",
+  "flag": "🇨🇦",
+  "taxYearLabel": "Tax Year 2025",
+  "taxYearStart": "January 1",
+  "currency": "CAD",
+  "currencySymbol": "C$",
+  "locale": "en-CA",
+  "dateFormat": "YYYY-MM-DD",
+  "numberFormat": "1,234.56",
+  "identifierName": "SIN",
+  "identifierFormat": "^\\d{3}-\\d{3}-\\d{3}$",
+  "identifierMaskPattern": "***-***-123",
+  "supportTier": "partial",
+  "supportTierDescription": "Extraction only — no filing integration with CRA yet",
+  "filingDeadlines": [
+    { "returnType": "T1", "deadline": "April 30", "description": "Personal Income Tax Return" },
+    { "returnType": "T2", "deadline": "6 months after fiscal year end", "description": "Corporate Income Tax Return" },
+    { "returnType": "T4", "deadline": "February 28", "description": "Statement of Remuneration Paid" }
+  ],
+  "documentTypes": [
+    {
+      "type": "T4",
+      "label": "T4 Statement of Remuneration",
+      "category": "income",
+      "description": "Annual employment income statement",
+      "fields": [
+        { "name": "employer_name", "label": "Employer Name", "group": "employer", "required": true },
+        { "name": "employee_name", "label": "Employee Name", "group": "employee", "required": true },
+        { "name": "employee_sin", "label": "SIN", "group": "employee", "required": true },
+        { "name": "employment_income", "label": "Employment Income (Box 14)", "group": "income", "format": "currency", "required": true },
+        { "name": "cpp_contributions", "label": "CPP Contributions", "group": "tax", "format": "currency" },
+        { "name": "ei_premiums", "label": "EI Premiums", "group": "tax", "format": "currency" },
+        { "name": "income_tax_deducted", "label": "Income Tax Deducted", "group": "tax", "format": "currency" }
+      ]
+    },
+    {
+      "type": "T5",
+      "label": "T5 Statement of Investment Income",
+      "category": "income",
+      "description": "Investment income statement",
+      "fields": [
+        { "name": "payer_name", "label": "Payer Name", "group": "payer", "required": true },
+        { "name": "recipient_name", "label": "Recipient Name", "group": "recipient", "required": true },
+        { "name": "recipient_sin", "label": "SIN", "group": "recipient", "required": true },
+        { "name": "actual_dividends", "label": "Actual Amount of Dividends", "group": "income", "format": "currency" },
+        { "name": "taxable_dividends", "label": "Taxable Amount of Dividends", "group": "income", "format": "currency" },
+        { "name": "interest_income", "label": "Interest Income", "group": "income", "format": "currency" }
+      ]
+    },
+    {
+      "type": "T3",
+      "label": "T3 Statement of Trust Income",
+      "category": "income",
+      "description": "Trust income allocations",
+      "fields": [
+        { "name": "trust_name", "label": "Trust Name", "group": "trust", "required": true },
+        { "name": "beneficiary_name", "label": "Beneficiary Name", "group": "beneficiary", "required": true },
+        { "name": "beneficiary_sin", "label": "SIN", "group": "beneficiary" },
+        { "name": "income_allocation", "label": "Income Allocation", "group": "income", "format": "currency" }
+      ]
+    }
+  ],
+  "taxSoftware": [
+    { "id": "turbotax-ca", "name": "TurboTax Canada", "vendor": "Intuit" },
+    { "id": "ufile", "name": "UFile", "vendor": "Dr Tax Software" },
+    { "id": "profile", "name": "ProFile", "vendor": "Intuit" }
+  ],
+  "taxBrackets": [
+    { "rate": "15%", "label": "15% bracket", "single": "0 – 57,375" },
+    { "rate": "20.5%", "label": "20.5% bracket", "single": "57,376 – 114,750" },
+    { "rate": "26%", "label": "26% bracket", "single": "114,751 – 177,882" },
+    { "rate": "29%", "label": "29% bracket", "single": "177,883 – 253,414" },
+    { "rate": "33%", "label": "33% bracket", "single": "253,414+" }
+  ],
+  "standardDeduction": [
+    { "status": "Basic Personal Amount", "amount": 15780 }
+  ],
+  "keyCredits": [
+    { "name": "Canada Child Benefit", "amount": "Up to C$7,787 (under 6)" },
+    { "name": "GST/HST Credit", "amount": "Up to C$519 (single)" },
+    { "name": "Climate Action Incentive", "amount": "Varies by province" }
+  ],
+  "keyLimits": [
+    { "name": "RRSP Contribution", "amount": "18% of prior year income (max C$32,490)" },
+    { "name": "TFSA Contribution", "amount": "C$7,000" },
+    { "name": "CPP Contribution", "amount": "C$4,034.10" }
+  ]
+}

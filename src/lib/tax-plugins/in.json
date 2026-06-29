@@ -1,0 +1,98 @@
+{
+  "code": "IN",
+  "name": "India",
+  "flag": "🇮🇳",
+  "taxYearLabel": "FY 2025-26 (AY 2026-27)",
+  "taxYearStart": "April 1",
+  "currency": "INR",
+  "currencySymbol": "₹",
+  "locale": "en-IN",
+  "dateFormat": "DD/MM/YYYY",
+  "numberFormat": "1,23,456.00",
+  "identifierName": "PAN",
+  "identifierFormat": "^[A-Z]{5}\\d{4}[A-Z]$",
+  "identifierMaskPattern": "ABCDE****F",
+  "supportTier": "partial",
+  "supportTierDescription": "Extraction only — no filing integration with Income Tax Department yet",
+  "filingDeadlines": [
+    { "returnType": "ITR-1", "deadline": "July 31", "description": "Salaried Individuals (Sahaj)" },
+    { "returnType": "ITR-3", "deadline": "July 31", "description": "Business/Profession Income" },
+    { "returnType": "ITR-6", "deadline": "October 31", "description": "Companies" },
+    { "returnType": "GSTR-1", "deadline": "11th of next month", "description": "GST Outward Supplies" },
+    { "returnType": "GSTR-3B", "deadline": "20th of next month", "description": "GST Monthly Return" }
+  ],
+  "documentTypes": [
+    {
+      "type": "Form-16",
+      "label": "Form 16 Salary Certificate",
+      "category": "income",
+      "description": "Annual salary and TDS statement from employer",
+      "fields": [
+        { "name": "employer_name", "label": "Employer Name", "group": "employer", "required": true },
+        { "name": "employer_tan", "label": "Employer TAN", "group": "employer" },
+        { "name": "employee_name", "label": "Employee Name", "group": "employee", "required": true },
+        { "name": "employee_pan", "label": "PAN", "group": "employee", "required": true },
+        { "name": "gross_salary", "label": "Gross Salary", "group": "income", "format": "currency", "required": true },
+        { "name": "tds_deducted", "label": "TDS Deducted", "group": "tax", "format": "currency", "required": true },
+        { "name": "net_salary", "label": "Net Salary", "group": "income", "format": "currency" }
+      ]
+    },
+    {
+      "type": "Form-26AS",
+      "label": "Form 26AS Tax Credit Statement",
+      "category": "income",
+      "description": "Annual tax credit statement from IT Department",
+      "fields": [
+        { "name": "taxpayer_name", "label": "Taxpayer Name", "group": "identity", "required": true },
+        { "name": "taxpayer_pan", "label": "PAN", "group": "identity", "required": true },
+        { "name": "assessment_year", "label": "Assessment Year", "group": "period" },
+        { "name": "total_tds", "label": "Total TDS", "group": "tax", "format": "currency" },
+        { "name": "total_income", "label": "Total Income", "group": "income", "format": "currency" }
+      ]
+    },
+    {
+      "type": "GST-Return",
+      "label": "GST Return (GSTR-1/3B)",
+      "category": "business",
+      "description": "Goods and Services Tax return",
+      "fields": [
+        { "name": "gstin", "label": "GSTIN", "group": "identity", "required": true },
+        { "name": "taxpayer_name", "label": "Taxpayer Name", "group": "identity", "required": true },
+        { "name": "return_period", "label": "Return Period", "group": "period", "required": true },
+        { "name": "outward_supplies", "label": "Outward Supplies (Taxable)", "group": "income", "format": "currency" },
+        { "name": "output_tax", "label": "Output Tax Liability", "group": "tax", "format": "currency" },
+        { "name": "input_tax_credit", "label": "Input Tax Credit", "group": "tax", "format": "currency" },
+        { "name": "net_tax_payable", "label": "Net Tax Payable", "group": "tax", "format": "currency" }
+      ]
+    }
+  ],
+  "taxSoftware": [
+    { "id": "cleartax", "name": "ClearTax", "vendor": "ClearTax" },
+    { "id": "taxspanner", "name": "TaxSpanner", "vendor": "TaxSpanner" },
+    { "id": "myitreturn", "name": "myITreturn", "vendor": "myITreturn" }
+  ],
+  "taxBrackets": [
+    { "rate": "0%", "label": "0% bracket (New Regime)", "single": "0 – 3,00,000" },
+    { "rate": "5%", "label": "5% bracket", "single": "3,00,001 – 7,00,000" },
+    { "rate": "10%", "label": "10% bracket", "single": "7,00,001 – 10,00,000" },
+    { "rate": "15%", "label": "15% bracket", "single": "10,00,001 – 12,00,000" },
+    { "rate": "20%", "label": "20% bracket", "single": "12,00,001 – 15,00,000" },
+    { "rate": "30%", "label": "30% bracket", "single": "15,00,000+" }
+  ],
+  "standardDeduction": [
+    { "status": "Standard Deduction (Salaried)", "amount": 75000 },
+    { "status": "New Regime Basic Exemption", "amount": 300000 }
+  ],
+  "keyCredits": [
+    { "name": "Section 80C", "amount": "₹1,50,000 (PF, PPF, ELSS, LIC)" },
+    { "name": "Section 80D", "amount": "₹25,000 (Health Insurance)" },
+    { "name": "Section 24(b)", "amount": "₹2,00,000 (Home Loan Interest)" },
+    { "name": "Section 80CCD(1B)", "amount": "₹50,000 (NPS)" }
+  ],
+  "keyLimits": [
+    { "name": "PPF Annual Limit", "amount": "₹1,50,000" },
+    { "name": "NPS Annual Limit", "amount": "₹2,00,000" },
+    { "name": "EPF Contribution", "amount": "12% of basic salary" },
+    { "name": "GST Registration Threshold", "amount": "₹40,00,000 (goods) / ₹20,00,000 (services)" }
+  ]
+}
