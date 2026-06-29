@@ -191,9 +191,19 @@ export function DocumentDetailView() {
   const [zoom, setZoom] = useState(100)
   const [previewLoading, setPreviewLoading] = useState(true)
   const [previewError, setPreviewError] = useState(false)
+  const [wordHtml, setWordHtml] = useState<string | null>(null)
 
   const isImage = doc?.mimeType?.startsWith('image/') ?? false
   const isPdf = doc?.mimeType === 'application/pdf'
+  const isWord =
+    doc?.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    doc?.mimeType === 'application/msword' ||
+    doc?.storedFilename?.endsWith('.docx') ||
+    doc?.storedFilename?.endsWith('.doc')
+  const isSpreadsheet =
+    doc?.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    doc?.mimeType === 'application/vnd.ms-excel' ||
+    doc?.mimeType === 'text/csv'
   const previewUrl = doc ? `/api/documents/${doc.id}/preview` : null
 
   const fetchDoc = () => {
@@ -223,9 +233,31 @@ export function DocumentDetailView() {
     setPreviewError(false)
 
     // Unsupported file types (Excel, CSV, etc.) get a static fallback card.
-    if (!isImage && !isPdf) {
+    if (!isImage && !isPdf && !isWord) {
       setPreviewLoading(false)
       return
+    }
+
+    // Word docs: fetch HTML preview
+    if (isWord) {
+      fetch(`/api/documents/${doc.id}/html`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (cancelled) return
+          if (data.html) {
+            setWordHtml(data.html)
+            setPreviewLoading(false)
+          } else {
+            setPreviewError(true)
+            setPreviewLoading(false)
+          }
+        })
+        .catch(() => {
+          if (cancelled) return
+          setPreviewError(true)
+          setPreviewLoading(false)
+        })
+      return () => { cancelled = true }
     }
 
     fetch(previewUrl, { method: 'HEAD' })
@@ -243,7 +275,7 @@ export function DocumentDetailView() {
     return () => {
       cancelled = true
     }
-  }, [doc?.id, previewUrl, isImage, isPdf])
+  }, [doc?.id, previewUrl, isImage, isPdf, isWord])
 
   const handleProcessWithAI = async () => {
     if (!documentId) return
@@ -788,7 +820,7 @@ export function DocumentDetailView() {
                       </a>
                     </Button>
                   </div>
-                ) : !isImage && !isPdf ? (
+                ) : !isImage && !isPdf && !isWord ? (
                   <div className="flex max-w-sm flex-col items-center gap-3 rounded-xl border border-dashed bg-background p-6 text-center">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
                       <FileSpreadsheet className="h-6 w-6" />
@@ -809,6 +841,11 @@ export function DocumentDetailView() {
                       </a>
                     </Button>
                   </div>
+                ) : isWord && wordHtml ? (
+                  <div
+                    className="prose prose-sm max-w-none rounded-lg border bg-white p-8 shadow-sm dark:bg-muted/30"
+                    dangerouslySetInnerHTML={{ __html: wordHtml }}
+                  />
                 ) : isImage ? (
                   <img
                     src={previewUrl!}

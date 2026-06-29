@@ -133,6 +133,21 @@ export async function POST(req: NextRequest) {
           const pdfData = await pdfParse(fileBuffer)
           pdfText = pdfData.text
           console.log(`[AI Extract] PDF text extracted: ${pdfText.length} chars`)
+
+          // If PDF text is too short, it's likely a scanned/image-only PDF → OCR
+          if (pdfText.trim().length < 50) {
+            console.log('[AI Extract] PDF appears to be scanned (minimal text) — attempting OCR')
+            try {
+              const Tesseract = (await import('tesseract.js')).default
+              const { data: { text: ocrText } } = await Tesseract.recognize(fileBuffer, 'eng')
+              if (ocrText.trim().length > 50) {
+                pdfText = ocrText
+                console.log(`[AI Extract] OCR extracted ${ocrText.length} chars from scanned PDF`)
+              }
+            } catch (ocrErr) {
+              console.error('[AI Extract] OCR failed for scanned PDF:', ocrErr)
+            }
+          }
         } catch (pdfErr) {
           console.error('[AI Extract] PDF text extraction failed:', pdfErr)
         }
@@ -145,6 +160,31 @@ export async function POST(req: NextRequest) {
           console.log(`[AI Extract] Word doc text extracted: ${pdfText.length} chars`)
         } catch (docErr) {
           console.error('[AI Extract] Word doc text extraction failed:', docErr)
+        }
+      } else if (
+        fileMime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        fileMime === 'application/vnd.ms-excel' ||
+        fileMime === 'text/csv'
+      ) {
+        // Extract text from Excel/CSV files
+        try {
+          if (fileMime === 'text/csv') {
+            const Papa = (await import('papaparse')).default
+            const csvText = fileBuffer.toString('utf-8')
+            const parsed = Papa.parse(csvText, { skipEmptyLines: true })
+            pdfText = parsed.data.map((row: unknown) => Array.isArray(row) ? row.join('\t') : String(row)).join('\n')
+          } else {
+            const XLSX = (await import('xlsx')).default
+            const workbook = XLSX.read(fileBuffer, { type: 'buffer' })
+            const sheets = workbook.SheetNames.map(name => {
+              const sheet = workbook.Sheets[name]
+              return `=== Sheet: ${name} ===\n${XLSX.utils.sheet_to_csv(sheet)}`
+            }).join('\n\n')
+            pdfText = sheets
+          }
+          console.log(`[AI Extract] Spreadsheet text extracted: ${pdfText.length} chars`)
+        } catch (ssErr) {
+          console.error('[AI Extract] Spreadsheet text extraction failed:', ssErr)
         }
       }
     } catch (e) {
