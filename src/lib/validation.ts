@@ -65,6 +65,8 @@ export const ALLOWED_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
   'text/csv',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/msword', // .doc
 ] as const
 
 export const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB per guideline

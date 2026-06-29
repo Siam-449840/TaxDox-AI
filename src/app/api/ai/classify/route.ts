@@ -89,6 +89,16 @@ export async function POST(req: NextRequest) {
         } catch (pdfErr) {
           console.error('[AI Classify] PDF text extraction failed:', pdfErr)
         }
+      } else if (fileMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileMime === 'application/msword') {
+        // Extract text from Word documents using mammoth
+        try {
+          const mammoth = (await import('mammoth')).default
+          const result = await mammoth.extractRawText({ buffer: fileBuffer })
+          pdfText = result.value // reuse pdfText variable for generic "document text"
+          console.log(`[AI Classify] Word doc text extracted: ${pdfText.length} chars`)
+        } catch (docErr) {
+          console.error('[AI Classify] Word doc text extraction failed:', docErr)
+        }
       }
     } catch (e) {
       console.log('File not found on disk, using filename classification:', e)
