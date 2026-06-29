@@ -2198,3 +2198,67 @@ The TaxDox AI platform is stable and production-ready. QA testing confirmed all 
 6. **Rate limiting**: No API rate limiting for upload/extract endpoints
 
 Priority for next round: Implement the G <letter> chord navigation listener, and create the daily cron job when the cron tool is available.
+
+---
+Task ID: BUGFIX-LOGIN
+Agent: Main (Claude)
+Task: Fix critical sign-in loop bug — user redirected back to sign-in page after login
+
+## Bug Description
+When users sign in with valid credentials, they are immediately redirected back to the sign-in page instead of reaching the dashboard. This made the app completely unusable.
+
+## Root Cause Analysis
+Two compounding issues:
+
+### 1. Missing NEXTAUTH_SECRET in .env (PRIMARY CAUSE)
+The `.env` file was missing the `NEXTAUTH_SECRET` environment variable entirely. When `NEXTAUTH_SECRET` is not set, NextAuth v4 generates a random secret on each server restart. This caused `JWEDecryptionFailed` errors:
+- Login creates a session token encrypted with secret A
+- On the next request (page load), the server tries to decrypt with secret B (different random secret)
+- Decryption fails → `getServerSession()` returns null → server redirects to `/auth/signin`
+- The dev log showed: `name: 'JWEDecryptionFailed'` on every `GET /` request
+
+### 2. Client-side race condition (SECONDARY CAUSE)
+The original `page.tsx` was a pure client component using `useSession()`. On a fresh page load:
+- `useSession()` returns `status: 'loading'` initially
+- Then briefly returns `status: 'unauthenticated'` before the session cookie is checked
+- A `useEffect` immediately redirected to `/auth/signin` on `unauthenticated`
+- This created a race condition where the redirect fired before the session could load
+
+## Fix Applied
+
+### Fix 1: Stable NEXTAUTH_SECRET
+Added a stable `NEXTAUTH_SECRET` to `.env`:
+```
+NEXTAUTH_SECRET=taxdox-ai-production-secret-key-2025-change-in-prod-stable
+```
+This ensures the session token is encrypted and decrypted with the same secret across server restarts.
+
+### Fix 2: Server-side session check
+Restructured `src/app/page.tsx` from a client component to a **server component**:
+- Uses `getServerSession(authOptions)` to check authentication on the server
+- If no session, `redirect('/auth/signin')` — this is a proper server redirect, not a client-side race
+- If session exists, renders `<HomeClient />` (the client component with view switching)
+- Created `src/components/home-client.tsx` containing the view switching logic (formerly in page.tsx)
+- The `HomeClient` component still uses `useSession()` but only for session expiry detection (redirects to signin if session becomes unauthenticated after loading)
+
+## Verification Results
+- **curl Test 1**: Unauthenticated `/` → 307 redirect to `/auth/signin` ✅
+- **curl Test 2**: Login via credentials callback → 302 (success) ✅
+- **curl Test 3**: Session API returns valid user data ✅
+- **curl Test 4**: `/` with session cookie → **HTTP 200** (no redirect!) ✅
+- **curl Test 5**: No JWE decryption errors in dev log ✅
+- **agent-browser Test**: Login → dashboard shows "Welcome back, Sarah" with full navigation ✅
+- **Page reload test**: Session persists, stays on `/` (no redirect to signin) ✅
+- VLM rating: 8/10 — "Shows logged-in dashboard with user name (Sarah Chen) and navigation"
+
+## Impact
+This was a **critical/blocking bug** that made the entire app unusable. The fix ensures:
+1. Session tokens are consistently encrypted/decrypted with a stable secret
+2. Authentication is checked server-side (no client race condition)
+3. Session persists across page reloads
+4. The sign-in → dashboard flow works reliably
+
+## Files Changed
+- `/home/z/my-project/.env` — Added stable NEXTAUTH_SECRET + CRON_API_KEY + all required env vars
+- `/home/z/my-project/src/app/page.tsx` — Converted to server component with `getServerSession` + `redirect`
+- `/home/z/my-project/src/components/home-client.tsx` — New file: client component with view switching (extracted from old page.tsx)
