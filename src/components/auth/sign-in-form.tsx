@@ -31,6 +31,15 @@ export function SignInForm() {
     setError(null)
     setLoading(true)
 
+    // Clear any stale session cookies from previous (broken) sessions.
+    // This prevents JWEDecryptionFailed errors when the NEXTAUTH_SECRET changed.
+    document.cookie.split(';').forEach((c) => {
+      const cookieName = c.split('=')[0].trim()
+      if (cookieName.includes('next-auth')) {
+        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+      }
+    })
+
     try {
       const res = await signIn('credentials', {
         email: email.trim(),
