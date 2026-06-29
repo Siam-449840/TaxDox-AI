@@ -67,16 +67,28 @@ export async function POST(req: NextRequest) {
   // Try to read the actual uploaded file from disk
   let fileBase64: string | null = fileContent || null
   let fileMime: string = mimeType || document.mimeType
+  let pdfText: string | null = null
 
   if (!fileBase64 && document.storedFilename) {
     try {
       const filePath = path.join(process.cwd(), 'download', 'uploads', document.storedFilename)
       const fileBuffer = await readFile(filePath)
-      fileBase64 = fileBuffer.toString('base64')
-      // Only process image files with GLM-4.6V (PDFs would need page rendering)
+
       const isImage = fileMime.startsWith('image/') && !fileMime.includes('svg')
-      if (!isImage) {
-        fileBase64 = null
+      const isPdf = fileMime === 'application/pdf' || document.storedFilename.endsWith('.pdf')
+
+      if (isImage) {
+        fileBase64 = fileBuffer.toString('base64')
+      } else if (isPdf) {
+        // Extract text from PDF for LLM-based classification
+        try {
+          const pdfParse = (await import('pdf-parse')).default
+          const pdfData = await pdfParse(fileBuffer)
+          pdfText = pdfData.text
+          console.log(`[AI Classify] PDF text extracted: ${pdfText.length} chars`)
+        } catch (pdfErr) {
+          console.error('[AI Classify] PDF text extraction failed:', pdfErr)
+        }
       }
     } catch (e) {
       console.log('File not found on disk, using filename classification:', e)
@@ -124,12 +136,50 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // If we have PDF text, use LLM (text model) for classification
+  if (!matchedType && pdfText && pdfText.length > 50) {
+    try {
+      const ZAI = (await import('z-ai-web-dev-sdk')).default
+      const zai = await ZAI.create()
+
+      // Sanitize for prompt injection defense
+      const { sanitizeDocumentText } = await import('@/lib/ai-security')
+      const { sanitized, hadInjection } = sanitizeDocumentText(pdfText)
+
+      if (hadInjection) {
+        console.warn('[AI Classify] Prompt injection detected in PDF text — sanitized')
+      }
+
+      const typeList = DOCUMENT_TYPES.map((t) => t.type).join(', ')
+      const prompt = `You are a tax document classifier. Read the following document text and classify it into one of these types: ${typeList}. Respond with ONLY a JSON object: {"documentType": "...", "confidence": 0.0-1.0}
+
+Document text (first 4000 chars):
+${sanitized.slice(0, 4000)}`
+
+      const response = await zai.chat.completions.create({
+        messages: [{ role: 'user', content: prompt }],
+        stream: false,
+      })
+
+      const content = response?.choices?.[0]?.message?.content || ''
+      const jsonMatch = content.match(/\{[^}]+\}/)
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0])
+        matchedType = result.documentType
+        confidence = result.confidence || 0.85
+        model = 'glm-4.6-llm-pdf'
+      }
+    } catch (error) {
+      console.error('PDF text LLM classification failed, falling back:', error)
+    }
+  }
+
   // Fallback to filename-based classification
   if (!matchedType) {
     const result = classifyFromFilename(document.originalFilename)
     matchedType = result.type
     confidence = result.confidence
-    model = fileContent ? 'glm-4.6v-fallback' : 'filename-heuristic'
+    model = fileBase64 ? 'glm-4.6v-fallback' : (pdfText ? 'pdf-llm-fallback' : 'filename-heuristic')
   }
 
   const typeDef: DocTypeDef | null = matchedType ? DOCUMENT_TYPE_MAP[matchedType] : null

@@ -114,16 +114,28 @@ export async function POST(req: NextRequest) {
   // Try to read the actual uploaded file from disk
   let fileBase64: string | null = fileContent || null
   let fileMime: string = mimeType || document.mimeType
+  let pdfText: string | null = null
 
   if (!fileBase64 && document.storedFilename) {
     try {
       const filePath = path.join(process.cwd(), 'download', 'uploads', document.storedFilename)
       const fileBuffer = await readFile(filePath)
-      fileBase64 = fileBuffer.toString('base64')
-      // Only process image files with GLM-4.6V (PDFs would need page rendering)
+
       const isImage = fileMime.startsWith('image/') && !fileMime.includes('svg')
-      if (!isImage) {
-        fileBase64 = null // Skip VLM for non-images, use simulated extraction
+      const isPdf = fileMime === 'application/pdf' || document.storedFilename.endsWith('.pdf')
+
+      if (isImage) {
+        fileBase64 = fileBuffer.toString('base64')
+      } else if (isPdf) {
+        // Extract text from PDF using pdf-parse
+        try {
+          const pdfParse = (await import('pdf-parse')).default
+          const pdfData = await pdfParse(fileBuffer)
+          pdfText = pdfData.text
+          console.log(`[AI Extract] PDF text extracted: ${pdfText.length} chars`)
+        } catch (pdfErr) {
+          console.error('[AI Extract] PDF text extraction failed:', pdfErr)
+        }
       }
     } catch (e) {
       console.log('File not found on disk, using simulated extraction:', e)
@@ -174,6 +186,50 @@ If a field is not present in the document, set its value to "N/A" and confidence
       }
     } catch (error) {
       console.error('GLM-4.6V extraction failed, falling back:', error)
+    }
+  }
+
+  // If we have PDF text, use the LLM (text model) for extraction
+  if (extractedFields.length === 0 && pdfText && pdfText.length > 50) {
+    try {
+      const ZAI = (await import('z-ai-web-dev-sdk')).default
+      const zai = await ZAI.create()
+
+      // Sanitize document text for prompt injection defense
+      const { sanitizeDocumentText } = await import('@/lib/ai-security')
+      const { sanitized, hadInjection } = sanitizeDocumentText(pdfText)
+
+      if (hadInjection) {
+        console.warn('[AI Extract] Prompt injection detected in PDF text — sanitized')
+      }
+
+      const fieldList = typeDef.fields
+        .map((f) => `- ${f.name}: ${f.label}`)
+        .join('\n')
+
+      const prompt = `You are a tax document data extraction engine. Extract the following fields from this ${typeDef.label} document text. Return ONLY a JSON array of objects with "name", "value", and "confidence" (0.0-1.0) properties.
+
+Fields to extract:
+${fieldList}
+
+If a field is not present in the document, set its value to "N/A" and confidence to 0. Mask sensitive data (SSN, EIN) like ***-**-1234.
+
+Document text:
+${sanized.slice(0, 8000)}`
+
+      const response = await zai.chat.completions.create({
+        messages: [{ role: 'user', content: prompt }],
+        stream: false,
+      })
+
+      const content = response?.choices?.[0]?.message?.content || ''
+      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        extractedFields = JSON.parse(jsonMatch[0])
+        model = 'glm-4.6-llm-pdf'
+      }
+    } catch (error) {
+      console.error('PDF text LLM extraction failed, falling back:', error)
     }
   }
 
