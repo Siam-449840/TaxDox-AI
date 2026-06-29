@@ -185,8 +185,15 @@ If a field is not present in the document, set its value to "N/A" and confidence
       value: mockValues[field.name] || '—',
       confidence: 0.82 + Math.random() * 0.17,
     }))
-    model = fileContent ? 'glm-4.6v-fallback' : 'simulated'
+    model = fileBase64 ? 'glm-4.6v-fallback' : 'simulated'
   }
+
+  // Determine if this is a fallback (not real AI extraction)
+  const isFallback = model !== 'glm-4.6v'
+
+  // Version tracking — records exactly what produced this extraction
+  const templateVersion = `${document.documentType?.toLowerCase().replace(/[^a-z0-9]/g, '')}-v1`
+  const promptVersion = 'extraction-v1'
 
   // Save extractions to database
   const extractions = []
@@ -207,6 +214,10 @@ If a field is not present in the document, set its value to "N/A" and confidence
         sourceLocation: 'page 1',
         isVerified: confidence > 0.9,
         verifiedAt: confidence > 0.9 ? new Date() : null,
+        modelVersion: model,
+        templateVersion,
+        promptVersion,
+        isFallback,
       },
     })
     extractions.push(ext)

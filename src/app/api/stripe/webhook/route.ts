@@ -22,6 +22,18 @@ export async function POST(req: NextRequest) {
   // Log the event
   console.log(`Stripe webhook: ${event.type} (${event.id})`)
 
+  // ─── Idempotency check ──────────────────────────────────────
+  // Stripe will redeliver events on retries. We must not double-process.
+  // Check if we've already seen this exact event ID.
+  const existingEvent = await db.subscriptionEvent.findFirst({
+    where: { stripeEventId: event.id },
+    select: { id: true },
+  })
+  if (existingEvent) {
+    console.log(`Webhook event ${event.id} already processed — skipping (idempotent)`)
+    return NextResponse.json({ received: true, duplicate: true })
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {

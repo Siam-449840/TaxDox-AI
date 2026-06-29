@@ -69,12 +69,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Team performance — match team members to engagements by name
-  // (engagements.assignedTo is a User record; teamMembers are TeamMember records;
-  //  they share the same names in seed data)
+  // Team performance — uses real FK (TeamMember.userId → User.id)
+  // This eliminates the name-matching join that caused the $0-revenue bug.
   const teamPerf = teamMembers.map((t) => {
     const memberEngagements = engagements.filter(
-      (e) => e.assignedTo?.name === t.name
+      (e) => e.assignedToId === t.userId
     )
     return {
       name: t.name,

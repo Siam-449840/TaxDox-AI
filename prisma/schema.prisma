@@ -57,6 +57,7 @@ model User {
   messages     Message[]
   accounts     Account[]
   sessions     Session[]
+  teamMember   TeamMember?  // 1:1 link — eliminates name-matching joins
 }
 
 model Account {
@@ -109,6 +110,8 @@ model TeamMember {
   id          String   @id @default(cuid())
   firmId      String
   firm        Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  userId      String?  @unique // FK to User — eliminates name-matching joins
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   name        String
   role        String   @default("preparer")
   email       String
@@ -259,6 +262,13 @@ model Extraction {
   verifiedBy     User?    @relation("VerifiedBy", fields: [verifiedById], references: [id])
   verifiedAt    DateTime?
   createdAt     DateTime @default(now())
+
+  // AI version tracking — records exactly which model/template/prompt produced this extraction.
+  // Without this, debugging accuracy regressions is guesswork.
+  modelVersion  String?  // e.g., "glm-4.6v", "simulated", "filename-heuristic"
+  templateVersion String? // e.g., "w2-v1", "1099-int-v2"
+  promptVersion String?  // e.g., "extraction-v1"
+  isFallback    Boolean  @default(false) // true if this came from a fallback path, not real AI
 
   @@index([documentId])
 }

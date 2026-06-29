@@ -346,13 +346,15 @@ async function main() {
   }
   const user = users[0] // Sarah Chen — primary user for audit logs
 
-  // Team members
+  // Team members — linked to User records via real FK (userId)
+  // This eliminates the name-matching join that caused the $0-revenue bug.
   const teamMembers = []
   for (let i = 0; i < TEAM.length; i++) {
     const t = TEAM[i]
     const tm = await db.teamMember.create({
       data: {
         firmId: firm.id,
+        userId: users[i].id, // Real FK — no more name matching
         name: t.name,
         role: t.role,
         email: t.email,
