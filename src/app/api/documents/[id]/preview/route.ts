@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 import { readFile } from 'fs/promises'
 import path from 'path'
 
@@ -35,7 +36,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('Preview error:', error)
+    logger.document.error('Preview error:', { error: String(error) })
     return NextResponse.json(
       { error: 'File not found on disk' },
       { status: 404 }

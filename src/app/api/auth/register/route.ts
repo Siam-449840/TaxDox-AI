@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   try {
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
       firm: { id: result.firm.id, name: result.firm.name },
     })
   } catch (error) {
-    console.error('Registration error:', error)
+    logger.auth.error('Registration error:', { error: String(error) })
     return NextResponse.json(
       { error: 'Failed to create account. Please try again.' },
       { status: 500 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 import { readFile } from 'fs/promises'
 import path from 'path'
 
@@ -45,7 +46,7 @@ export async function GET(
       messages: result.messages,
     })
   } catch (error) {
-    console.error('Word doc HTML conversion error:', error)
+    logger.document.error('Word doc HTML conversion error:', { error: String(error) })
     return NextResponse.json(
       { error: 'Failed to convert Word document' },
       { status: 500 }

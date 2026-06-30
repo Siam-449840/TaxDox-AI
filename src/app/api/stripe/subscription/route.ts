@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 export async function GET() {
   try {
@@ -71,7 +72,7 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error('Subscription status error:', error)
+    logger.billing.error('Subscription status error:', { error: String(error) })
     return NextResponse.json(
       { error: 'Failed to fetch subscription status' },
       { status: 500 }

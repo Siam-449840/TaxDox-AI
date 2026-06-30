@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 import { getStripe } from '@/lib/stripe'
 import { appUrl } from '@/lib/urls'
 
@@ -34,7 +35,7 @@ export async function POST() {
 
     return NextResponse.json({ url: portalSession.url })
   } catch (error) {
-    console.error('Billing portal error:', error)
+    logger.billing.error('Billing portal error:', { error: String(error) })
     return NextResponse.json(
       { error: 'Failed to open billing portal' },
       { status: 500 }

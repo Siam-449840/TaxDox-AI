@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 import { constructWebhookEvent } from '@/lib/stripe'
 import type Stripe from 'stripe'
 
@@ -15,12 +16,12 @@ export async function POST(req: NextRequest) {
   try {
     event = constructWebhookEvent(body, signature)
   } catch (err) {
-    console.error('Webhook signature verification failed:', err)
+    logger.billing.error('Webhook signature verification failed:', { error: String(err) })
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
   // Log the event
-  console.log(`Stripe webhook: ${event.type} (${event.id})`)
+  logger.billing.info(`Stripe webhook: ${event.type} (${event.id})`)
 
   // ─── Idempotency check ──────────────────────────────────────
   // Stripe will redeliver events on retries. We must not double-process.
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     select: { id: true },
   })
   if (existingEvent) {
-    console.log(`Webhook event ${event.id} already processed — skipping (idempotent)`)
+    logger.billing.info(`Webhook event ${event.id} already processed — skipping (idempotent)`)
     return NextResponse.json({ received: true, duplicate: true })
   }
 
@@ -191,12 +192,12 @@ export async function POST(req: NextRequest) {
 
       default:
         // Unhandled event type — log but don't error
-        console.log(`Unhandled Stripe event: ${event.type}`)
+        logger.billing.info(`Unhandled Stripe event: ${event.type}`)
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error('Webhook handler error:', error)
+    logger.billing.error('Webhook handler error:', { error: String(error) })
     return NextResponse.json(
       { error: 'Webhook handler failed' },
       { status: 500 }

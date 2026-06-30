@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 import { getStripe, STRIPE_PRICES, requirePriceId, type PlanTier } from '@/lib/stripe'
 import { appUrl } from '@/lib/urls'
 
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: checkoutSession.url })
   } catch (error) {
-    console.error('Stripe checkout error:', error)
+    logger.billing.error('Stripe checkout error:', { error: String(error) })
     return NextResponse.json(
       { error: 'Failed to create checkout session' },
       { status: 500 }

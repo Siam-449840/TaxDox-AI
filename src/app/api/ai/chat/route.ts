@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { logger } from '@/lib/logger'
 
 const SYSTEM_PROMPT = `You are TaxDox AI Assistant, an expert tax document intelligence assistant for accounting firms.
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ reply })
   } catch (error) {
-    console.error('AI chat error:', error)
+    logger.ai.error('AI chat error:', { error: String(error) })
     return NextResponse.json(
       {
         reply:

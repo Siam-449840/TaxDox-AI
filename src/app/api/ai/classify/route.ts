@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { DOCUMENT_TYPES, DOCUMENT_TYPE_MAP, type DocTypeDef } from '@/lib/constants'
 import { readFile } from 'fs/promises'
 import path from 'path'
+import { logger } from '@/lib/logger'
 
 /**
  * AI Document Classification Engine
@@ -82,27 +83,27 @@ export async function POST(req: NextRequest) {
       } else if (isPdf) {
         // Extract text from PDF for LLM-based classification
         try {
-          const pdfParse = (await import('pdf-parse')).default
-          const pdfData = await pdfParse(fileBuffer)
+          const pdfParse = (await import('pdf-parse')) as any
+          const pdfData = await (pdfParse.default ? pdfParse.default(fileBuffer) : pdfParse(fileBuffer))
           pdfText = pdfData.text
-          console.log(`[AI Classify] PDF text extracted: ${pdfText.length} chars`)
+          logger.ai.info(`[AI Classify] PDF text extracted: ${pdfText?.length || 0} chars`)
 
           // If PDF text is too short, it's likely a scanned/image-only PDF → OCR
-          if (pdfText.trim().length < 50) {
-            console.log('[AI Classify] PDF appears to be scanned (minimal text) — attempting OCR')
+          if ((pdfText || '').trim().length < 50) {
+            logger.ai.info('[AI Classify] PDF appears to be scanned (minimal text) — attempting OCR')
             try {
               const Tesseract = (await import('tesseract.js')).default
               const { data: { text: ocrText } } = await Tesseract.recognize(fileBuffer, 'eng')
               if (ocrText.trim().length > 50) {
                 pdfText = ocrText
-                console.log(`[AI Classify] OCR extracted ${ocrText.length} chars from scanned PDF`)
+                logger.ai.info(`[AI Classify] OCR extracted ${ocrText.length} chars from scanned PDF`)
               }
             } catch (ocrErr) {
-              console.error('[AI Classify] OCR failed for scanned PDF:', ocrErr)
+              logger.ai.error('AI classify:  OCR failed for scanned PDF:', { error: String(ocrErr) })
             }
           }
         } catch (pdfErr) {
-          console.error('[AI Classify] PDF text extraction failed:', pdfErr)
+          logger.ai.error('AI classify:  PDF text extraction failed:', { error: String(pdfErr) })
         }
       } else if (fileMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileMime === 'application/msword') {
         // Extract text from Word documents using mammoth
@@ -110,9 +111,9 @@ export async function POST(req: NextRequest) {
           const mammoth = (await import('mammoth')).default
           const result = await mammoth.extractRawText({ buffer: fileBuffer })
           pdfText = result.value
-          console.log(`[AI Classify] Word doc text extracted: ${pdfText.length} chars`)
+          logger.ai.info(`[AI Classify] Word doc text extracted: ${pdfText.length} chars`)
         } catch (docErr) {
-          console.error('[AI Classify] Word doc text extraction failed:', docErr)
+          logger.ai.error('AI classify:  Word doc text extraction failed:', { error: String(docErr) })
         }
       } else if (
         fileMime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
@@ -135,13 +136,13 @@ export async function POST(req: NextRequest) {
             }).join('\n\n')
             pdfText = sheets
           }
-          console.log(`[AI Classify] Spreadsheet text extracted: ${pdfText.length} chars`)
+          logger.ai.info(`[AI Classify] Spreadsheet text extracted: ${pdfText.length} chars`)
         } catch (ssErr) {
-          console.error('[AI Classify] Spreadsheet text extraction failed:', ssErr)
+          logger.ai.error('AI classify:  Spreadsheet text extraction failed:', { error: String(ssErr) })
         }
       }
     } catch (e) {
-      console.log('File not found on disk, using filename classification:', e)
+      logger.ai.info('File not found on disk, using filename classification:', { error: String(e) })
     }
   }
 
@@ -182,7 +183,7 @@ export async function POST(req: NextRequest) {
         model = 'glm-4.6v'
       }
     } catch (error) {
-      console.error('GLM-4.6V classification failed, falling back:', error)
+      logger.ai.error('GLM-4.6V classification failed, falling back:', { error: String(error) })
     }
   }
 
@@ -197,7 +198,7 @@ export async function POST(req: NextRequest) {
       const { sanitized, hadInjection } = sanitizeDocumentText(pdfText)
 
       if (hadInjection) {
-        console.warn('[AI Classify] Prompt injection detected in PDF text — sanitized')
+        logger.ai.warn('AI classify:  Prompt injection detected in PDF text — sanitized')
       }
 
       const typeList = DOCUMENT_TYPES.map((t) => t.type).join(', ')
@@ -220,7 +221,7 @@ ${sanitized.slice(0, 4000)}`
         model = 'glm-4.6-llm-pdf'
       }
     } catch (error) {
-      console.error('PDF text LLM classification failed, falling back:', error)
+      logger.ai.error('PDF text LLM classification failed, falling back:', { error: String(error) })
     }
   }
 

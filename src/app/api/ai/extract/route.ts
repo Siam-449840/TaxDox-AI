@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { DOCUMENT_TYPE_MAP } from '@/lib/constants'
 import { readFile } from 'fs/promises'
 import path from 'path'
+import { logger } from '@/lib/logger'
 import { extractionCompleteEmail } from '@/lib/email-templates'
 
 /**
@@ -129,27 +130,27 @@ export async function POST(req: NextRequest) {
       } else if (isPdf) {
         // Extract text from PDF using pdf-parse
         try {
-          const pdfParse = (await import('pdf-parse')).default
-          const pdfData = await pdfParse(fileBuffer)
+          const pdfParse = (await import('pdf-parse')) as any
+          const pdfData = await (pdfParse.default ? pdfParse.default(fileBuffer) : pdfParse(fileBuffer))
           pdfText = pdfData.text
-          console.log(`[AI Extract] PDF text extracted: ${pdfText.length} chars`)
+          logger.ai.info(`[AI Extract] PDF text extracted: ${pdfText?.length || 0} chars`)
 
           // If PDF text is too short, it's likely a scanned/image-only PDF → OCR
-          if (pdfText.trim().length < 50) {
-            console.log('[AI Extract] PDF appears to be scanned (minimal text) — attempting OCR')
+          if ((pdfText || '').trim().length < 50) {
+            logger.ai.info('[AI Extract] PDF appears to be scanned (minimal text) — attempting OCR')
             try {
               const Tesseract = (await import('tesseract.js')).default
               const { data: { text: ocrText } } = await Tesseract.recognize(fileBuffer, 'eng')
               if (ocrText.trim().length > 50) {
                 pdfText = ocrText
-                console.log(`[AI Extract] OCR extracted ${ocrText.length} chars from scanned PDF`)
+                logger.ai.info(`[AI Extract] OCR extracted ${ocrText.length} chars from scanned PDF`)
               }
             } catch (ocrErr) {
-              console.error('[AI Extract] OCR failed for scanned PDF:', ocrErr)
+              logger.ai.error('AI extract:  OCR failed for scanned PDF:', { error: String(ocrErr) })
             }
           }
         } catch (pdfErr) {
-          console.error('[AI Extract] PDF text extraction failed:', pdfErr)
+          logger.ai.error('AI extract:  PDF text extraction failed:', { error: String(pdfErr) })
         }
       } else if (fileMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileMime === 'application/msword') {
         // Extract text from Word documents using mammoth
@@ -157,9 +158,9 @@ export async function POST(req: NextRequest) {
           const mammoth = (await import('mammoth')).default
           const result = await mammoth.extractRawText({ buffer: fileBuffer })
           pdfText = result.value
-          console.log(`[AI Extract] Word doc text extracted: ${pdfText.length} chars`)
+          logger.ai.info(`[AI Extract] Word doc text extracted: ${pdfText.length} chars`)
         } catch (docErr) {
-          console.error('[AI Extract] Word doc text extraction failed:', docErr)
+          logger.ai.error('AI extract:  Word doc text extraction failed:', { error: String(docErr) })
         }
       } else if (
         fileMime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
@@ -182,13 +183,13 @@ export async function POST(req: NextRequest) {
             }).join('\n\n')
             pdfText = sheets
           }
-          console.log(`[AI Extract] Spreadsheet text extracted: ${pdfText.length} chars`)
+          logger.ai.info(`[AI Extract] Spreadsheet text extracted: ${pdfText.length} chars`)
         } catch (ssErr) {
-          console.error('[AI Extract] Spreadsheet text extraction failed:', ssErr)
+          logger.ai.error('AI extract:  Spreadsheet text extraction failed:', { error: String(ssErr) })
         }
       }
     } catch (e) {
-      console.log('File not found on disk, using simulated extraction:', e)
+      logger.ai.info('File not found on disk, using simulated extraction:', { error: String(e) })
     }
   }
 
@@ -235,7 +236,7 @@ If a field is not present in the document, set its value to "N/A" and confidence
         model = 'glm-4.6v'
       }
     } catch (error) {
-      console.error('GLM-4.6V extraction failed, falling back:', error)
+      logger.ai.error('GLM-4.6V extraction failed, falling back:', { error: String(error) })
     }
   }
 
@@ -250,7 +251,7 @@ If a field is not present in the document, set its value to "N/A" and confidence
       const { sanitized, hadInjection } = sanitizeDocumentText(pdfText)
 
       if (hadInjection) {
-        console.warn('[AI Extract] Prompt injection detected in PDF text — sanitized')
+        logger.ai.warn('AI extract:  Prompt injection detected in PDF text — sanitized')
       }
 
       const fieldList = typeDef.fields
@@ -265,7 +266,7 @@ ${fieldList}
 If a field is not present in the document, set its value to "N/A" and confidence to 0. Mask sensitive data (SSN, EIN) like ***-**-1234.
 
 Document text:
-${sanized.slice(0, 8000)}`
+${sanitized.slice(0, 8000)}`
 
       const response = await zai.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
@@ -279,7 +280,7 @@ ${sanized.slice(0, 8000)}`
         model = 'glm-4.6-llm-pdf'
       }
     } catch (error) {
-      console.error('PDF text LLM extraction failed, falling back:', error)
+      logger.ai.error('PDF text LLM extraction failed, falling back:', { error: String(error) })
     }
   }
 
@@ -302,7 +303,7 @@ ${sanized.slice(0, 8000)}`
   const promptVersion = 'extraction-v1'
 
   // Save extractions to database
-  const extractions = []
+  const extractions: any[] = []
   const fieldMap = new Map(typeDef.fields.map((f) => [f.name, f]))
   for (const extracted of extractedFields) {
     const fieldDef = fieldMap.get(extracted.name)
@@ -389,7 +390,7 @@ ${sanized.slice(0, 8000)}`
       })
     }
   } catch (emailError) {
-    console.error('extraction_complete email log failed:', emailError)
+    logger.ai.error('extraction_complete email log failed:', { error: String(emailError) })
   }
 
   return NextResponse.json({

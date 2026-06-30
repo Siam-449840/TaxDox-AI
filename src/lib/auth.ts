@@ -68,7 +68,6 @@ export const authOptions: NextAuthOptions = {
         if (user.mfaEnabled && user.mfaSecret) {
           if (!credentials.mfaCode) {
             // Step 1: signal to the client that an OTP is required.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return { mfaRequired: true, email: user.email } as any
           }
           // Step 2: verify the code.
