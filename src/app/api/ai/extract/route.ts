@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { DOCUMENT_TYPE_MAP } from '@/lib/constants'
-import { readFile } from 'fs/promises'
-import path from 'path'
+import { getObjectStore } from '@/lib/object-store'
 import { logger } from '@/lib/logger'
 import { extractionCompleteEmail } from '@/lib/email-templates'
 
@@ -119,8 +118,8 @@ export async function POST(req: NextRequest) {
 
   if (!fileBase64 && document.storedFilename) {
     try {
-      const filePath = path.join(process.cwd(), 'download', 'uploads', document.storedFilename)
-      const fileBuffer = await readFile(filePath)
+      const store = getObjectStore()
+      const fileBuffer = await store.get(document.storedFilename)
 
       const isImage = fileMime.startsWith('image/') && !fileMime.includes('svg')
       const isPdf = fileMime === 'application/pdf' || document.storedFilename.endsWith('.pdf')

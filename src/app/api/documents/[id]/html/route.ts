@@ -1,23 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
-import { readFile } from 'fs/promises'
-import path from 'path'
+import { getObjectStore } from '@/lib/object-store'
+import { requirePermission } from '@/lib/permissions'
 
 /**
  * GET /api/documents/[id]/html
  *
- * Converts Word documents (.docx) to HTML for preview.
- * Uses mammoth to extract formatted HTML from the .docx file.
+ * Converts Word documents (.docx) to HTML for preview via mammoth.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const document = await db.document.findUnique({ where: { id } })
+
+  const authz = await requirePermission(req, 'document:read', 'document')
+  if (authz instanceof NextResponse) return authz
+  const { firmId } = authz
+
+  const document = await db.document.findUnique({
+    where: { id },
+    include: { client: { select: { firmId: true } } },
+  })
 
   if (!document) {
+    return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+  }
+
+  // Tenant guard.
+  if (document.client.firmId !== firmId) {
     return NextResponse.json({ error: 'Document not found' }, { status: 404 })
   }
 
@@ -36,8 +48,8 @@ export async function GET(
   }
 
   try {
-    const filePath = path.join(process.cwd(), 'download', 'uploads', document.storedFilename)
-    const fileBuffer = await readFile(filePath)
+    const store = getObjectStore()
+    const fileBuffer = await store.get(document.storedFilename)
     const mammoth = (await import('mammoth')).default
     const result = await mammoth.convertToHtml({ buffer: fileBuffer })
 
@@ -46,7 +58,7 @@ export async function GET(
       messages: result.messages,
     })
   } catch (error) {
-    logger.document.error('Word doc HTML conversion error:', { error: String(error) })
+    logger.document.error('Word doc HTML conversion error', { error: String(error) })
     return NextResponse.json(
       { error: 'Failed to convert Word document' },
       { status: 500 }
