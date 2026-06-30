@@ -6,6 +6,7 @@ const PUBLIC_API_ROUTES = [
   '/api/auth',
   '/api/stripe/webhook',
   '/api/health',
+  '/api/inngest',
   // Cron endpoints authenticate via their own API key (?key=...),
   // not user sessions, so they must bypass NextAuth.
   '/api/cron',

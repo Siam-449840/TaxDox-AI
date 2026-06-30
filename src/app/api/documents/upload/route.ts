@@ -4,6 +4,8 @@ import { requirePermission } from '@/lib/permissions'
 import { MAX_FILE_SIZE, validateMimeType } from '@/lib/validation'
 import { getObjectStore, generateKey } from '@/lib/object-store'
 import { logger } from '@/lib/logger'
+import { isQueueEnabled, getInngest, EVENTS } from '@/inngest/client'
+import { runExtraction } from '@/lib/jobs/extraction'
 import { z } from 'zod'
 
 const uploadMetaSchema = z.object({
@@ -113,8 +115,29 @@ export async function POST(req: NextRequest) {
       size: file.size,
     })
 
+    // ── Kick off AI extraction ──────────────────────────────────────
+    // Production: enqueue an Inngest event (returns immediately, processed
+    // async with retries). Dev fallback: run the pipeline inline so the app
+    // works without queue credentials.
+    let jobId: string | undefined
+    if (isQueueEnabled()) {
+      await getInngest().send({
+        name: EVENTS.extractionRequested,
+        data: { documentId: document.id },
+      })
+      jobId = document.id
+      logger.ai.info('Extraction enqueued', { documentId: document.id })
+    } else {
+      // Dev: run inline (non-blocking; the response still returns fast).
+      runExtraction(document.id).catch((e) =>
+        logger.ai.error('Inline extraction failed', { documentId: document.id, error: String(e) })
+      )
+    }
+
     return NextResponse.json({
       document,
+      jobId,
+      status: isQueueEnabled() ? 'queued' : 'processing',
       storedFilename: stored.key,
       fileSize: file.size,
       mimeType: file.type,
