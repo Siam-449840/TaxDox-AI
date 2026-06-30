@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — NEVER commit real secrets. .env.example is the template only.
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -52,3 +53,12 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Runtime data — uploads live in object storage in prod; local dirs are scratch
+/download/
+/upload/
+/uploads/
+
+# Backups
+*.sql.gz
+backups/

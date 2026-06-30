@@ -10,19 +10,36 @@ export function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY is not set')
     }
     stripeInstance = new Stripe(key, {
-      apiVersion: '2024-12-18.acacia',
+      apiVersion: '2026-06-24.dahlia',
       typescript: true,
     })
   }
   return stripeInstance
 }
 
-// Price IDs for each tier — configured in Stripe dashboard
+// Price IDs for each tier — MUST be configured in the Stripe dashboard and set
+// via env. No placeholder fallback: a missing price must surface as an error
+// rather than silently charging an invalid price.
 export const STRIPE_PRICES = {
-  starter: process.env.STRIPE_PRICE_STARTER || 'price_starter',
-  professional: process.env.STRIPE_PRICE_PROFESSIONAL || 'price_professional',
-  business: process.env.STRIPE_PRICE_BUSINESS || 'price_business',
+  starter: process.env.STRIPE_PRICE_STARTER,
+  professional: process.env.STRIPE_PRICE_PROFESSIONAL,
+  business: process.env.STRIPE_PRICE_BUSINESS,
 } as const
+
+/**
+ * Resolve a tier to its price id, throwing a clear error if unconfigured.
+ * Call sites that already validate the tier should use this instead of the
+ * raw map so misconfiguration fails loudly at the point of use.
+ */
+export function requirePriceId(tier: PlanTier): string {
+  const id = STRIPE_PRICES[tier]
+  if (!id) {
+    throw new Error(
+      `STRIPE_PRICE_${tier.toUpperCase()} is not configured. Set it in the environment.`
+    )
+  }
+  return id
+}
 
 export type PlanTier = keyof typeof STRIPE_PRICES
 

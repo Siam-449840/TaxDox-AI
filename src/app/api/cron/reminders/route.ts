@@ -1,24 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { deadlineReminderEmail } from '@/lib/email-templates'
-import { differenceInCalendarDays, format } from 'date-fns'
+import { runReminderSweep } from '@/lib/jobs/reminders'
+import { logger } from '@/lib/logger'
 
 // ─────────────────────────────────────────────────────────────────
 // Cron-style deadline reminder scheduler.
 //
-// Triggered by an external scheduler (or manually) with a simple API
-// key check via the `?key=` query param. The default key is taken
-// from `CRON_API_KEY` (env), falling back to `taxdox-cron-key` for
-// local development.
+// Triggered by an external scheduler (or manually) with an API-key check via
+// the `?key=` query param. There is NO default key — `CRON_API_KEY` must be
+// set; if unset the endpoint returns 503 (refusing to run on a guessable
+// value). The sweep runs across ALL firms.
 //
-// For every engagement whose deadline is within the next 14 days,
-// where the status is NOT 'done' or 'created', and where no
-// `deadline_reminder` email has been logged in the past 3 days, this
-// endpoint:
-//   • Computes the number of days until the deadline
-//   • Builds the email body using `deadlineReminderEmail`
-//   • Persists an EmailLog with status 'sent' addressed to the
-//     engagement's client
+// For an authenticated, single-firm trigger (the in-app "Run reminders"
+// button) see POST /api/engagements/reminders/run instead.
 //
 // Returns: { processed: N, skipped: N, reminders: [...] }
 // ─────────────────────────────────────────────────────────────────
@@ -26,100 +19,30 @@ import { differenceInCalendarDays, format } from 'date-fns'
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const key = searchParams.get('key')
-  const expectedKey = process.env.CRON_API_KEY || 'taxdox-cron-key'
+  // No insecure default: if CRON_API_KEY is unset, return 503 rather than
+  // accepting a publicly-known value.
+  const expectedKey = process.env.CRON_API_KEY
+  if (!expectedKey) {
+    return NextResponse.json(
+      { error: 'Cron not configured (CRON_API_KEY unset)' },
+      { status: 503 }
+    )
+  }
 
-  if (key !== expectedKey) {
+  if (!key || key !== expectedKey) {
+    logger.security.warn('Cron reminders invoked with invalid key')
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const now = new Date()
-  const fourteenDaysFromNow = new Date(
-    now.getTime() + 14 * 24 * 60 * 60 * 1000
-  )
-  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-
-  // Find engagements with upcoming deadlines (status NOT done/created)
-  const engagements = await db.engagement.findMany({
-    where: {
-      status: { notIn: ['done', 'created'] },
-      deadline: { gte: now, lte: fourteenDaysFromNow },
-    },
-    include: { client: true },
-  })
-
-  const reminders: Array<{
-    engagementId: string
-    client: string
-    email: string
-    engagementType: string
-    taxYear: number
-    daysLeft: number
-    deadline: string
-  }> = []
-  let skipped = 0
-
-  for (const engagement of engagements) {
-    // Skip engagements with no client email — we can't reach them
-    if (!engagement.client?.email) {
-      skipped++
-      continue
-    }
-
-    // Check if a reminder was already sent in the last 3 days
-    const recentReminder = await db.emailLog.findFirst({
-      where: {
-        engagementId: engagement.id,
-        template: 'deadline_reminder',
-        sentAt: { gte: threeDaysAgo },
-      },
-      select: { id: true },
+  try {
+    const result = await runReminderSweep()
+    logger.notification.info('Reminder sweep complete', {
+      processed: result.processed,
+      skipped: result.skipped,
     })
-
-    if (recentReminder) {
-      skipped++
-      continue
-    }
-
-    const daysLeft = differenceInCalendarDays(engagement.deadline!, now)
-    const emailTpl = deadlineReminderEmail(
-      engagement.client.name,
-      engagement.engagementType,
-      engagement.taxYear,
-      daysLeft,
-      format(engagement.deadline!, 'MMMM d, yyyy')
-    )
-
-    await db.emailLog.create({
-      data: {
-        firmId: engagement.firmId,
-        engagementId: engagement.id,
-        clientId: engagement.clientId,
-        toEmail: engagement.client.email,
-        toName: engagement.client.name,
-        fromName: 'Meridian CPA Group',
-        subject: emailTpl.subject,
-        body: emailTpl.body,
-        template: emailTpl.template,
-        status: 'sent',
-        sentAt: now,
-      },
-    })
-
-    reminders.push({
-      engagementId: engagement.id,
-      client: engagement.client.name,
-      email: engagement.client.email,
-      engagementType: engagement.engagementType,
-      taxYear: engagement.taxYear,
-      daysLeft,
-      deadline: format(engagement.deadline!, 'MMMM d, yyyy'),
-    })
+    return NextResponse.json(result)
+  } catch (error) {
+    logger.notification.error('Reminder sweep failed', { error: String(error) })
+    return NextResponse.json({ error: 'Sweep failed' }, { status: 500 })
   }
-
-  return NextResponse.json({
-    processed: reminders.length,
-    skipped,
-    reminders,
-    ranAt: now.toISOString(),
-  })
 }

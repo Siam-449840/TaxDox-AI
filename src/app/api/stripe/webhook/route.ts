@@ -81,22 +81,26 @@ export async function POST(req: NextRequest) {
             unpaid: 'past_due',
           }
 
-          // Determine tier from price ID
+          // Determine tier from price ID using the canonical price map.
+          // A missing/unrecognized price is recorded as null rather than
+          // silently defaulting to 'starter'.
           const priceId = subscription.items.data[0]?.price?.id
           const tierMap: Record<string, string> = {
-            [process.env.STRIPE_PRICE_STARTER || 'price_starter']: 'starter',
-            [process.env.STRIPE_PRICE_PROFESSIONAL || 'price_professional']: 'professional',
-            [process.env.STRIPE_PRICE_BUSINESS || 'price_business']: 'business',
+            [process.env.STRIPE_PRICE_STARTER ?? '']: 'starter',
+            [process.env.STRIPE_PRICE_PROFESSIONAL ?? '']: 'professional',
+            [process.env.STRIPE_PRICE_BUSINESS ?? '']: 'business',
           }
-          const tier = tierMap[priceId || ''] || 'starter'
+          const tier = priceId ? (tierMap[priceId] ?? null) : null
 
           await db.firm.update({
             where: { id: firmId },
             data: {
               subscriptionStatus: statusMap[subscription.status] || 'incomplete',
-              subscriptionTier: tier,
+              // Only update the tier when we recognized the price; leave the
+              // existing tier untouched if the price id is unmapped.
+              ...(tier ? { subscriptionTier: tier } : {}),
               stripeSubscriptionId: subscription.id,
-              stripePriceId: priceId,
+              stripePriceId: priceId ?? null,
             },
           })
 

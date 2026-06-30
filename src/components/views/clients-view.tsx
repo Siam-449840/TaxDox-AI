@@ -229,8 +229,6 @@ export function ClientsView() {
     })
   }, [clients, search, typeFilter, statusFilter])
 
-  const firmId = clients[0]?.firmId
-
   // ─── Dialog handlers ─────────────────────────────────────────
   function openCreate() {
     setEditingId(null)
@@ -276,7 +274,7 @@ export function ClientsView() {
         setDialogOpen(false)
       } else {
         const payload = {
-          firmId: firmId || 'firm-1-placeholder',
+          // firmId is resolved server-side from the session — never sent.
           name: form.name.trim(),
           email: form.email.trim(),
           phone: form.phone.trim() || null,

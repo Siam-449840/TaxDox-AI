@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { getStripe } from '@/lib/stripe'
+import { appUrl } from '@/lib/urls'
 
 export async function POST() {
   try {
@@ -25,7 +26,6 @@ export async function POST() {
     }
 
     const stripe = getStripe()
-    const appUrl = process.env.APP_URL || 'http://localhost:3000'
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: firm.stripeCustomerId,

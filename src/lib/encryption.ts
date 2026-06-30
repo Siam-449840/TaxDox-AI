@@ -5,8 +5,9 @@
  * Disk-level encryption alone is not sufficient — field-level encryption ensures
  * that even if the database is compromised, PII remains encrypted.
  *
- * In production: encryption key stored in AWS KMS / Cloudflare KV (never in DB).
- * In development: key from ENCRYPTION_KEY env var (with secure default).
+ * In production: the key MUST come from ENCRYPTION_KEY (validated at boot by
+ * validateEnv()); there is no secure default. In development only, a dev-only
+ * fallback key is used so local work doesn't require a configured secret.
  *
  * Usage:
  *   import { encryptPII, decryptPII, maskPII } from '@/lib/encryption'
@@ -22,13 +23,26 @@ const ALGORITHM = 'aes-256-gcm'
 const IV_LENGTH = 16
 const TAG_LENGTH = 16
 
-// In production, this key comes from AWS KMS / Vault.
-// In development, we use a stable env var with a secure default.
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'taxdox-ai-dev-encryption-key-change-in-prod-32b!'
+// The PII encryption key MUST be provided via ENCRYPTION_KEY. There is no
+// secure default: a publicly-known key would let anyone with DB access
+// decrypt every SSN/EIN. We resolve lazily so validateEnv() (boot) gets the
+// chance to fail loud first; calls here hard-error if the key is missing in
+// production, and fall back to a dev-only key otherwise.
+const DEV_FALLBACK_KEY = 'taxdox-dev-only-encryption-key-DO-NOT-USE-IN-PROD-32b!'
+const isProd = process.env.NODE_ENV === 'production'
 
-// Derive a 32-byte key from the passphrase using SHA-256
 function getKey(): Buffer {
-  return crypto.createHash('sha256').update(ENCRYPTION_KEY).digest()
+  const raw = process.env.ENCRYPTION_KEY
+  if (!raw || raw.trim() === '') {
+    if (isProd) {
+      // Should never reach here — validateEnv() blocks boot — but defend in depth.
+      throw new Error('[encryption] ENCRYPTION_KEY is required in production.')
+    }
+    // eslint-disable-next-line no-console
+    console.warn('[encryption] ENCRYPTION_KEY unset — using dev-only key. NEVER use in production.')
+    return crypto.createHash('sha256').update(DEV_FALLBACK_KEY).digest()
+  }
+  return crypto.createHash('sha256').update(raw).digest()
 }
 
 /**

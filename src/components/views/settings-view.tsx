@@ -527,18 +527,15 @@ function GeneralSection({
     toast.info('Form reset to current values')
   }
 
-  // Trigger the cron-style reminder sweep manually. The default API
-  // key is exposed to the client as NEXT_PUBLIC_CRON_API_KEY so the
-  // button works in development without server-side configuration;
-  // fall back to the same default key the cron route uses.
+  // Trigger the deadline-reminder sweep manually for this firm. Uses the
+  // authenticated admin endpoint (NOT the cron key) so no secret is ever
+  // shipped to the browser.
   const handleRunReminders = async () => {
     setRunningReminders(true)
     try {
-      const cronKey =
-        process.env.NEXT_PUBLIC_CRON_API_KEY || 'taxdox-cron-key'
-      const res = await fetch(
-        `/api/cron/reminders?key=${encodeURIComponent(cronKey)}`
-      )
+      const res = await fetch('/api/engagements/reminders/run', {
+        method: 'POST',
+      })
       if (!res.ok) {
         throw new Error(`Request failed (${res.status})`)
       }

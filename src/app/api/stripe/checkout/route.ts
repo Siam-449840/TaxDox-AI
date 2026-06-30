@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { getStripe, STRIPE_PRICES, type PlanTier } from '@/lib/stripe'
+import { getStripe, STRIPE_PRICES, requirePriceId, type PlanTier } from '@/lib/stripe'
+import { appUrl } from '@/lib/urls'
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,8 +30,7 @@ export async function POST(req: NextRequest) {
     }
 
     const stripe = getStripe()
-    const priceId = STRIPE_PRICES[tier]
-    const appUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const priceId = requirePriceId(tier)
 
     // Create or reuse Stripe customer
     let customerId = firm.stripeCustomerId
