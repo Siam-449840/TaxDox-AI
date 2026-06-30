@@ -1,0 +1,4 @@
+-- AlterTable: add MFA/2FA fields to User
+ALTER TABLE "User" ADD COLUMN "mfaEnabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "User" ADD COLUMN "mfaSecret" TEXT;
+ALTER TABLE "User" ADD COLUMN "mfaBackupCodes" TEXT;
