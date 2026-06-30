@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
             }).join('\n\n')
             pdfText = sheets
           }
-          logger.ai.info(`[AI Classify] Spreadsheet text extracted: ${pdfText.length} chars`)
+          logger.ai.info(`AI classify: Spreadsheet text extracted: ${(pdfText ?? '').length} chars`)
         } catch (ssErr) {
           logger.ai.error('AI classify:  Spreadsheet text extraction failed:', { error: String(ssErr) })
         }
