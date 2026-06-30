@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { DOCUMENT_TYPE_MAP } from '@/lib/constants'
 import { getObjectStore } from '@/lib/object-store'
+import { sendEmail } from '@/lib/email'
 import { logger } from '@/lib/logger'
 import { extractionCompleteEmail } from '@/lib/email-templates'
+
+// Minimal HTML escaper so plain-text email bodies render safely in HTML view.
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
 
 /**
  * AI Field-Level Data Extraction Engine
@@ -354,8 +360,9 @@ ${sanitized.slice(0, 8000)}`
 
   // ── Send "extraction complete" email to the client ──────────────────
   // Auto-fires once AI extraction has finished so the client knows their
-  // uploaded document has been parsed. Best-effort: never fail the
-  // extraction response because the email log could not be written.
+  // uploaded document has been parsed. Delivered via the real transport
+  // (Resend/log) and the EmailLog reflects the actual result. Best-effort:
+  // never fails the extraction response.
   try {
     const docWithClient = await db.document.findUnique({
       where: { id: documentId },
@@ -373,23 +380,20 @@ ${sanitized.slice(0, 8000)}`
         extractions.length,
         avgConfidence
       )
-      await db.emailLog.create({
-        data: {
-          firmId: docWithClient.client.firmId,
-          engagementId: docWithClient.engagementId || null,
-          clientId: docWithClient.client.id,
-          toEmail: docWithClient.client.email,
-          toName: docWithClient.client.name,
-          subject: emailTpl.subject,
-          body: emailTpl.body,
-          template: emailTpl.template,
-          status: 'sent',
-          sentAt: new Date(),
-        },
+      await sendEmail({
+        firmId: docWithClient.client.firmId,
+        engagementId: docWithClient.engagementId || null,
+        clientId: docWithClient.client.id,
+        to: docWithClient.client.email,
+        toName: docWithClient.client.name,
+        subject: emailTpl.subject,
+        text: emailTpl.body,
+        html: `<pre style="font-family: ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap;">${escapeHtml(emailTpl.body)}</pre>`,
+        template: emailTpl.template,
       })
     }
   } catch (emailError) {
-    logger.ai.error('extraction_complete email log failed:', { error: String(emailError) })
+    logger.ai.error('extraction_complete email failed', { error: String(emailError) })
   }
 
   return NextResponse.json({

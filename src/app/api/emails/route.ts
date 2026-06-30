@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { sendEmail } from '@/lib/email'
 import {
   pbcRequestEmail,
   deadlineReminderEmail,
@@ -153,22 +154,36 @@ export async function POST(req: NextRequest) {
       break
   }
 
-  // Persist the simulated email.
-  const email = await db.emailLog.create({
-    data: {
-      firmId,
-      engagementId: engagementId ?? engagement?.id ?? null,
-      clientId: clientId ?? clientRecord?.id ?? null,
-      toEmail,
-      toName,
-      fromName: body.fromName ?? 'Meridian CPA Group',
-      subject: content.subject,
-      body: content.body,
-      template: content.template,
-      status: body.status ?? 'sent',
-      sentAt: new Date(),
-    },
+  // Deliver via the real transport (Resend in prod, log-only in dev) and
+  // persist an EmailLog reflecting the actual result. sendEmail() never
+  // throws — failures are recorded as status='failed'.
+  const result = await sendEmail({
+    firmId,
+    engagementId: engagementId ?? engagement?.id ?? null,
+    clientId: clientId ?? clientRecord?.id ?? null,
+    to: toEmail,
+    toName,
+    fromName: body.fromName ?? 'Meridian CPA Group',
+    subject: content.subject,
+    text: content.body,
+    html: `<pre style="font-family: ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap;">${escapeHtml(content.body)}</pre>`,
+    template: content.template,
   })
 
-  return NextResponse.json({ email }, { status: 201 })
+  // Re-read the just-written EmailLog so the response shape stays stable for
+  // existing clients (sendEmail writes the row but doesn't return it).
+  const email = await db.emailLog.findFirst({
+    where: { firmId, toEmail, subject: content.subject },
+    orderBy: { sentAt: 'desc' },
+    take: 1,
+  })
+
+  return NextResponse.json(
+    { email, status: result.status, error: result.error },
+    { status: result.status === 'failed' ? 502 : 201 }
+  )
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }

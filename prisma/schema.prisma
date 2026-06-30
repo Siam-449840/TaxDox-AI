@@ -376,3 +376,23 @@ model EmailLog {
   @@index([engagementId])
   @@index([clientId])
 }
+
+// ─── Outbox (transactional side-effect reliability, ADR-007) ─────
+
+model OutboxEvent {
+  id             String   @id @default(cuid())
+  firmId         String
+  eventType      String   // see docs/event-catalog.md
+  aggregateType  String   // document/engagement/subscription/email
+  aggregateId    String
+  eventId        String   @unique // stable dedupe key (uuid v5)
+  payload        String   @default("{}") // JSON
+  status         String   @default("pending") // pending/sent/dead_letter/failed
+  attempts       Int      @default(0)
+  lastError      String?
+  createdAt      DateTime @default(now())
+  dispatchedAt   DateTime?
+
+  @@index([firmId])
+  @@index([status, createdAt])
+}

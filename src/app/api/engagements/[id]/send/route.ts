@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { pbcRequestEmail } from '@/lib/email-templates'
+import { sendEmail } from '@/lib/email'
 
 export async function POST(
   req: NextRequest,
@@ -49,9 +50,10 @@ export async function POST(
     },
   })
 
-  // ── Simulate outbound email ────────────────────────────────────
-  // Only log when the request channel was email (or unspecified) so
-  // portal/sms dispatches do not create spurious email logs.
+  // ── Deliver the PBC request email ───────────────────────────────
+  // Only send when the channel is email so portal/sms dispatches don't create
+  // spurious logs. Delivers via the real transport (Resend/log) and persists
+  // an EmailLog reflecting the actual result.
   if (sendVia === 'email') {
     const template = pbcRequestEmail(
       engagement.client.name,
@@ -59,22 +61,23 @@ export async function POST(
       engagement.taxYear,
       engagement.deadline ?? new Date()
     )
-    await db.emailLog.create({
-      data: {
-        firmId: engagement.firmId,
-        engagementId: engagement.id,
-        clientId: engagement.client.id,
-        toEmail: engagement.client.email,
-        toName: engagement.client.name,
-        fromName: 'Meridian CPA Group',
-        subject: template.subject,
-        body: template.body,
-        template: template.template,
-        status: 'sent',
-        sentAt: new Date(),
-      },
+    await sendEmail({
+      firmId: engagement.firmId,
+      engagementId: engagement.id,
+      clientId: engagement.client.id,
+      to: engagement.client.email,
+      toName: engagement.client.name,
+      fromName: 'Meridian CPA Group',
+      subject: template.subject,
+      text: template.body,
+      html: `<pre style="font-family: ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap;">${escapeHtml(template.body)}</pre>`,
+      template: template.template,
     })
   }
 
   return NextResponse.json({ success: true })
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }

@@ -9,6 +9,7 @@
 
 import { db } from '@/lib/db'
 import { deadlineReminderEmail } from '@/lib/email-templates'
+import { sendEmail } from '@/lib/email'
 import { differenceInCalendarDays, format } from 'date-fns'
 
 export interface ReminderResult {
@@ -85,20 +86,19 @@ export async function runReminderSweep(
       format(engagement.deadline!, 'MMMM d, yyyy')
     )
 
-    await db.emailLog.create({
-      data: {
-        firmId: engagement.firmId,
-        engagementId: engagement.id,
-        clientId: engagement.clientId,
-        toEmail: engagement.client.email,
-        toName: engagement.client.name,
-        fromName: 'Meridian CPA Group',
-        subject: emailTpl.subject,
-        body: emailTpl.body,
-        template: emailTpl.template,
-        status: 'sent',
-        sentAt: now,
-      },
+    // Deliver via the real transport (Resend in prod, log-only in dev) and
+    // persist an EmailLog reflecting the actual transport result.
+    await sendEmail({
+      firmId: engagement.firmId,
+      engagementId: engagement.id,
+      clientId: engagement.clientId,
+      to: engagement.client.email,
+      toName: engagement.client.name,
+      fromName: 'Meridian CPA Group',
+      subject: emailTpl.subject,
+      text: emailTpl.body,
+      html: `<pre style="font-family: ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap;">${escapeHtml(emailTpl.body)}</pre>`,
+      template: emailTpl.template,
     })
 
     reminders.push({
@@ -118,4 +118,12 @@ export async function runReminderSweep(
     reminders,
     ranAt: now.toISOString(),
   }
+}
+
+// Minimal HTML escaper so plain-text email bodies render safely in the HTML view.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 }
