@@ -6,6 +6,7 @@ import { getObjectStore, generateKey } from '@/lib/object-store'
 import { logger } from '@/lib/logger'
 import { isQueueEnabled, getInngest, EVENTS } from '@/inngest/client'
 import { runExtraction } from '@/lib/jobs/extraction'
+import { getIdempotentResult, storeIdempotentResult } from '@/lib/idempotency'
 import { z } from 'zod'
 
 const uploadMetaSchema = z.object({
@@ -17,6 +18,13 @@ const uploadMetaSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    // Idempotency replay: if the client retries an upload with the same
+    // Idempotency-Key, return the original result instead of re-uploading.
+    const idem = await getIdempotentResult(req)
+    if (idem.hit) {
+      return NextResponse.json(idem.body, { status: idem.status })
+    }
+
     const authz = await requirePermission(req, 'document:write', 'document')
     if (authz instanceof NextResponse) return authz
     const { firmId } = authz
@@ -134,7 +142,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    return NextResponse.json({
+    const responseBody = {
       document,
       jobId,
       status: isQueueEnabled() ? 'queued' : 'processing',
@@ -142,7 +150,13 @@ export async function POST(req: NextRequest) {
       fileSize: file.size,
       mimeType: file.type,
       message: 'File uploaded successfully',
-    })
+    }
+
+    // Cache the result so a client retry with the same Idempotency-Key
+    // replays this response instead of creating a duplicate upload.
+    await storeIdempotentResult(req, responseBody, 201)
+
+    return NextResponse.json(responseBody, { status: 201 })
   } catch (error) {
     logger.document.error('Upload error', { error: String(error) })
     return NextResponse.json(

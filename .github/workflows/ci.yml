@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Typecheck · Lint · Build · Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: ankane/pgvector:v0.5.1
+        env:
+          POSTGRES_USER: taxdox_ci
+          POSTGRES_PASSWORD: taxdox_ci
+          POSTGRES_DB: taxdox_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U taxdox_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://taxdox_ci:taxdox_ci@localhost:5432/taxdox_ci
+      # CI-only secrets: boot validation must pass, so provide throwaway values.
+      NEXTAUTH_SECRET: ci-nextauth-secret-throwaway-0000000000
+      NEXTAUTH_URL: http://localhost:3000
+      ENCRYPTION_KEY: ci-encryption-key-throwaway-00000000000000000000
+      APP_URL: http://localhost:3000
+      STRIPE_SECRET_KEY: sk_test_ci_throwaway
+      STRIPE_WEBHOOK_SECRET: whsec_ci_throwaway
+      STRIPE_PRICE_STARTER: price_ci_starter
+      STRIPE_PRICE_PROFESSIONAL: price_ci_pro
+      STRIPE_PRICE_BUSINESS: price_ci_business
+      CRON_API_KEY: ci-cron-key-throwaway
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: bunx prisma generate
+
+      - name: Apply migrations
+        run: bunx prisma migrate deploy
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Audit (high/critical only)
+        run: bunx npm-audit-html || true
+        # Fail only on high/critical vulnerabilities.
+      - name: Audit gate
+        run: |
+          set -e
+          bunx npm audit --audit-level=high --omit=dev > /tmp/audit.txt || {
+            echo "High/critical vulnerabilities found:"; cat /tmp/audit.txt; exit 1
+          }
+
+      - name: Build
+        run: bun run build
+        env:
+          # Production build exercises validateEnv(); provide all required vars.
+          NODE_ENV: production
+
+      - name: Smoke test
+        run: bun run smoke:ci
+        env:
+          APP_URL: http://localhost:3000

@@ -13,7 +13,12 @@
     "db:reset": "prisma migrate reset",
     "db:seed": "bun prisma/seed.ts",
     "smoke": "bash scripts/smoke-test.sh",
-    "smoke:ci": "bash scripts/smoke-test.sh || (echo 'SMOKE TEST FAILED — blocking deploy' && exit 1)"
+    "smoke:ci": "bash scripts/smoke-test.sh || (echo 'SMOKE TEST FAILED — blocking deploy' && exit 1)",
+    "perf:baseline": "bun scripts/baseline-perf.ts",
+    "loadtest": "k6 run load-tests/k6-extraction.js",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:backup": "bash scripts/backup-db.sh",
+    "db:restore": "bash scripts/restore-db.sh"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1076.0",

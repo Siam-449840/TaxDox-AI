@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "bun run build",
+  "installCommand": "bun install --frozen-lockfile",
+  "regions": ["sfo1"],
+  "crons": [
+    {
+      "path": "/api/cron/reminders?key=$CRON_API_KEY",
+      "schedule": "0 13 * * *"
+    }
+  ],
+  "functions": {
+    "src/app/api/documents/upload/route.ts": { "maxDuration": 60 },
+    "src/app/api/ai/extract/route.ts": { "maxDuration": 60 },
+    "src/app/api/ai/classify/route.ts": { "maxDuration": 60 },
+    "src/app/api/inngest/route.ts": { "maxDuration": 300 }
+  }
+}
