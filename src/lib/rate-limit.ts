@@ -112,7 +112,8 @@ export interface RateLimitResult {
 export async function checkRateLimit(
   identifier: string
 ): Promise<RateLimitResult> {
-  const isDev = process.env.NODE_ENV !== 'production'
+  const allowMemoryFallback =
+    process.env.NODE_ENV !== 'production' || process.env.CI === 'true'
   const hasRedis = !!(upstashUrl() && upstashToken())
 
   try {
@@ -126,8 +127,9 @@ export async function checkRateLimit(
       return { blocked: false, count, retryAfterSec: ttl }
     }
 
-    if (isDev) {
-      // In-memory fallback for local dev.
+    if (allowMemoryFallback) {
+      // In-memory fallback for local dev and CI smoke tests. Real production
+      // still fails closed when Redis is missing.
       const { count, ttl } = memoryIncr(identifier, WINDOW_SECONDS)
       if (count > MAX_ATTEMPTS) {
         return { blocked: true, count, retryAfterSec: ttl }
@@ -143,9 +145,9 @@ export async function checkRateLimit(
     return { blocked: true, count: 0, retryAfterSec: WINDOW_SECONDS }
   } catch (error) {
     logger.security.error('Rate limit check failed', { error: String(error) })
-    // On any Redis error in prod, fail closed. In dev, allow (in-memory may
-    // have thrown but it's not a security concern locally).
-    if (!isDev) {
+    // On any Redis error in real prod, fail closed. In dev/CI, allow so local
+    // and automated smoke tests are not blocked by third-party infrastructure.
+    if (!allowMemoryFallback) {
       return { blocked: true, count: 0, retryAfterSec: WINDOW_SECONDS }
     }
     return { blocked: false, count: 0, retryAfterSec: 0 }
