@@ -78,6 +78,35 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    if (data.engagementId) {
+      const owningEngagement = await db.engagement.findFirst({
+        where: { id: data.engagementId, firmId, clientId: data.clientId },
+        select: { id: true },
+      })
+      if (!owningEngagement) {
+        return NextResponse.json(
+          { error: 'Engagement not found in your firm' },
+          { status: 404 }
+        )
+      }
+    }
+
+    if (data.pbcItemId) {
+      const owningPbcItem = await db.pbcItem.findFirst({
+        where: {
+          id: data.pbcItemId,
+          pbcList: { engagement: { firmId, clientId: data.clientId } },
+        },
+        select: { id: true },
+      })
+      if (!owningPbcItem) {
+        return NextResponse.json(
+          { error: 'PBC item not found in your firm' },
+          { status: 404 }
+        )
+      }
+    }
+
     // ── Store the file via the ObjectStore abstraction (R2 in prod, local
     // disk in dev). The returned key is what we persist.
     const buffer = Buffer.from(await file.arrayBuffer())

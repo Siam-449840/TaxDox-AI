@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
+import { requirePermission } from '@/lib/permissions'
 import {
   pbcRequestEmail,
   deadlineReminderEmail,
@@ -21,6 +22,10 @@ import {
  * Returns { emails: [...] } sorted newest-first.
  */
 export async function GET(req: NextRequest) {
+  const authz = await requirePermission(req, 'email:read', 'email')
+  if (authz instanceof NextResponse) return authz
+  const { firmId } = authz
+
   const { searchParams } = new URL(req.url)
   const engagementId = searchParams.get('engagementId')
   const clientId = searchParams.get('clientId')
@@ -30,7 +35,7 @@ export async function GET(req: NextRequest) {
     ? Math.min(500, Math.max(1, Math.floor(rawLimit)))
     : 100
 
-  const where: Record<string, unknown> = {}
+  const where: Record<string, unknown> = { firmId }
   if (engagementId) where.engagementId = engagementId
   if (clientId) where.clientId = clientId
   if (template) where.template = template
@@ -68,6 +73,10 @@ export async function GET(req: NextRequest) {
  * Returns { email } — the created EmailLog record.
  */
 export async function POST(req: NextRequest) {
+  const authz = await requirePermission(req, 'email:write', 'email')
+  if (authz instanceof NextResponse) return authz
+  const { firmId } = authz
+
   const body = await req.json()
   const template = (body.template as EmailTemplate) ?? 'pbc_request'
 
@@ -77,26 +86,21 @@ export async function POST(req: NextRequest) {
 
   const [engagement, client] = await Promise.all([
     engagementId
-      ? db.engagement.findUnique({
-          where: { id: engagementId },
+      ? db.engagement.findFirst({
+          where: { id: engagementId, firmId },
           include: { client: true },
         })
       : Promise.resolve(null),
     clientId
-      ? db.client.findUnique({ where: { id: clientId } })
+      ? db.client.findFirst({ where: { id: clientId, firmId } })
       : Promise.resolve(null),
   ])
 
-  // Determine firmId (prefer body → engagement → client → first firm)
-  let firmId: string | undefined = body.firmId
-  if (!firmId && engagement) firmId = engagement.firmId
-  if (!firmId && client) firmId = client.firmId
-  if (!firmId) {
-    const firstFirm = await db.firm.findFirst({ select: { id: true } })
-    firmId = firstFirm?.id
+  if (engagementId && !engagement) {
+    return NextResponse.json({ error: 'Engagement not found in your firm' }, { status: 404 })
   }
-  if (!firmId) {
-    return NextResponse.json({ error: 'Could not resolve firm' }, { status: 400 })
+  if (clientId && !client) {
+    return NextResponse.json({ error: 'Client not found in your firm' }, { status: 404 })
   }
 
   // Resolve recipient info

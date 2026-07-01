@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requirePermission } from '@/lib/permissions'
 
-export async function GET() {
+export async function GET(req: Request) {
+  const authz = await requirePermission(req as never, 'dashboard:read', 'dashboard')
+  if (authz instanceof NextResponse) return authz
+  const { firmId } = authz
+
   const [engagements, clients, documents, teamMembers, pbcItems] = await Promise.all([
     db.engagement.findMany({
+      where: { firmId },
       include: { client: true, assignedTo: true },
       orderBy: { updatedAt: 'desc' },
     }),
-    db.client.count(),
-    db.document.count(),
-    db.teamMember.findMany(),
-    db.pbcItem.count(),
+    db.client.count({ where: { firmId } }),
+    db.document.count({ where: { client: { firmId } } }),
+    db.teamMember.findMany({ where: { firmId } }),
+    db.pbcItem.count({ where: { pbcList: { engagement: { firmId } } } }),
   ])
 
   const active = engagements.filter((e) =>
@@ -38,13 +44,22 @@ export async function GET() {
 
   // Document processing stats
   const docsByStatus: Record<string, number> = {}
-  const allDocs = await db.document.findMany({ select: { status: true } })
+  const allDocs = await db.document.findMany({
+    where: { client: { firmId } },
+    select: { status: true },
+  })
   for (const d of allDocs) {
     docsByStatus[d.status] = (docsByStatus[d.status] || 0) + 1
   }
 
   // Recent activity (from activities table)
   const recentActivities = await db.activity.findMany({
+    where: {
+      OR: [
+        { engagement: { firmId } },
+        { document: { client: { firmId } } },
+      ],
+    },
     take: 10,
     orderBy: { createdAt: 'desc' },
     include: { engagement: { include: { client: true } } },
@@ -75,7 +90,9 @@ export async function GET() {
   }))
 
   // Processing accuracy (mock from extractions)
-  const extractions = await db.extraction.findMany()
+  const extractions = await db.extraction.findMany({
+    where: { document: { client: { firmId } } },
+  })
   const avgConfidence =
     extractions.length > 0
       ? extractions.reduce((sum, e) => sum + e.confidence, 0) / extractions.length

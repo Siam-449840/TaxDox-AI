@@ -5,6 +5,7 @@ import { getObjectStore } from '@/lib/object-store'
 import { sendEmail } from '@/lib/email'
 import { logger } from '@/lib/logger'
 import { extractionCompleteEmail } from '@/lib/email-templates'
+import { requirePermission } from '@/lib/permissions'
 
 // Minimal HTML escaper so plain-text email bodies render safely in HTML view.
 function escapeHtml(s: string): string {
@@ -89,6 +90,25 @@ function getMockValues(docType: string): Record<string, string> {
 export async function POST(req: NextRequest) {
   const body = await req.json()
   const { documentId, fileContent, mimeType } = body
+  const expectedInternalKey = process.env.INTERNAL_API_KEY || process.env.CRON_API_KEY
+  const providedInternalKey = req.headers.get('x-taxdox-internal-key')
+  const isInternal =
+    (!!expectedInternalKey && providedInternalKey === expectedInternalKey) ||
+    (!expectedInternalKey &&
+      process.env.NODE_ENV !== 'production' &&
+      providedInternalKey === 'dev-internal')
+
+  if (!isInternal) {
+    const authz = await requirePermission(req, 'extraction:write', 'extraction')
+    if (authz instanceof NextResponse) return authz
+    const document = await db.document.findFirst({
+      where: { id: documentId, client: { firmId: authz.firmId } },
+      select: { id: true },
+    })
+    if (!document) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+    }
+  }
 
   const document = await db.document.findUnique({
     where: { id: documentId },

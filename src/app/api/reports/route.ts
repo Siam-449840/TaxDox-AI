@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(req: NextRequest) {
+  const authz = await requirePermission(req, 'report:read', 'report')
+  if (authz instanceof NextResponse) return authz
+  const { firmId } = authz
+
   const { searchParams } = new URL(req.url)
   const range = searchParams.get('range') || '30d'
+  void range
 
   const engagements = await db.engagement.findMany({
+    where: { firmId },
     include: { client: true, assignedTo: true, documents: true },
   })
-  const documents = await db.document.findMany({ include: { extractions: true } })
-  const teamMembers = await db.teamMember.findMany()
-  const extractions = await db.extraction.findMany()
+  const documents = await db.document.findMany({
+    where: { client: { firmId } },
+    include: { extractions: true },
+  })
+  const teamMembers = await db.teamMember.findMany({ where: { firmId } })
+  const extractions = await db.extraction.findMany({
+    where: { document: { client: { firmId } } },
+  })
 
   // Operational metrics
   const processingTimes = documents

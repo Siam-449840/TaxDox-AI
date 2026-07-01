@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const pbcList = await db.pbcList.findUnique({
-    where: { id },
+  const authz = await requirePermission(_req, 'pbc:read', 'pbc')
+  if (authz instanceof NextResponse) return authz
+  const { firmId } = authz
+
+  const pbcList = await db.pbcList.findFirst({
+    where: { id, engagement: { firmId } },
     include: {
       items: {
         orderBy: { orderIndex: 'asc' },
@@ -29,7 +34,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const authz = await requirePermission(req, 'pbc:write', 'pbc')
+  if (authz instanceof NextResponse) return authz
+  const { firmId } = authz
+
   const body = await req.json()
+  const owned = await db.pbcList.findFirst({
+    where: { id, engagement: { firmId } },
+    select: { id: true },
+  })
+  if (!owned) {
+    return NextResponse.json({ error: 'PBC list not found' }, { status: 404 })
+  }
   const pbcList = await db.pbcList.update({
     where: { id },
     data: { name: body.name },

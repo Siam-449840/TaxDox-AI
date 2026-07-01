@@ -77,56 +77,54 @@ export function getTenantDb(firmId: string) {
   const base = new PrismaClient()
   return base.$extends({
     name: 'tenant-isolation',
-    query: {
-      ...Object.fromEntries(
-        DIRECT_FIRM_TABLES.map((table) => [
-          table,
-          {
-            async findMany({ args, query }: { args: Prisma.AnyTuple; query: any }) {
-              args.where = args.where || {}
-              args.where.firmId = firmId
-              return query(args)
-            },
-            async findFirst({ args, query }: { args: Prisma.AnyTuple; query: any }) {
-              args.where = args.where || {}
-              args.where.firmId = firmId
-              return query(args)
-            },
-            async findUnique({ args, query }: { args: Prisma.AnyTuple; query: any }) {
-              args.where = args.where || {}
-              if (args.where.firmId === undefined) {
-                args.where = { AND: [args.where, { firmId }] }
-              }
-              return query(args)
-            },
-            async count({ args, query }: { args: Prisma.AnyTuple; query: any }) {
-              args.where = args.where || {}
-              args.where.firmId = firmId
-              return query(args)
-            },
-            async update({ args, query }: { args: Prisma.AnyTuple; query: any }) {
-              args.where = args.where || {}
-              args.where.firmId = firmId
-              return query(args)
-            },
-            async updateMany({ args, query }: { args: Prisma.AnyTuple; query: any }) {
-              args.where = args.where || {}
-              args.where.firmId = firmId
-              return query(args)
-            },
-            async delete({ args, query }: { args: Prisma.AnyTuple; query: any }) {
-              args.where = args.where || {}
-              args.where.firmId = firmId
-              return query(args)
-            },
-            async deleteMany({ args, query }: { args: Prisma.AnyTuple; query: any }) {
-              args.where = args.where || {}
-              args.where.firmId = firmId
-              return query(args)
-            },
+    query: Object.fromEntries(
+      DIRECT_FIRM_TABLES.map((table) => [
+        table,
+        {
+          async findMany({ args, query }: { args: any; query: any }) {
+            args.where = args.where || {}
+            args.where.firmId = firmId
+            return query(args)
           },
-        ])
-      ),
-    },
+          async findFirst({ args, query }: { args: any; query: any }) {
+            args.where = args.where || {}
+            args.where.firmId = firmId
+            return query(args)
+          },
+          async findUnique({ args, query }: { args: any; query: any }) {
+            args.where = args.where || {}
+            if (args.where.firmId === undefined) {
+              args.where = { AND: [args.where, { firmId }] }
+            }
+            return query(args)
+          },
+          async count({ args, query }: { args: any; query: any }) {
+            args.where = args.where || {}
+            args.where.firmId = firmId
+            return query(args)
+          },
+          async update({ args, query }: { args: any; query: any }) {
+            args.where = args.where || {}
+            args.where.firmId = firmId
+            return query(args)
+          },
+          async updateMany({ args, query }: { args: any; query: any }) {
+            args.where = args.where || {}
+            args.where.firmId = firmId
+            return query(args)
+          },
+          async delete({ args, query }: { args: any; query: any }) {
+            args.where = args.where || {}
+            args.where.firmId = firmId
+            return query(args)
+          },
+          async deleteMany({ args, query }: { args: any; query: any }) {
+            args.where = args.where || {}
+            args.where.firmId = firmId
+            return query(args)
+          },
+        },
+      ])
+    ) as any,
   })
 }

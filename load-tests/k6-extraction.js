@@ -45,7 +45,7 @@ const PDF_BYTES = Buffer.from(
   'binary'
 )
 
-export default function () {
+export default function uploadAndPoll() {
   const clientId = __ENV.CLIENT_ID || 'seed-client-1'
 
   group('upload + poll', () => {

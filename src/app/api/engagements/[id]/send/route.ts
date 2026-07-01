@@ -2,15 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { pbcRequestEmail } from '@/lib/email-templates'
 import { sendEmail } from '@/lib/email'
+import { requirePermission } from '@/lib/permissions'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const authz = await requirePermission(req, 'pbc:write', 'pbc')
+  if (authz instanceof NextResponse) return authz
+  const { firmId } = authz
+
   const body = await req.json()
-  const engagement = await db.engagement.findUnique({
-    where: { id },
+  const engagement = await db.engagement.findFirst({
+    where: { id, firmId },
     include: { pbcList: true, client: true },
   })
 

@@ -38,7 +38,6 @@ function getKey(): Buffer {
       // Should never reach here — validateEnv() blocks boot — but defend in depth.
       throw new Error('[encryption] ENCRYPTION_KEY is required in production.')
     }
-    // eslint-disable-next-line no-console
     console.warn('[encryption] ENCRYPTION_KEY unset — using dev-only key. NEVER use in production.')
     return crypto.createHash('sha256').update(DEV_FALLBACK_KEY).digest()
   }

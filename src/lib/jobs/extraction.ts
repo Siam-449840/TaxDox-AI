@@ -36,6 +36,14 @@ export interface ExtractionProgress {
 export async function runExtraction(documentId: string): Promise<ExtractionProgress> {
   const aiBreaker = getBreaker('ai-glm', { threshold: 5, cooldownMs: 60_000 })
   const baseUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+  const internalKey =
+    process.env.INTERNAL_API_KEY ||
+    process.env.CRON_API_KEY ||
+    (process.env.NODE_ENV !== 'production' ? 'dev-internal' : '')
+  const internalHeaders = {
+    'Content-Type': 'application/json',
+    ...(internalKey ? { 'x-taxdox-internal-key': internalKey } : {}),
+  }
 
   try {
     await setStage(documentId, 'classifying')
@@ -46,7 +54,7 @@ export async function runExtraction(documentId: string): Promise<ExtractionProgr
     const classifyRes = await aiBreaker.run(() =>
       fetch(`${baseUrl}/api/ai/classify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: internalHeaders,
         body: JSON.stringify({ documentId }),
       })
     )
@@ -62,7 +70,7 @@ export async function runExtraction(documentId: string): Promise<ExtractionProgr
     const extractRes = await aiBreaker.run(() =>
       fetch(`${baseUrl}/api/ai/extract`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: internalHeaders,
         body: JSON.stringify({ documentId }),
       })
     )

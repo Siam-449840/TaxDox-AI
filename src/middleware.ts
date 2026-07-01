@@ -12,6 +12,16 @@ const PUBLIC_API_ROUTES = [
   '/api/cron',
 ]
 
+function internalRequestOk(req: NextRequest): boolean {
+  const provided = req.headers.get('x-taxdox-internal-key')
+  const expected = process.env.INTERNAL_API_KEY || process.env.CRON_API_KEY
+  if (!provided) return false
+  if (!expected && process.env.NODE_ENV !== 'production') {
+    return provided === 'dev-internal'
+  }
+  return !!expected && provided === expected
+}
+
 /**
  * Resolve the set of allowed origins for CSRF protection. In production this
  * is the canonical APP_URL (and NEXTAUTH_URL). In dev we also allow
@@ -86,7 +96,7 @@ export async function middleware(req: NextRequest) {
   // auth and CSRF (Stripe signs its payloads; cron uses an API key).
   const isPublic = PUBLIC_API_ROUTES.some((route) => pathname.startsWith(route))
 
-  if (!isPublic) {
+  if (!isPublic && !internalRequestOk(req)) {
     // CSRF check first — cheap reject before any token work.
     if (!csrfOk(req)) {
       return NextResponse.json(

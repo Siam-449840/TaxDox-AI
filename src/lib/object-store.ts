@@ -65,7 +65,7 @@ const LOCAL_DIR = path.join(process.cwd(), 'download', 'uploads')
 
 class LocalStore implements ObjectStore {
   async put(key: string, data: Buffer, _opts: PutOptions): Promise<StoredObject> {
-    const full = path.join(process.cwd(), key)
+    const full = path.join(/* turbopackIgnore: true */ process.cwd(), key)
     await mkdir(path.dirname(full), { recursive: true })
     await writeFile(full, data)
     return {
@@ -77,7 +77,7 @@ class LocalStore implements ObjectStore {
 
   async get(key: string): Promise<Buffer> {
     // Support both new partitioned keys and legacy flat filenames.
-    const full = path.join(process.cwd(), key)
+    const full = path.join(/* turbopackIgnore: true */ process.cwd(), key)
     try {
       return await readFile(full)
     } catch {
@@ -88,7 +88,7 @@ class LocalStore implements ObjectStore {
 
   async delete(key: string): Promise<void> {
     try {
-      await unlink(path.join(process.cwd(), key))
+      await unlink(path.join(/* turbopackIgnore: true */ process.cwd(), key))
     } catch {
       // Already gone — fine.
     }

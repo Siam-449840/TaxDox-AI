@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { DOCUMENT_TYPES, DOCUMENT_TYPE_MAP, type DocTypeDef } from '@/lib/constants'
 import { getObjectStore } from '@/lib/object-store'
 import { logger } from '@/lib/logger'
+import { requirePermission } from '@/lib/permissions'
 
 /**
  * AI Document Classification Engine
@@ -51,6 +52,25 @@ function classifyFromFilename(filename: string): {
 export async function POST(req: NextRequest) {
   const body = await req.json()
   const { documentId, fileContent, mimeType } = body
+  const expectedInternalKey = process.env.INTERNAL_API_KEY || process.env.CRON_API_KEY
+  const providedInternalKey = req.headers.get('x-taxdox-internal-key')
+  const isInternal =
+    (!!expectedInternalKey && providedInternalKey === expectedInternalKey) ||
+    (!expectedInternalKey &&
+      process.env.NODE_ENV !== 'production' &&
+      providedInternalKey === 'dev-internal')
+
+  if (!isInternal) {
+    const authz = await requirePermission(req, 'ai:use', 'ai')
+    if (authz instanceof NextResponse) return authz
+    const document = await db.document.findFirst({
+      where: { id: documentId, client: { firmId: authz.firmId } },
+      select: { id: true },
+    })
+    if (!document) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+    }
+  }
 
   const document = await db.document.findUnique({
     where: { id: documentId },

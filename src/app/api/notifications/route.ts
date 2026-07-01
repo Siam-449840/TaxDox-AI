@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requirePermission } from '@/lib/permissions'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Notifications API — generates a unified notification feed from live DB state.
@@ -51,7 +52,11 @@ function daysBetween(from: Date, to: Date): number {
   return Math.round((to.getTime() - from.getTime()) / MS_PER_DAY)
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const authz = await requirePermission(req as never, 'dashboard:read', 'notification')
+  if (authz instanceof NextResponse) return authz
+  const { firmId } = authz
+
   const now = new Date()
   const sevenDaysFromNow = new Date(now.getTime() + 7 * MS_PER_DAY)
   const threeDaysAgo = new Date(now.getTime() - 3 * MS_PER_DAY)
@@ -69,6 +74,7 @@ export async function GET() {
     // 1. Deadlines within 7 days (or overdue) for non-done engagements.
     db.engagement.findMany({
       where: {
+        firmId,
         status: { not: 'done' },
         deadline: { lte: sevenDaysFromNow, not: null },
       },
@@ -79,6 +85,7 @@ export async function GET() {
     // 2. Documents processed but low-confidence (not yet reviewed).
     db.document.findMany({
       where: {
+        client: { firmId },
         status: 'processed',
         confidence: { lt: 0.9 },
       },
@@ -98,6 +105,7 @@ export async function GET() {
     // 3. PBC items still pending for more than 3 days.
     db.pbcItem.findMany({
       where: {
+        pbcList: { engagement: { firmId } },
         status: 'pending',
         createdAt: { lt: threeDaysAgo },
       },
@@ -116,6 +124,10 @@ export async function GET() {
     // 4. Recent upload activities (last 24h).
     db.activity.findMany({
       where: {
+        OR: [
+          { engagement: { firmId } },
+          { document: { client: { firmId } } },
+        ],
         type: 'upload',
         createdAt: { gte: oneDayAgo },
       },
@@ -129,6 +141,10 @@ export async function GET() {
     // 5. Recent extract activities (last 24h).
     db.activity.findMany({
       where: {
+        OR: [
+          { engagement: { firmId } },
+          { document: { client: { firmId } } },
+        ],
         type: 'extract',
         createdAt: { gte: oneDayAgo },
       },
@@ -142,6 +158,10 @@ export async function GET() {
     // 6. Unread messages from clients.
     db.message.findMany({
       where: {
+        OR: [
+          { engagement: { firmId } },
+          { client: { firmId } },
+        ],
         read: false,
         fromType: 'client',
       },

@@ -90,7 +90,6 @@ export function validateEnv(): string[] {
 
   // Development: warn but continue (so local dev without every integration works).
   validationError = null
-  // eslint-disable-next-line no-console
   console.warn(
     `[env] Missing (ok in dev): ${missing.join(', ')}. These MUST be set before production.`
   )

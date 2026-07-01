@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { getObjectStore } from '@/lib/object-store'
 import { requirePermission } from '@/lib/permissions'
+import sanitizeHtml from 'sanitize-html'
 
 /**
  * GET /api/documents/[id]/html
@@ -52,9 +53,52 @@ export async function GET(
     const fileBuffer = await store.get(document.storedFilename)
     const mammoth = (await import('mammoth')).default
     const result = await mammoth.convertToHtml({ buffer: fileBuffer })
+    const html = sanitizeHtml(result.value, {
+      allowedTags: [
+        'p',
+        'br',
+        'strong',
+        'b',
+        'em',
+        'i',
+        'u',
+        's',
+        'ul',
+        'ol',
+        'li',
+        'table',
+        'thead',
+        'tbody',
+        'tr',
+        'th',
+        'td',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'blockquote',
+        'a',
+        'span',
+      ],
+      allowedAttributes: {
+        a: ['href', 'name', 'target', 'rel'],
+        span: ['class'],
+        p: ['class'],
+        table: ['class'],
+        th: ['colspan', 'rowspan'],
+        td: ['colspan', 'rowspan'],
+      },
+      allowedSchemes: ['http', 'https', 'mailto'],
+      transformTags: {
+        a: sanitizeHtml.simpleTransform('a', {
+          rel: 'noopener noreferrer',
+          target: '_blank',
+        }),
+      },
+    })
 
     return NextResponse.json({
-      html: result.value,
+      html,
       messages: result.messages,
     })
   } catch (error) {

@@ -323,7 +323,7 @@ async function main() {
   })
 
   // Users — create one User per team member so engagements can be assigned properly
-  const users = []
+  const users: any[] = []
   for (const t of TEAM) {
     const u = await db.user.create({
       data: {
@@ -348,7 +348,7 @@ async function main() {
 
   // Team members — linked to User records via real FK (userId)
   // This eliminates the name-matching join that caused the $0-revenue bug.
-  const teamMembers = []
+  const teamMembers: any[] = []
   for (let i = 0; i < TEAM.length; i++) {
     const t = TEAM[i]
     const tm = await db.teamMember.create({
@@ -367,7 +367,7 @@ async function main() {
   }
 
   // Clients
-  const clients = []
+  const clients: any[] = []
   for (const c of CLIENTS) {
     const client = await db.client.create({
       data: {
