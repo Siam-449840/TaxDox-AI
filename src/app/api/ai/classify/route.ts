@@ -82,6 +82,10 @@ export async function POST(req: NextRequest) {
   let confidence = 0
   let model = 'filename-heuristic'
   let promptVersion: string | undefined
+  // Track whether a real provider attempt actually happened so the fallback
+  // label is accurate (don't append "-fallback" to a heuristic that never
+  // called the provider).
+  let aiAttempted = false
 
   // Read the actual uploaded file from storage to feed the provider.
   let fileBase64: string | null = fileContent || null
@@ -162,6 +166,7 @@ export async function POST(req: NextRequest) {
 
   // ── AI classify via the gateway ─────────────────────────────────
   if ((fileBase64 || (pdfText && pdfText.length > 50))) {
+    aiAttempted = true
     try {
       const gw = getAIGateway()
       const result = await gw.classify({
@@ -187,7 +192,17 @@ export async function POST(req: NextRequest) {
     const result = classifyFromFilename(document.originalFilename)
     matchedType = result.type
     confidence = result.confidence
-    model = fileBase64 ? `${model}-fallback` : (pdfText ? 'pdf-llm-fallback' : 'filename-heuristic')
+    if (model !== 'filename-heuristic') {
+      // AI succeeded but returned null documentType
+      model = `${model}-fallback`
+    } else if (aiAttempted) {
+      // AI was attempted but failed (threw)
+      const primary = (process.env.AI_PROVIDER || 'gemini').trim()
+      model = `${primary}-fallback`
+    } else {
+      // AI was never attempted
+      model = fileBase64 ? 'filename-heuristic' : (pdfText ? 'pdf-llm-fallback' : 'filename-heuristic')
+    }
   }
 
   const typeDef: DocTypeDef | null = matchedType ? DOCUMENT_TYPE_MAP[matchedType] : null

@@ -28,7 +28,12 @@ export interface GoldenFixture {
 
 export interface ExtractionMetrics {
   fieldAccuracy: number // fraction of expected fields matched
-  hallucinationRate: number // fraction of returned fields NOT in expected set or document
+  // Fraction of returned fields whose name is NOT in the expected set. NOTE:
+  // this compares against the expected-field set only — it does NOT verify
+  // presence in the source document text (the scorer has no document access).
+  // A returned value that happens to match document text but isn't in the
+  // expected set still counts here as a "hallucination".
+  hallucinationRate: number
   confidenceCalibration: number // avg |confidence − correct|
   classificationAccuracy: number // 1 or 0
   fieldsEvaluated: number
@@ -64,30 +69,41 @@ export function evaluateExtraction(
   expected: GoldenFixture,
   classify?: ClassifyResult | null
 ): ExtractionMetrics {
-  const expectedNames = new Set(expected.expectedFields.map((f) => f.name))
+  const expectedFields = expected.expectedFields
+  const expectedNames = new Set(expectedFields.map((f) => f.name))
   let correct = 0
   let hallucinated = 0
   let confDeltaSum = 0
+  let fieldsEvaluated = 0
+
+  // Track which expected field names have already been scored so duplicate
+  // returns of the same name can't inflate `correct` past the expected count
+  // (which would let fieldAccuracy exceed 1.0).
+  const scored = new Set<string>()
 
   for (const f of result.fields) {
-    if (!expectedNames.has(f.name)) {
+    fieldsEvaluated++
+    if (!expectedNames.has(f.name) || scored.has(f.name)) {
+      // Either truly unexpected, or a duplicate of an expected name we already
+      // graded. Count as hallucinated (duplicate fields are not trustworthy).
       hallucinated++
       confDeltaSum += Math.abs(f.confidence - 0) // wrong → desired conf 0
       continue
     }
-    const exp = expected.expectedFields.find((e) => e.name === f.name)!
+    scored.add(f.name)
+    const exp = expectedFields.find((e) => e.name === f.name)!
     const isCorrect = valueMatches(f.value, exp.value, exp.tolerance)
     if (isCorrect) correct++
     confDeltaSum += Math.abs(f.confidence - (isCorrect ? 1 : 0))
   }
 
-  const fieldsEvaluated = result.fields.length || 1
-  const expectedCount = expected.expectedFields.length || 1
+  const denom = fieldsEvaluated || 1
+  const expectedCount = expectedFields.length || 1
 
   return {
-    fieldAccuracy: correct / expectedCount,
-    hallucinationRate: fieldsEvaluated > 0 ? hallucinated / fieldsEvaluated : 0,
-    confidenceCalibration: confDeltaSum / fieldsEvaluated,
+    fieldAccuracy: Math.min(1, correct / expectedCount),
+    hallucinationRate: denom > 0 ? hallucinated / denom : 0,
+    confidenceCalibration: confDeltaSum / denom,
     classificationAccuracy: classify && expected.documentType
       ? (classify.documentType === expected.documentType ? 1 : 0)
       : (expected.documentType === null ? 1 : 0),

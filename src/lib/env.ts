@@ -52,7 +52,10 @@ export const OPTIONAL_INTEGRATIONS = {
   queue: () => !!process.env.INNGEST_EVENT_KEY,
   redis: () => !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN,
   sentry: () => !!process.env.SENTRY_DSN,
-  ai: () => !!process.env.GEMINI_API_KEY && process.env.AI_PROVIDER === 'gemini',
+  ai: () => {
+    const provider = (process.env.AI_PROVIDER || 'gemini').trim()
+    return provider === 'gemini' && !!process.env.GEMINI_API_KEY
+  },
   r2: () =>
     !!process.env.R2_ACCOUNT_ID &&
     !!process.env.R2_ACCESS_KEY_ID &&

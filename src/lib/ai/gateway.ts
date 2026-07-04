@@ -50,7 +50,8 @@ async function ensureProvidersRegistered(): Promise<void> {
 // Ordered list of providers to try. Pulled from AI_PROVIDER (primary); future
 // env AI_FALLBACK_PROVIDERS can extend it. Today: just the primary.
 function providerPriority(): string[] {
-  const primary = process.env.AI_PROVIDER || 'gemini'
+  // Trim so "gemini " doesn't create a distinct breaker key / fail registry lookup.
+  const primary = (process.env.AI_PROVIDER || 'gemini').trim()
   const fallbacks = (process.env.AI_FALLBACK_PROVIDERS || '')
     .split(',')
     .map((s) => s.trim())

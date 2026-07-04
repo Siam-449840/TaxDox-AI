@@ -10,10 +10,22 @@
  * Run: bun scripts/seed-tenant-b.ts
  */
 import { PrismaClient } from '@prisma/client'
+import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 
 const db = new PrismaClient()
-const PWD = await bcrypt.hash('AtlasValidation2025!', 12)
+// Read the seed password from env (never commit a real one). A random one is
+// generated + printed once if SEED_TENANT_B_PASSWORD is unset, so this script
+// can never accidentally be run against a non-local DB with a known password.
+const SEED_PASSWORD = process.env.SEED_TENANT_B_PASSWORD || (() => {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SEED_TENANT_B_PASSWORD must be set in production (refusing to use a generated password)')
+  }
+  const generated = `Atlas-${crypto.randomBytes(6).toString('hex')}!`
+  console.log('⚠️  Generated ephemeral seed password (set SEED_TENANT_B_PASSWORD to pin it):', generated)
+  return generated
+})()
+const PWD = await bcrypt.hash(SEED_PASSWORD, 12)
 
 async function main() {
   console.log('🌐 Seeding second tenant (Firm B) for IDOR validation...')

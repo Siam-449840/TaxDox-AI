@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { DOCUMENT_TYPE_MAP } from '@/lib/constants'
 import { getObjectStore } from '@/lib/object-store'
@@ -134,8 +135,9 @@ export async function POST(req: NextRequest) {
 
   let extractedFields: { name: string; value: string; confidence: number }[] = []
   let model = 'simulated'
-  let promptVersion = 'extraction-v1'
+  let promptVersion: string | null = null
   let isFallback = true
+  let aiAttempted = false
 
   // Read the uploaded file from storage to feed the provider.
   let fileBase64: string | null = fileContent || null
@@ -216,6 +218,7 @@ export async function POST(req: NextRequest) {
 
   // ── AI extract via the gateway (image or text) ──────────────────
   if (fileBase64 || (pdfText && pdfText.length > 50)) {
+    aiAttempted = true
     // Sanitize document text for prompt-injection defense before it reaches any
     // provider. (The gateway passes text through verbatim, so defense happens
     // here at the application boundary — same as before.)
@@ -257,9 +260,9 @@ export async function POST(req: NextRequest) {
     extractedFields = typeDef.fields.map((field) => ({
       name: field.name,
       value: mockValues[field.name] || '—',
-      confidence: 0.82 + Math.random() * 0.17,
+      confidence: 0.82 + (crypto.randomBytes(4).readUInt32BE(0) / 0xffffffff) * 0.17,
     }))
-    model = fileBase64 ? `${model}-fallback` : 'simulated'
+    model = 'simulated'
     isFallback = true
   }
 
