@@ -40,7 +40,7 @@ export const options = {
 
 const headers = { cookie: COOKIE, origin: BASE }
 
-export default function () {
+export default function loadTest() {
   group('dashboard', () => {
     const r = http.get(`${BASE}/api/dashboard`, { headers })
     dashboardT.add(r.timings.duration)

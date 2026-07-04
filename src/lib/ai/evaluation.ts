@@ -101,9 +101,7 @@ export function evaluateExtraction(
   const expectedCount = expectedFields.length || 1
 
   let classificationAccuracy = 0
-  if (expected.documentType === null) {
-    classificationAccuracy = 1
-  } else if (classify && classify.documentType === expected.documentType) {
+  if (expected.documentType === null || classify?.documentType === expected.documentType) {
     classificationAccuracy = 1
   }
 

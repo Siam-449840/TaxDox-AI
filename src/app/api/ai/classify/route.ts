@@ -198,13 +198,12 @@ export async function POST(req: NextRequest) {
       // AI was attempted but failed (threw)
       const primary = (process.env.AI_PROVIDER || 'gemini').trim()
       model = `${primary}-fallback`
+    } else if (!fileBase64 && pdfText) {
+      // AI was never attempted, PDF text is available
+      model = 'pdf-llm-fallback'
     } else {
-      // AI was never attempted
-      if (!fileBase64 && pdfText) {
-        model = 'pdf-llm-fallback'
-      } else {
-        model = 'filename-heuristic'
-      }
+      // AI was never attempted, PDF text is not available
+      model = 'filename-heuristic'
     }
   }
 

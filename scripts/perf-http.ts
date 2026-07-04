@@ -7,6 +7,9 @@
  *
  * Usage: bun scripts/perf-http.ts
  */
+import os from 'node:os'
+import path from 'node:path'
+
 const BASE = process.env.PERF_BASE || 'http://localhost:3000'
 
 function percentile(sorted: number[], p: number): number {
@@ -85,30 +88,30 @@ function report(r: ProbeResult, budgetMs: number) {
 async function main() {
   console.log(`\n=== TaxDox AI — HTTP Performance Validation ===`)
   console.log(`Target: ${BASE}\n`)
-  const cookie = await readCookieJar('/tmp/fa.jar')
+  const cookieJarPath = path.join(os.tmpdir(), 'fa.jar')
+  const cookie = await readCookieJar(cookieJarPath)
 
-  const results: any[] = []
-
-  // Public / infra
-  results.push(report(await probe('GET /api/health/live (no DB)', `${BASE}/api/health/live`, '', { n: 100 }), 100))
-  results.push(report(await probe('GET /api/health/ready (DB probe)', `${BASE}/api/health/ready`, '', { n: 60 }), 200))
-
-  // Authenticated DB-backed reads (Firm A — 12 clients, 12 engagements, many docs)
-  results.push(report(await probe('GET /api/dashboard (aggregations)', `${BASE}/api/dashboard`, cookie), 300))
-  results.push(report(await probe('GET /api/clients (list)', `${BASE}/api/clients`, cookie), 300))
-  results.push(report(await probe('GET /api/engagements (list w/ relations)', `${BASE}/api/engagements`, cookie), 300))
-  results.push(report(await probe('GET /api/documents (list w/ extractions)', `${BASE}/api/documents`, cookie), 300))
-  results.push(report(await probe('GET /api/reports (cross-table aggregations)', `${BASE}/api/reports`, cookie), 500))
-  results.push(report(await probe('GET /api/notifications (6 source queries)', `${BASE}/api/notifications`, cookie), 400))
-  results.push(report(await probe('GET /api/emails (list)', `${BASE}/api/emails`, cookie), 300))
-  results.push(report(await probe('GET /api/audit-logs (list)', `${BASE}/api/audit-logs`, cookie), 300))
+  // Public / infra & Authenticated DB-backed reads
+  const results = [
+    report(await probe('GET /api/health/live (no DB)', `${BASE}/api/health/live`, '', { n: 100 }), 100),
+    report(await probe('GET /api/health/ready (DB probe)', `${BASE}/api/health/ready`, '', { n: 60 }), 200),
+    report(await probe('GET /api/dashboard (aggregations)', `${BASE}/api/dashboard`, cookie), 300),
+    report(await probe('GET /api/clients (list)', `${BASE}/api/clients`, cookie), 300),
+    report(await probe('GET /api/engagements (list w/ relations)', `${BASE}/api/engagements`, cookie), 300),
+    report(await probe('GET /api/documents (list w/ extractions)', `${BASE}/api/documents`, cookie), 300),
+    report(await probe('GET /api/reports (cross-table aggregations)', `${BASE}/api/reports`, cookie), 500),
+    report(await probe('GET /api/notifications (6 source queries)', `${BASE}/api/notifications`, cookie), 400),
+    report(await probe('GET /api/emails (list)', `${BASE}/api/emails`, cookie), 300),
+    report(await probe('GET /api/audit-logs (list)', `${BASE}/api/audit-logs`, cookie), 300),
+  ]
 
   // Single-resource reads (engagement detail with deep relations)
   // fetch an engagement id first
   const engList = await fetch(`${BASE}/api/engagements`, { headers: { cookie, origin: BASE } }).then((r) => r.json())
   const engId = engList.engagements?.[0]?.id
   if (engId) {
-    results.push(report(await probe('GET /api/engagements/[id] (deep detail)', `${BASE}/api/engagements/${engId}`, cookie), 300))
+    const engReport = report(await probe('GET /api/engagements/[id] (deep detail)', `${BASE}/api/engagements/${engId}`, cookie), 300)
+    results.push(engReport)
   }
 
   // Write (create + delete a client) — measures write latency + activity log write
@@ -131,7 +134,7 @@ async function main() {
   writeSamples.sort((a, b) => a - b)
   const wp95 = percentile(writeSamples, 95)
   console.log(
-    `  ${wp95 <= 800 ? '✓ PASS' : '✗ FAIL'}  ${'POST /api/clients (create write)'.padEnd(42)} P50 ${percentile(writeSamples,50).toFixed(1).padStart(6)}ms  P95 ${wp95.toFixed(1).padStart(6)}ms  (budget P95≤800ms, n=${writeSamples.length})`
+    `  ${wp95 <= 800 ? '✓ PASS' : '✗ FAIL'}  ${'POST /api/clients (create write)'.padEnd(42)} P50 ${percentile(writeSamples, 50).toFixed(1).padStart(6)}ms  P95 ${wp95.toFixed(1).padStart(6)}ms  (budget P95≤800ms, n=${writeSamples.length})`
   )
 
   console.log('\n=== Summary ===')
@@ -139,8 +142,9 @@ async function main() {
   console.log(`  ${passed}/${results.length} read probes within budget`)
 
   // Save raw results for the report
-  await Bun.write('/tmp/perf-results.json', JSON.stringify(results, null, 2))
-  console.log('  raw: /tmp/perf-results.json')
+  const resultsPath = path.join(os.tmpdir(), 'perf-results.json')
+  await Bun.write(resultsPath, JSON.stringify(results, null, 2))
+  console.log(`  raw: ${resultsPath}`)
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })
