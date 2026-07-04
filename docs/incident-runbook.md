@@ -25,7 +25,7 @@
 ### 2. AI Provider Timeout / Rate Limit
 **Symptoms**: Document extraction stuck in "processing", extraction API returns 429 or 504
 **Runbook**:
-1. Check AI provider status page (z-ai-web-dev-sdk)
+1. Check AI provider status page (Google Gemini — status.cloud.google.com)
 2. Verify API key is valid and quota not exhausted
 3. Fallback to simulated extraction if provider is down
 4. Queue pending extractions and retry when provider recovers

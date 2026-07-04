@@ -8,7 +8,7 @@ The guideline (Section 5) requires AI extraction to be treated as a platform, no
 
 ## Decision
 1. Every extraction records: `modelVersion`, `templateVersion`, `promptVersion`, `isFallback`
-2. Real AI extraction (GLM-4.6V) is distinguishable from simulated/fallback paths
+2. Real AI extraction (active provider — Gemini 3.5 Flash via the AI Gateway; see `docs/ai-architecture.md`) is distinguishable from simulated/fallback paths
 3. Hallucination detection validates extracted values against document text
 4. Prompt injection defense sanitizes document text before AI calls
 5. Cross-document validation checks consistency across an engagement's documents

@@ -277,11 +277,11 @@ export function DocumentsView() {
       setPendingFile(null)
       setUploadProgress(0)
 
-      // Auto-trigger AI processing (classify + extract) via GLM-4.6V
+      // Auto-trigger AI processing (classify + extract) via Gemini 3.5 Flash
       const documentId = data.document?.id
       if (documentId) {
         setProcessing(true)
-        const processingToast = toast.info('Processing with GLM-4.6V...', {
+        const processingToast = toast.info('Processing with Gemini 3.5 Flash...', {
           description: 'Classifying document type and extracting fields.',
         })
         try {
@@ -425,7 +425,7 @@ export function DocumentsView() {
             </div>
             <p className="text-sm font-medium">
               {processing
-                ? 'Processing with GLM-4.6V...'
+                ? 'Processing with Gemini 3.5 Flash...'
                 : 'Uploading file...'}
             </p>
             <div className="h-1.5 w-48 overflow-hidden rounded-full bg-muted">

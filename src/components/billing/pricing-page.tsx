@@ -50,7 +50,7 @@ const PLANS = [
     docsPerMonth: 200,
     features: [
       '200 documents / month',
-      'Full AI extraction (GLM-4.6V)',
+      'Full AI extraction (Gemini 3.5 Flash)',
       'All tax software integrations',
       'Priority support',
       '25 clients',

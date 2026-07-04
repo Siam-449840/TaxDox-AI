@@ -82,6 +82,20 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // If an assignee is provided, they MUST belong to the caller's firm.
+  if (data.assignedToId) {
+    const targetUser = await db.user.findFirst({
+      where: { id: data.assignedToId, firmId },
+      select: { id: true },
+    })
+    if (!targetUser) {
+      return NextResponse.json(
+        { error: 'Assignee not found in your firm' },
+        { status: 404 }
+      )
+    }
+  }
+
   try {
     const engagement = await db.engagement.create({
       data: {

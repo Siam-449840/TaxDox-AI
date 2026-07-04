@@ -11,8 +11,10 @@ import { z } from 'zod'
 
 const uploadMetaSchema = z.object({
   clientId: z.string().min(1),
-  engagementId: z.string().min(1).optional(),
-  pbcItemId: z.string().min(1).optional(),
+  // formData.get() returns `null` for absent fields; `.nullish()` accepts both
+  // null and undefined so an upload without these optional ids validates.
+  engagementId: z.string().min(1).nullish(),
+  pbcItemId: z.string().min(1).nullish(),
   uploadedBy: z.enum(['client', 'user']).default('user'),
 })
 

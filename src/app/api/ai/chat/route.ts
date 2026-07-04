@@ -1,44 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
 import { logger } from '@/lib/logger'
+import { getAIGateway } from '@/lib/ai'
+import { CHAT_SYSTEM_PROMPT } from '@/lib/ai/prompts'
 
-const SYSTEM_PROMPT = `You are TaxDox AI Assistant, an expert tax document intelligence assistant for accounting firms.
-
-You help tax professionals with:
-- Understanding tax document types (W-2, 1099 series, K-1, 1098, etc.)
-- PBC (Prepared by Client) document list management
-- AI data extraction and field-level confidence
-- Tax software integration (UltraTax, CCH, Lacerte, etc.)
-- Workflow automation for tax engagements
-- Tax preparation best practices
-- IRS compliance and deadlines
-
-Keep responses concise, professional, and actionable. Use bullet points when helpful.
-If asked about specific tax advice for a client, remind them to consult a licensed CPA.
-You are part of the TaxDox AI platform — "Other tools extract data. TaxDox AI understands your tax workflow."`
-
+/**
+ * AI Assistant chat. Routes through the AI Gateway (active provider today:
+ * Gemini 3.5 Flash). Preserves the graceful degraded-reply fallback on failure
+ * so a provider outage never breaks the assistant UI.
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { messages } = body
 
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...messages.map((m: { role: string; content: string }) => ({
-          role: m.role,
-          content: m.content,
-        })),
-      ],
-      stream: false,
-    })
+    const gw = getAIGateway()
+    const reply = await gw.chat([
+      { role: 'system', content: CHAT_SYSTEM_PROMPT },
+      ...messages.map((m: { role: 'user' | 'assistant'; content: string }) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    ])
 
-    const reply =
-      completion?.choices?.[0]?.message?.content ||
-      'I apologize, I could not process that request. Please try again.'
-
-    return NextResponse.json({ reply })
+    return NextResponse.json({ reply: reply.reply || 'I apologize, I could not process that request. Please try again.' })
   } catch (error) {
     logger.ai.error('AI chat error:', { error: String(error) })
     return NextResponse.json(

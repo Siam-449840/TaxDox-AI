@@ -40,7 +40,7 @@ const WELCOME_FEATURES = [
   {
     icon: Bot,
     title: 'AI-Powered Classification',
-    description: 'GLM-4.6V vision model automatically detects document type and extracts key fields.',
+    description: 'Gemini 3.5 Flash vision model automatically detects document type and extracts key fields.',
     accent: 'bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300',
   },
   {

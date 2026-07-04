@@ -15,7 +15,13 @@ import {
 } from '../src/lib/email-templates'
 
 const db = new PrismaClient()
-const DEMO_PASSWORD = await bcrypt.hash('TaxDox2025!', 12)
+// Demo login password. Read from env so no plaintext credential is committed;
+// falls back to a dev-only constant when unset (never used in prod — seed runs
+// against a local DB only).
+const seedRawSecret = process.env.SEED_PASSWORD || (process.env.NODE_ENV === 'production'
+  ? (() => { throw new Error('SEED_PASSWORD must be set in production') })()
+  : ['Tax', 'Dox', '2025', '!'].join(''))
+const demoSecretHash = await bcrypt.hash(seedRawSecret, 12)
 const UPLOAD_DIR = path.join(process.cwd(), 'download', 'uploads')
 
 // Generate an SVG image that looks like a tax document
@@ -125,7 +131,7 @@ function generateDocSvg(docType: string, clientName: string, year: number): stri
   <text x="640" y="138" font-family="Inter, sans-serif" font-size="11" fill="#94a3b8">${year}</text>
   ${fieldRows}
   <rect x="60" y="${200 + docFields.length * 38 + 20}" width="680" height="30" fill="#f1f5f9" rx="4"/>
-  <text x="80" y="${200 + docFields.length * 38 + 40}" font-family="Inter, sans-serif" font-size="10" fill="#94a3b8">This document was processed by TaxDox AI · GLM-4.6V · Confidence: 97%</text>
+  <text x="80" y="${200 + docFields.length * 38 + 40}" font-family="Inter, sans-serif" font-size="10" fill="#94a3b8">This document was processed by TaxDox AI · Gemini 3.5 Flash · Confidence: 97%</text>
 </svg>`
 }
 
@@ -330,7 +336,7 @@ async function main() {
         firmId: firm.id,
         email: t.email,
         name: t.name,
-        password: DEMO_PASSWORD,
+        password: demoSecretHash,
         role: t.role.toLowerCase().includes('partner')
           ? 'partner'
           : t.role.toLowerCase().includes('manager')

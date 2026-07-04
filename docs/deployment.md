@@ -22,6 +22,9 @@ Staged, canary rollout (ADR-009). The app is serverless-ready (Vercel) with opti
 | `APP_URL` | your origin |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER/PROFESSIONAL/BUSINESS` | Stripe dashboard |
 | `CRON_API_KEY` | `openssl rand -hex 32` |
+| `AI_PROVIDER` | `gemini` (the active provider; see `docs/ai-architecture.md`) |
+| `GEMINI_API_KEY` | Google Gemini API key |
+| `GEMINI_MODEL` | `gemini-3.5-flash` (or another supported model id) |
 
 **Optional but recommended for full production behavior:**
 
@@ -33,6 +36,7 @@ Staged, canary rollout (ADR-009). The app is serverless-ready (Vercel) with opti
 | `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | distributed rate-limit + idempotency |
 | `SENTRY_DSN` | error/perf monitoring |
 | `FLAG_*` | feature-flag overrides |
+| `AI_FALLBACK_PROVIDERS` | ordered comma-separated fallback provider chain (none registered today) |
 
 ## First-time production deploy
 
