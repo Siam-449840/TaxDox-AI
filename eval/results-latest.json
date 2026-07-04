@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-07-03T19:48:16.585Z",
+  "fixtureCount": 0,
+  "status": "no-fixtures",
+  "summary": {
+    "meanFieldAccuracy": 0,
+    "meanHallucinationRate": 0,
+    "meanConfidenceCalibration": 0,
+    "classificationAccuracy": 0
+  },
+  "perFixture": []
+}

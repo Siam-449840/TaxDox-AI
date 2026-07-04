@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TaxDox AI Golden Fixture",
+  "description": "Expected-output schema for a single labeled evaluation fixture. One fixture = one document with its expected classification + field values.",
+  "type": "object",
+  "required": ["id", "file", "documentType", "expectedFields"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable fixture identifier (e.g. 'w2-001')."
+    },
+    "file": {
+      "type": "string",
+      "description": "Path to the source document under eval/golden/fixtures/."
+    },
+    "documentType": {
+      "type": ["string", "null"],
+      "description": "Expected classification, or null if the fixture is intentionally unclassifiable."
+    },
+    "expectedFields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "description": "Field name matching the DocTypeDef in src/lib/constants.ts." },
+          "value": { "type": "string", "description": "Expected value (normalized comparison; see src/lib/ai/evaluation.ts)." },
+          "tolerance": {
+            "type": "number",
+            "description": "Allowed numeric delta for currency/amount fields."
+          }
+        }
+      }
+    },
+    "mustDetect": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Field names that must appear in the output even if their value isn't strictly graded."
+    }
+  }
+}
