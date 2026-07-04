@@ -19,7 +19,10 @@ const uploadMetaSchema = z.object({
     (val) => (val === '' || val === null || val === undefined ? null : val),
     z.string().min(1).nullable().optional()
   ),
-  uploadedBy: z.enum(['client', 'user']).default('user'),
+  uploadedBy: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? 'user' : val),
+    z.enum(['client', 'user']).default('user')
+  ),
 })
 
 export async function POST(req: NextRequest) {
@@ -81,13 +84,17 @@ export async function POST(req: NextRequest) {
 
       meta.error.issues.forEach((issue) => {
         const path = issue.path.join('.')
-        const received = 'received' in issue ? String(issue.received) : 'unknown'
-        if (issue.code === 'invalid_type' && received === 'undefined') {
+        const msg = issue.message.toLowerCase()
+        let received = 'unknown'
+        if (msg.includes('received ')) {
+          received = msg.split('received ')[1]?.trim() || 'unknown'
+        }
+        if (issue.code === 'invalid_type' && (received === 'undefined' || received === 'null')) {
           missingFields.push(path)
         } else {
           invalidTypes.push({
             field: path,
-            expected: 'expected' in issue ? String(issue.expected) : 'valid value',
+            expected: 'expected' in issue ? String((issue as any).expected) : 'valid value',
             received,
           })
         }
