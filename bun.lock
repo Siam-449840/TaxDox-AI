@@ -106,6 +106,12 @@
     },
   },
   "overrides": {
+    "defu": "^6.1.5",
+    "effect": "^3.20.0",
+    "js-cookie": "^3.0.7",
+    "lodash": "^4.18.0",
+    "lodash-es": "^4.18.0",
+    "minimatch": "^3.1.5",
     "picomatch": "^4.0.4",
     "postcss": "^8.5.16",
     "uuid": "^11.1.1",
@@ -1353,7 +1359,7 @@
 
     "define-properties": ["define-properties@1.2.1", "https://registry.npmjs.com/define-properties/-/define-properties-1.2.1.tgz", { "dependencies": { "define-data-property": "^1.0.1", "has-property-descriptors": "^1.0.0", "object-keys": "^1.1.1" } }, "sha512-8QmQKqEASLd5nx0U1B1okLElbUuuttJ/AnYmRXbbbGDWh6uS208EjD4Xqq/I9wK7u0v6O08XhTWnt5XtEbR6Dg=="],
 
-    "defu": ["defu@6.1.4", "https://registry.npmjs.com/defu/-/defu-6.1.4.tgz", {}, "sha512-mEQCMmwJu317oSz8CwdIOdwf3xMif1ttiM8LTufzc3g6kR+9Pe236twL8j3IYT1F7GfRgGcW6MWxzZjLIkuHIg=="],
+    "defu": ["defu@6.1.7", "", {}, "sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ=="],
 
     "dequal": ["dequal@2.0.3", "https://registry.npmjs.com/dequal/-/dequal-2.0.3.tgz", {}, "sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA=="],
 
@@ -1395,7 +1401,7 @@
 
     "ecdsa-sig-formatter": ["ecdsa-sig-formatter@1.0.11", "", { "dependencies": { "safe-buffer": "^5.0.1" } }, "sha512-nagl3RYrbNv6kQkeJIpt6NJZy8twLB/2vtz6yN9Z4vRKHN4/QZJIEbqohALSgwKdnksuY3k5Addp5lg8sVoVcQ=="],
 
-    "effect": ["effect@3.18.4", "https://registry.npmjs.com/effect/-/effect-3.18.4.tgz", { "dependencies": { "@standard-schema/spec": "^1.0.0", "fast-check": "^3.23.1" } }, "sha512-b1LXQJLe9D11wfnOKAk3PKxuqYshQ0Heez+y5pnkd3jLj1yx9QhM72zZ9uUrOQyNvrs2GZZd/3maL0ZV18YuDA=="],
+    "effect": ["effect@3.21.4", "", { "dependencies": { "@standard-schema/spec": "^1.0.0", "fast-check": "^3.23.1" } }, "sha512-B89v/xSgPbl1J2Ai2u18jxq3odpFauU1rC6/eSs4FeNHi72kwKdJp12VGigvRV2lK+kRnx+OOz41XV8guZd4gQ=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.267", "https://registry.npmjs.com/electron-to-chromium/-/electron-to-chromium-1.5.267.tgz", {}, "sha512-0Drusm6MVRXSOJpGbaSVgcQsuB4hEkMpHXaVstcPmhu5LIedxs1xNK/nIxmQIU/RPC0+1/o0AVZfBTkTNJOdUw=="],
 
@@ -1717,7 +1723,7 @@
 
     "jose": ["jose@4.15.9", "https://registry.npmjs.com/jose/-/jose-4.15.9.tgz", {}, "sha512-1vUQX+IdDMVPj4k8kOxgUqlcK518yluMuGZwqlr44FS1ppZB/5GWh4rZG89erpOBOJjU/OBsnCVFfapsRz6nEA=="],
 
-    "js-cookie": ["js-cookie@3.0.5", "https://registry.npmjs.com/js-cookie/-/js-cookie-3.0.5.tgz", {}, "sha512-cEiJEAEoIbWfCZYKWhVwFuvPX1gETRYPw6LlaTKoxD3s2AkXzkCjnp6h0V77ozyqj0jakteJ4YqDJT830+lVGw=="],
+    "js-cookie": ["js-cookie@3.0.8", "", {}, "sha512-yeJd4aNAdYZQjaon2bpD/Gb0B/omw7HQOsynXXcOiWVCacbBcPlgn8S/d1X6blFSaHao7ozqtW7NZW19xpCtIw=="],
 
     "js-tokens": ["js-tokens@4.0.0", "https://registry.npmjs.com/js-tokens/-/js-tokens-4.0.0.tgz", {}, "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ=="],
 
@@ -1789,9 +1795,9 @@
 
     "locate-path": ["locate-path@6.0.0", "https://registry.npmjs.com/locate-path/-/locate-path-6.0.0.tgz", { "dependencies": { "p-locate": "^5.0.0" } }, "sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw=="],
 
-    "lodash": ["lodash@4.17.21", "https://registry.npmjs.com/lodash/-/lodash-4.17.21.tgz", {}, "sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg=="],
+    "lodash": ["lodash@4.18.1", "", {}, "sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q=="],
 
-    "lodash-es": ["lodash-es@4.17.22", "https://registry.npmjs.com/lodash-es/-/lodash-es-4.17.22.tgz", {}, "sha512-XEawp1t0gxSi9x01glktRZ5HDy0HXqrM0x5pXQM98EaI0NxO6jVM7omDOxsuEo5UIASAnm2bRp1Jt/e0a2XU8Q=="],
+    "lodash-es": ["lodash-es@4.18.1", "", {}, "sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A=="],
 
     "lodash.camelcase": ["lodash.camelcase@4.3.0", "", {}, "sha512-TwuEnCnxbc3rAvhf/LbG7tJUDzhqXyFnv3dtzLOPgCG/hODL7WFnsbwktkD7yUV0RrreP/l1PALq/YSg6VvjlA=="],
 
@@ -1927,7 +1933,7 @@
 
     "minimalistic-assert": ["minimalistic-assert@1.0.1", "", {}, "sha512-UtJcAD4yEaGtjPezWuO9wC4nwUnVH/8/Im3yEHQP4b67cXlD/Qr9hdITCU1xDbSEXg2XKNaP8jsReV7vQd00/A=="],
 
-    "minimatch": ["minimatch@3.1.2", "https://registry.npmjs.com/minimatch/-/minimatch-3.1.2.tgz", { "dependencies": { "brace-expansion": "^1.1.7" } }, "sha512-J7p63hRiAjw1NDEww1W7i37+ByIrOWO5XQQAzZ3VOcL0PNybwpfmV/N05zFAzwQ9USyEcX6t3UO+K5aqBQOIHw=="],
+    "minimatch": ["minimatch@3.1.5", "", { "dependencies": { "brace-expansion": "^1.1.7" } }, "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w=="],
 
     "minimist": ["minimist@1.2.8", "https://registry.npmjs.com/minimist/-/minimist-1.2.8.tgz", {}, "sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA=="],
 
@@ -2535,8 +2541,6 @@
 
     "@typescript-eslint/eslint-plugin/ignore": ["ignore@7.0.5", "https://registry.npmjs.com/ignore/-/ignore-7.0.5.tgz", {}, "sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg=="],
 
-    "@typescript-eslint/typescript-estree/minimatch": ["minimatch@9.0.5", "https://registry.npmjs.com/minimatch/-/minimatch-9.0.5.tgz", { "dependencies": { "brace-expansion": "^2.0.1" } }, "sha512-G6T0ZX48xgozx7587koeX9Ys2NYy6Gmv//P89sEte9V9whIapMNF4idKxnW2QtCcLiTWlb/wfCabAtAFWhhBow=="],
-
     "accepts/negotiator": ["negotiator@0.6.3", "", {}, "sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg=="],
 
     "browserslist/baseline-browser-mapping": ["baseline-browser-mapping@2.9.15", "https://registry.npmjs.com/baseline-browser-mapping/-/baseline-browser-mapping-2.9.15.tgz", { "bin": { "baseline-browser-mapping": "dist/cli.js" } }, "sha512-kX8h7K2srmDyYnXRIppo4AH/wYgzWVCs+eKr3RusRSQ5PvRYoEFmR/I0PbdTjKFAoKqp5+kbxnNTFO9jOfSVJg=="],
@@ -2560,8 +2564,6 @@
     "fast-glob/glob-parent": ["glob-parent@5.1.2", "https://registry.npmjs.com/glob-parent/-/glob-parent-5.1.2.tgz", { "dependencies": { "is-glob": "^4.0.1" } }, "sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow=="],
 
     "gaxios/node-fetch": ["node-fetch@3.3.2", "", { "dependencies": { "data-uri-to-buffer": "^4.0.0", "fetch-blob": "^3.1.4", "formdata-polyfill": "^4.0.10" } }, "sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA=="],
-
-    "glob/minimatch": ["minimatch@9.0.5", "https://registry.npmjs.com/minimatch/-/minimatch-9.0.5.tgz", { "dependencies": { "brace-expansion": "^2.0.1" } }, "sha512-G6T0ZX48xgozx7587koeX9Ys2NYy6Gmv//P89sEte9V9whIapMNF4idKxnW2QtCcLiTWlb/wfCabAtAFWhhBow=="],
 
     "inngest/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
@@ -2612,10 +2614,6 @@
     "@traceloop/instrumentation-anthropic/@opentelemetry/instrumentation/import-in-the-middle": ["import-in-the-middle@1.15.0", "", { "dependencies": { "acorn": "^8.14.0", "acorn-import-attributes": "^1.9.5", "cjs-module-lexer": "^1.2.2", "module-details-from-path": "^1.0.3" } }, "sha512-bpQy+CrsRmYmoPMAE/0G33iwRqwW4ouqdRg8jgbH3aKuCtOc8lxgmYXg2dMM92CRiGP660EtBcymH/eVUpCSaA=="],
 
     "@traceloop/instrumentation-anthropic/@opentelemetry/instrumentation/require-in-the-middle": ["require-in-the-middle@7.5.2", "", { "dependencies": { "debug": "^4.3.5", "module-details-from-path": "^1.0.3", "resolve": "^1.22.8" } }, "sha512-gAZ+kLqBdHarXB64XpAe2VCjB7rIRv+mU8tfRWziHRJ5umKsIHN2tLLv6EtMw7WCdP19S0ERVMldNvxYCHnhSQ=="],
-
-    "@typescript-eslint/typescript-estree/minimatch/brace-expansion": ["brace-expansion@2.0.2", "https://registry.npmjs.com/brace-expansion/-/brace-expansion-2.0.2.tgz", { "dependencies": { "balanced-match": "^1.0.0" } }, "sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ=="],
-
-    "glob/minimatch/brace-expansion": ["brace-expansion@2.0.2", "https://registry.npmjs.com/brace-expansion/-/brace-expansion-2.0.2.tgz", { "dependencies": { "balanced-match": "^1.0.0" } }, "sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ=="],
 
     "yargs/find-up/locate-path": ["locate-path@5.0.0", "", { "dependencies": { "p-locate": "^4.1.0" } }, "sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g=="],
 
