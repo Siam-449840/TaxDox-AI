@@ -1,7 +1,7 @@
 /**
  * TaxDox AI — Circuit Breaker
  *
- * Wraps calls to unreliable external services (AI/GLM, Resend, Stripe) so a
+ * Wraps calls to unreliable external services (AI/Gemini, Resend, Stripe) so a
  * failing dependency fails fast instead of cascading. Three states:
  *   - CLOSED:     requests pass through; failures increment a counter.
  *   - OPEN:       requests fail immediately for `cooldownMs`; no call is made.

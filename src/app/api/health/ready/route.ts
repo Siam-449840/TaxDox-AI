@@ -82,6 +82,20 @@ export async function GET() {
     required: false,
   }
 
+  // ── AI provider (required in prod when extraction is product-critical) ─
+  // We treat AI as required-but-degradable: a missing key degrades readiness
+  // but doesn't pull the instance (the app still serves reads). An open AI
+  // breaker is already handled by the circuitBreakers check below.
+  if (OPTIONAL_INTEGRATIONS.ai()) {
+    checks.ai = { status: 'ok', detail: process.env.AI_PROVIDER || 'gemini', required: false }
+  } else {
+    checks.ai = {
+      status: IS_PROD ? 'degraded' : 'degraded',
+      detail: 'AI provider not configured',
+      required: false,
+    }
+  }
+
   // ── Circuit breakers (any open → not ready) ──────────────────────
   const states = breakerStates()
   const openBreakers = Object.entries(states).filter(([, s]) => s === 'open')

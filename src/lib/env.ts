@@ -34,6 +34,11 @@ const REQUIRED_IN_PROD: Record<string, string> = {
   STRIPE_PRICE_BUSINESS: 'Stripe price id — Business tier',
   // Cron
   CRON_API_KEY: 'Shared secret guarding /api/cron/*',
+  // AI provider (Gemini). AI_PROVIDER selects the gateway provider;
+  // GEMINI_* configure the Gemini implementation.
+  AI_PROVIDER: 'AI provider name (gemini)',
+  GEMINI_API_KEY: 'Google Gemini API key',
+  GEMINI_MODEL: 'Gemini model id (e.g. gemini-3.5-flash)',
 }
 
 /**
@@ -47,6 +52,7 @@ export const OPTIONAL_INTEGRATIONS = {
   queue: () => !!process.env.INNGEST_EVENT_KEY,
   redis: () => !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN,
   sentry: () => !!process.env.SENTRY_DSN,
+  ai: () => !!process.env.GEMINI_API_KEY && process.env.AI_PROVIDER === 'gemini',
   r2: () =>
     !!process.env.R2_ACCOUNT_ID &&
     !!process.env.R2_ACCESS_KEY_ID &&
