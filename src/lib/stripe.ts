@@ -58,7 +58,7 @@ export const PLAN_CONFIG = {
     priceId: STRIPE_PRICES.professional,
     docsPerMonth: 200,
     features: [
-      'Full AI extraction (GLM-4.6V)',
+      'Full AI extraction (Gemini 3.5 Flash)',
       'All tax software integrations',
       'Priority support',
       '25 clients',

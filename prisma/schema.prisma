@@ -279,7 +279,7 @@ model Extraction {
 
   // AI version tracking — records exactly which model/template/prompt produced this extraction.
   // Without this, debugging accuracy regressions is guesswork.
-  modelVersion  String?  // e.g., "glm-4.6v", "simulated", "filename-heuristic"
+  modelVersion  String?  // e.g., "gemini-3.5-flash", "simulated", "filename-heuristic"
   templateVersion String? // e.g., "w2-v1", "1099-int-v2"
   promptVersion String?  // e.g., "extraction-v1"
   isFallback    Boolean  @default(false) // true if this came from a fallback path, not real AI
