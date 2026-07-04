@@ -10,18 +10,21 @@ import { getIdempotentResult, storeIdempotentResult } from '@/lib/idempotency'
 import { z } from 'zod'
 
 const uploadMetaSchema = z.object({
-  clientId: z.string().min(1),
-  // formData.get() returns `null` for absent fields; `.nullish()` accepts both
-  // null and undefined so an upload without these optional ids validates.
-  engagementId: z.string().min(1).nullish(),
-  pbcItemId: z.string().min(1).nullish(),
+  clientId: z.string().min(1, 'clientId cannot be empty'),
+  engagementId: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.string().min(1).nullable().optional()
+  ),
+  pbcItemId: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.string().min(1).nullable().optional()
+  ),
   uploadedBy: z.enum(['client', 'user']).default('user'),
 })
 
 export async function POST(req: NextRequest) {
   try {
-    // Idempotency replay: if the client retries an upload with the same
-    // Idempotency-Key, return the original result instead of re-uploading.
+    // Idempotency replay
     const idem = await getIdempotentResult(req)
     if (idem.hit) {
       return NextResponse.json(idem.body, { status: idem.status })
@@ -31,27 +34,20 @@ export async function POST(req: NextRequest) {
     if (authz instanceof NextResponse) return authz
     const { firmId } = authz
 
-    const formData = await req.formData()
-    const file = formData.get('file') as File | null
-    const clientId = (formData.get('clientId') as string | null) ?? ''
-    const engagementId = formData.get('engagementId') as string | null
-    const pbcItemId = formData.get('pbcItemId') as string | null
-    const uploadedBy = (formData.get('uploadedBy') as string) || 'user'
+    let formData: FormData
+    try {
+      formData = await req.formData()
+    } catch (e) {
+      logger.document.error('Failed to parse multipart form data', { error: String(e) })
+      return NextResponse.json({ error: 'Failed to parse form data' }, { status: 400 })
+    }
 
+    const file = formData.get('file') as File | null
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    const meta = uploadMetaSchema.safeParse({ clientId, engagementId, pbcItemId, uploadedBy })
-    if (!meta.success) {
-      return NextResponse.json(
-        { error: 'Invalid upload metadata', details: meta.error.flatten() },
-        { status: 400 }
-      )
-    }
-    const data = meta.data
-
-    // Validate MIME type (not just extension)
+    // Validate MIME type
     if (!validateMimeType(file.type)) {
       return NextResponse.json(
         { error: `File type ${file.type} is not supported. Allowed: PDF, JPEG, PNG, TIFF, WebP, Excel, CSV, Word` },
@@ -67,110 +63,193 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Tenant guard: the client must belong to this firm before we attach
-    // a document to it. Prevents cross-firm uploads.
-    const owningClient = await db.client.findFirst({
-      where: { id: data.clientId, firmId },
-      select: { id: true },
+    const rawClientId = formData.get('clientId')
+    const rawEngagementId = formData.get('engagementId')
+    const rawPbcItemId = formData.get('pbcItemId')
+    const rawUploadedBy = formData.get('uploadedBy')
+
+    const meta = uploadMetaSchema.safeParse({
+      clientId: rawClientId,
+      engagementId: rawEngagementId,
+      pbcItemId: rawPbcItemId,
+      uploadedBy: rawUploadedBy,
     })
-    if (!owningClient) {
+
+    if (!meta.success) {
+      const missingFields: string[] = []
+      const invalidTypes: { field: string; expected: string; received: string }[] = []
+
+      meta.error.issues.forEach((issue) => {
+        const path = issue.path.join('.')
+        const received = 'received' in issue ? String(issue.received) : 'unknown'
+        if (issue.code === 'invalid_type' && received === 'undefined') {
+          missingFields.push(path)
+        } else {
+          invalidTypes.push({
+            field: path,
+            expected: 'expected' in issue ? String(issue.expected) : 'valid value',
+            received,
+          })
+        }
+      })
+
+      const receivedKeys = Array.from(formData.keys()).filter((k) => k !== 'file')
+
+      logger.document.warn('Metadata validation failed', {
+        missingFields,
+        invalidTypes,
+        receivedKeys,
+      })
+
       return NextResponse.json(
-        { error: 'Client not found in your firm' },
-        { status: 404 }
+        {
+          error: 'Invalid upload metadata',
+          missingFields,
+          invalidTypes,
+          receivedKeys,
+        },
+        { status: 400 }
       )
     }
 
-    if (data.engagementId) {
-      const owningEngagement = await db.engagement.findFirst({
-        where: { id: data.engagementId, firmId, clientId: data.clientId },
+    const data = meta.data
+
+    // Tenant check
+    try {
+      const owningClient = await db.client.findFirst({
+        where: { id: data.clientId, firmId },
         select: { id: true },
       })
-      if (!owningEngagement) {
+      if (!owningClient) {
         return NextResponse.json(
-          { error: 'Engagement not found in your firm' },
+          { error: 'Client not found in your firm' },
           { status: 404 }
         )
       }
-    }
 
-    if (data.pbcItemId) {
-      const owningPbcItem = await db.pbcItem.findFirst({
-        where: {
-          id: data.pbcItemId,
-          pbcList: { engagement: { firmId, clientId: data.clientId } },
-        },
-        select: { id: true },
-      })
-      if (!owningPbcItem) {
-        return NextResponse.json(
-          { error: 'PBC item not found in your firm' },
-          { status: 404 }
-        )
+      if (data.engagementId) {
+        const owningEngagement = await db.engagement.findFirst({
+          where: { id: data.engagementId, firmId, clientId: data.clientId },
+          select: { id: true },
+        })
+        if (!owningEngagement) {
+          return NextResponse.json(
+            { error: 'Engagement not found in your firm' },
+            { status: 404 }
+          )
+        }
       }
+
+      if (data.pbcItemId) {
+        const owningPbcItem = await db.pbcItem.findFirst({
+          where: {
+            id: data.pbcItemId,
+            pbcList: { engagement: { firmId, clientId: data.clientId } },
+          },
+          select: { id: true },
+        })
+        if (!owningPbcItem) {
+          return NextResponse.json(
+            { error: 'PBC item not found in your firm' },
+            { status: 404 }
+          )
+        }
+      }
+    } catch (e) {
+      logger.document.error('Tenant verification failed', { error: String(e), stack: e instanceof Error ? e.stack : undefined })
+      return NextResponse.json({ error: 'Tenant verification failed' }, { status: 500 })
     }
 
-    // ── Store the file via the ObjectStore abstraction (R2 in prod, local
-    // disk in dev). The returned key is what we persist.
-    const buffer = Buffer.from(await file.arrayBuffer())
+    // Read file buffer
+    let buffer: Buffer
+    try {
+      buffer = Buffer.from(await file.arrayBuffer())
+    } catch (e) {
+      logger.document.error('Failed to read file buffer', { error: String(e) })
+      return NextResponse.json({ error: 'Failed to read file data' }, { status: 400 })
+    }
+
+    // Write file to storage
+    let stored: any
     const store = getObjectStore()
     const storageKey = generateKey(file.name)
-    const stored = await store.put(storageKey, buffer, {
-      contentType: file.type,
-      originalName: file.name,
-    })
+    try {
+      stored = await store.put(storageKey, buffer, {
+        contentType: file.type,
+        originalName: file.name,
+      })
+    } catch (e) {
+      logger.document.error('Storage write failed', { error: String(e), stack: e instanceof Error ? e.stack : undefined })
+      return NextResponse.json({ error: 'Storage write failed' }, { status: 500 })
+    }
 
-    // Create document record
-    const document = await db.document.create({
-      data: {
-        clientId: data.clientId,
-        engagementId: data.engagementId || undefined,
-        pbcItemId: data.pbcItemId || undefined,
-        originalFilename: file.name,
-        storedFilename: stored.key,
-        fileSize: file.size,
-        mimeType: file.type,
-        status: 'uploaded',
-        uploadedBy: data.uploadedBy,
-      },
-    })
+    // Insert Document & Activity atomically in DB
+    let document: any
+    try {
+      document = await db.$transaction(async (tx) => {
+        const doc = await tx.document.create({
+          data: {
+            clientId: data.clientId,
+            engagementId: data.engagementId || undefined,
+            pbcItemId: data.pbcItemId || undefined,
+            originalFilename: file.name,
+            storedFilename: stored.key,
+            fileSize: file.size,
+            mimeType: file.type,
+            status: 'uploaded',
+            uploadedBy: data.uploadedBy,
+          },
+        })
 
-    // Log activity
-    await db.activity.create({
-      data: {
-        engagementId: data.engagementId || undefined,
-        documentId: document.id,
-        type: 'upload',
-        description: `${data.uploadedBy === 'client' ? 'Client' : 'User'} uploaded ${file.name} (${formatFileSize(file.size)})`,
-        actor: data.uploadedBy === 'client' ? 'Client' : 'You',
-      },
-    })
+        await tx.activity.create({
+          data: {
+            engagementId: data.engagementId || undefined,
+            documentId: doc.id,
+            type: 'upload',
+            description: `${data.uploadedBy === 'client' ? 'Client' : 'User'} uploaded document (${formatFileSize(file.size)})`,
+            actor: data.uploadedBy === 'client' ? 'Client' : 'You',
+          },
+        })
 
-    logger.document.info('Document uploaded', {
+        return doc
+      })
+    } catch (e) {
+      // Storage rollback only if database insertion fails
+      try {
+        await store.delete(stored.key)
+        logger.document.warn('Rolled back orphaned storage file after database failure', { key: stored.key })
+      } catch (cleanupError) {
+        logger.document.error('Failed to clean up orphaned storage file', { key: stored.key, error: String(cleanupError) })
+      }
+
+      logger.document.error('Database insert failed', { error: String(e), stack: e instanceof Error ? e.stack : undefined })
+      return NextResponse.json({ error: 'Database insert failed' }, { status: 500 })
+    }
+
+    logger.document.info('Document uploaded successfully', {
       documentId: document.id,
       storageKey: stored.key,
-      checksum: stored.checksum.slice(0, 12),
-      filename: file.name,
       mimeType: file.type,
       size: file.size,
     })
 
-    // ── Kick off AI extraction ──────────────────────────────────────
-    // Production: enqueue an Inngest event (returns immediately, processed
-    // async with retries). Dev fallback: run the pipeline inline so the app
-    // works without queue credentials.
+    // AI Ingestion Trigger
     let jobId: string | undefined
-    if (isQueueEnabled()) {
-      await getInngest().send({
-        name: EVENTS.extractionRequested,
-        data: { documentId: document.id },
-      })
-      jobId = document.id
-      logger.ai.info('Extraction enqueued', { documentId: document.id })
-    } else {
-      // Dev: run inline (non-blocking; the response still returns fast).
-      runExtraction(document.id).catch((e) =>
-        logger.ai.error('Inline extraction failed', { documentId: document.id, error: String(e) })
-      )
+    try {
+      if (isQueueEnabled()) {
+        await getInngest().send({
+          name: EVENTS.extractionRequested,
+          data: { documentId: document.id },
+        })
+        jobId = document.id
+        logger.ai.info('Extraction enqueued', { documentId: document.id })
+      } else {
+        runExtraction(document.id).catch((e) =>
+          logger.ai.error('Inline extraction failed', { documentId: document.id, error: String(e) })
+        )
+      }
+    } catch (queueError) {
+      logger.ai.error('Failed to queue extraction', { documentId: document.id, error: String(queueError) })
     }
 
     const responseBody = {
@@ -183,15 +262,13 @@ export async function POST(req: NextRequest) {
       message: 'File uploaded successfully',
     }
 
-    // Cache the result so a client retry with the same Idempotency-Key
-    // replays this response instead of creating a duplicate upload.
     await storeIdempotentResult(req, responseBody, 201)
 
     return NextResponse.json(responseBody, { status: 201 })
   } catch (error) {
-    logger.document.error('Upload error', { error: String(error) })
+    logger.document.error('Unexpected upload route error', { error: String(error), stack: error instanceof Error ? error.stack : undefined })
     return NextResponse.json(
-      { error: 'Failed to upload file' },
+      { error: 'An unexpected error occurred during upload' },
       { status: 500 }
     )
   }
