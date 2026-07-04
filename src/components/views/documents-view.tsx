@@ -245,8 +245,12 @@ export function DocumentsView() {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('clientId', clientId)
-      formData.append('engagementId', selectedEngagementId || '')
+      if (clientId) {
+        formData.append('clientId', clientId)
+      }
+      if (selectedEngagementId) {
+        formData.append('engagementId', selectedEngagementId)
+      }
       formData.append('uploadedBy', 'user')
 
       // Simulate progress for visual feedback (real multipart upload progress
