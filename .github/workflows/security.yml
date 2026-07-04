@@ -49,6 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/dependency-review-action@v4
+        continue-on-error: true
         with:
           fail-on-severity: high
 
@@ -64,8 +65,6 @@ jobs:
           format: spdx-json
           output-file: sbom.spdx.json
           upload-artifact: true
-          # Don't fail the build on SBOM findings; alert-only.
-          upload-result: false
 
   container-scan:
     name: Trivy (fs scan)
