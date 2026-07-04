@@ -34,7 +34,7 @@ export interface ExtractionProgress {
  * backoff) and a per-step timeout. Failures are recorded on the Document.
  */
 export async function runExtraction(documentId: string): Promise<ExtractionProgress> {
-  const aiBreaker = getBreaker('ai-glm', { threshold: 5, cooldownMs: 60_000 })
+  const aiBreaker = getBreaker(`ai-${process.env.AI_PROVIDER || 'gemini'}`, { threshold: 5, cooldownMs: 60_000 })
   const baseUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
   const internalKey =
     process.env.INTERNAL_API_KEY ||
@@ -50,7 +50,7 @@ export async function runExtraction(documentId: string): Promise<ExtractionProgr
 
     // Classify. We hit the existing endpoint with a server-internal call so
     // the AI prompt + fallback heuristics live in exactly one place. The
-    // breaker fails fast if GLM is down.
+    // breaker fails fast if the AI provider is down.
     const classifyRes = await aiBreaker.run(() =>
       fetch(`${baseUrl}/api/ai/classify`, {
         method: 'POST',

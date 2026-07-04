@@ -6,6 +6,8 @@ import { sendEmail } from '@/lib/email'
 import { logger } from '@/lib/logger'
 import { extractionCompleteEmail } from '@/lib/email-templates'
 import { requirePermission } from '@/lib/permissions'
+import { getAIGateway } from '@/lib/ai'
+import { ProviderError } from '@/lib/ai'
 
 // Minimal HTML escaper so plain-text email bodies render safely in HTML view.
 function escapeHtml(s: string): string {
@@ -15,19 +17,15 @@ function escapeHtml(s: string): string {
 /**
  * AI Field-Level Data Extraction Engine
  *
- * Model: GLM-4.6V (Vision Language Model via z-ai-web-dev-sdk)
+ * Routes through the AI Gateway (active provider selected by AI_PROVIDER, today
+ * Gemini 3.5 Flash). Output is schema-validated + hallucination-checked before
+ * it is persisted. No route code references a provider SDK directly.
  *
- * In production, this endpoint:
- * 1. Receives the document file (image/PDF page rendered as image)
- * 2. Sends it to GLM-4.6V with the document type's field schema
- * 3. GLM-4.6V extracts structured field data with confidence scores
- * 4. Results are saved to the Extraction table
- *
- * For demo/development without actual file content, it falls back
- * to simulated extraction with realistic mock values.
+ * Auth/tenant rules unchanged: requirePermission (or internal key), tenant
+ * ownership of the document before extract.
  */
 
-// Simulated extraction values (demo fallback)
+// Simulated extraction values (demo fallback when no provider call succeeds)
 function getMockValues(docType: string): Record<string, string> {
   const data: Record<string, Record<string, string>> = {
     'W-2': {
@@ -136,8 +134,10 @@ export async function POST(req: NextRequest) {
 
   let extractedFields: { name: string; value: string; confidence: number }[] = []
   let model = 'simulated'
+  let promptVersion = 'extraction-v1'
+  let isFallback = true
 
-  // Try to read the actual uploaded file from disk
+  // Read the uploaded file from storage to feed the provider.
   let fileBase64: string | null = fileContent || null
   let fileMime: string = mimeType || document.mimeType
   let pdfText: string | null = null
@@ -153,14 +153,12 @@ export async function POST(req: NextRequest) {
       if (isImage) {
         fileBase64 = fileBuffer.toString('base64')
       } else if (isPdf) {
-        // Extract text from PDF using pdf-parse
         try {
           const pdfParse = (await import('pdf-parse')) as any
           const pdfData = await (pdfParse.default ? pdfParse.default(fileBuffer) : pdfParse(fileBuffer))
           pdfText = pdfData.text
           logger.ai.info(`[AI Extract] PDF text extracted: ${pdfText?.length || 0} chars`)
 
-          // If PDF text is too short, it's likely a scanned/image-only PDF → OCR
           if ((pdfText || '').trim().length < 50) {
             logger.ai.info('[AI Extract] PDF appears to be scanned (minimal text) — attempting OCR')
             try {
@@ -171,28 +169,26 @@ export async function POST(req: NextRequest) {
                 logger.ai.info(`[AI Extract] OCR extracted ${ocrText.length} chars from scanned PDF`)
               }
             } catch (ocrErr) {
-              logger.ai.error('AI extract:  OCR failed for scanned PDF:', { error: String(ocrErr) })
+              logger.ai.error('AI extract: OCR failed for scanned PDF:', { error: String(ocrErr) })
             }
           }
         } catch (pdfErr) {
-          logger.ai.error('AI extract:  PDF text extraction failed:', { error: String(pdfErr) })
+          logger.ai.error('AI extract: PDF text extraction failed:', { error: String(pdfErr) })
         }
       } else if (fileMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileMime === 'application/msword') {
-        // Extract text from Word documents using mammoth
         try {
           const mammoth = (await import('mammoth')).default
           const result = await mammoth.extractRawText({ buffer: fileBuffer })
           pdfText = result.value
           logger.ai.info(`[AI Extract] Word doc text extracted: ${pdfText.length} chars`)
         } catch (docErr) {
-          logger.ai.error('AI extract:  Word doc text extraction failed:', { error: String(docErr) })
+          logger.ai.error('AI extract: Word doc text extraction failed:', { error: String(docErr) })
         }
       } else if (
         fileMime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
         fileMime === 'application/vnd.ms-excel' ||
         fileMime === 'text/csv'
       ) {
-        // Extract text from Excel/CSV files
         try {
           if (fileMime === 'text/csv') {
             const Papa = (await import('papaparse')).default
@@ -210,7 +206,7 @@ export async function POST(req: NextRequest) {
           }
           logger.ai.info(`AI extract: Spreadsheet text extracted: ${(pdfText ?? '').length} chars`)
         } catch (ssErr) {
-          logger.ai.error('AI extract:  Spreadsheet text extraction failed:', { error: String(ssErr) })
+          logger.ai.error('AI extract: Spreadsheet text extraction failed:', { error: String(ssErr) })
         }
       }
     } catch (e) {
@@ -218,94 +214,40 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // If we have file content (image), use GLM-4.6V vision model
-  if (fileBase64) {
-    try {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default
-      const zai = await ZAI.create()
-
-      const fieldList = typeDef.fields
-        .map((f) => `- ${f.name}: ${f.label}`)
-        .join('\n')
-
-      const prompt = `You are a tax document data extraction engine. Extract the following fields from this ${typeDef.label} document. Return ONLY a JSON array of objects with "name", "value", and "confidence" (0.0-1.0) properties.
-
-Fields to extract:
-${fieldList}
-
-If a field is not present in the document, set its value to "N/A" and confidence to 0. Mask sensitive data (SSN, EIN) like ***-**-1234.`
-
-      const response = await zai.chat.completions.createVision({
-        model: 'glm-4.6v',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${fileMime};base64,${fileBase64}`,
-                },
-              },
-            ],
-          },
-        ],
-        thinking: { type: 'disabled' },
-      })
-
-      const content = response?.choices?.[0]?.message?.content || ''
-      const jsonMatch = content.match(/\[[\s\S]*\]/)
-      if (jsonMatch) {
-        extractedFields = JSON.parse(jsonMatch[0])
-        model = 'glm-4.6v'
-      }
-    } catch (error) {
-      logger.ai.error('GLM-4.6V extraction failed, falling back:', { error: String(error) })
-    }
-  }
-
-  // If we have PDF text, use the LLM (text model) for extraction
-  if (extractedFields.length === 0 && pdfText && pdfText.length > 50) {
-    try {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default
-      const zai = await ZAI.create()
-
-      // Sanitize document text for prompt injection defense
+  // ── AI extract via the gateway (image or text) ──────────────────
+  if (fileBase64 || (pdfText && pdfText.length > 50)) {
+    // Sanitize document text for prompt-injection defense before it reaches any
+    // provider. (The gateway passes text through verbatim, so defense happens
+    // here at the application boundary — same as before.)
+    let sanitizedText = pdfText
+    if (pdfText) {
       const { sanitizeDocumentText } = await import('@/lib/ai-security')
-      const { sanitized, hadInjection } = sanitizeDocumentText(pdfText)
-
-      if (hadInjection) {
-        logger.ai.warn('AI extract:  Prompt injection detected in PDF text — sanitized')
+      const r = sanitizeDocumentText(pdfText)
+      if (r.hadInjection) {
+        logger.ai.warn('AI extract: Prompt injection detected in document text — sanitized')
       }
+      sanitizedText = r.sanitized
+    }
 
-      const fieldList = typeDef.fields
-        .map((f) => `- ${f.name}: ${f.label}`)
-        .join('\n')
-
-      const prompt = `You are a tax document data extraction engine. Extract the following fields from this ${typeDef.label} document text. Return ONLY a JSON array of objects with "name", "value", and "confidence" (0.0-1.0) properties.
-
-Fields to extract:
-${fieldList}
-
-If a field is not present in the document, set its value to "N/A" and confidence to 0. Mask sensitive data (SSN, EIN) like ***-**-1234.
-
-Document text:
-${sanitized.slice(0, 8000)}`
-
-      const response = await zai.chat.completions.create({
-        messages: [{ role: 'user', content: prompt }],
-        stream: false,
+    try {
+      const gw = getAIGateway()
+      const result = await gw.extract({
+        documentType: document.documentType,
+        fields: typeDef.fields.map((f) => ({ name: f.name, label: f.label })),
+        imageBase64: fileBase64 || undefined,
+        mimeType: fileMime,
+        text: sanitizedText || undefined,
       })
-
-      const content = response?.choices?.[0]?.message?.content || ''
-      const jsonMatch = content.match(/\[[\s\S]*\]/)
-      if (jsonMatch) {
-        extractedFields = JSON.parse(jsonMatch[0])
-        model = 'glm-4.6-llm-pdf'
-      }
+      extractedFields = result.fields
+      model = result.model
+      promptVersion = result.promptVersion
+      isFallback = result.isFallback
     } catch (error) {
-      logger.ai.error('PDF text LLM extraction failed, falling back:', { error: String(error) })
+      const kind = error instanceof ProviderError ? error.kind : 'unknown'
+      logger.ai.error('AI extract failed, falling back to simulated:', {
+        kind,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -317,15 +259,12 @@ ${sanitized.slice(0, 8000)}`
       value: mockValues[field.name] || '—',
       confidence: 0.82 + Math.random() * 0.17,
     }))
-    model = fileBase64 ? 'glm-4.6v-fallback' : 'simulated'
+    model = fileBase64 ? `${model}-fallback` : 'simulated'
+    isFallback = true
   }
 
-  // Determine if this is a fallback (not real AI extraction)
-  const isFallback = model !== 'glm-4.6v'
-
-  // Version tracking — records exactly what produced this extraction
+  // Version tracking — records exactly what produced this extraction.
   const templateVersion = `${document.documentType?.toLowerCase().replace(/[^a-z0-9]/g, '')}-v1`
-  const promptVersion = 'extraction-v1'
 
   // Save extractions to database
   const extractions: any[] = []
@@ -378,11 +317,7 @@ ${sanitized.slice(0, 8000)}`
     },
   })
 
-  // ── Send "extraction complete" email to the client ──────────────────
-  // Auto-fires once AI extraction has finished so the client knows their
-  // uploaded document has been parsed. Delivered via the real transport
-  // (Resend/log) and the EmailLog reflects the actual result. Best-effort:
-  // never fails the extraction response.
+  // Best-effort extraction-complete email.
   try {
     const docWithClient = await db.document.findUnique({
       where: { id: documentId },
@@ -391,8 +326,7 @@ ${sanitized.slice(0, 8000)}`
     if (docWithClient?.client) {
       const avgConfidence =
         extractions.length > 0
-          ? extractions.reduce((sum, e) => sum + e.confidence, 0) /
-            extractions.length
+          ? extractions.reduce((sum, e) => sum + e.confidence, 0) / extractions.length
           : 0
       const emailTpl = extractionCompleteEmail(
         docWithClient.client.name,
