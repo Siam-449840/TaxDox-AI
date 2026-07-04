@@ -2,9 +2,9 @@
 
 ### Enterprise AI Tax Document Intelligence Platform
 
-**Production-Hardened SaaS for Accounting and CPA Firms**
+**Production-Hardened Architecture • Enterprise-Grade Security • Operational Readiness**
 
-**Secure • Multi-Tenant • AI-Native • Enterprise-Grade**
+**Clean Architecture • DDD-inspired • Multi-Tenant • Security-First**
 
 [![Next.js](https://img.shields.io/badge/Next.js-15%20(App%20Router)-black?style=flat&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?style=flat&logo=typescript)](https://www.typescriptlang.org/)
@@ -16,7 +16,7 @@
 [![Inngest](https://img.shields.io/badge/Inngest-Background%20Jobs-000000?style=flat)](https://www.inngest.com/)
 [![Stripe](https://img.shields.io/badge/Stripe-Billing-008cdd?style=flat&logo=stripe)](https://stripe.com/)
 
-TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting and CPA firms. It automates tax document intake, classification, and field extraction (W-2s, 1099s, K-1s) using an AI Gateway with a provider-agnostic architecture, currently configured to use Google Gemini Flash (provider and model fully configurable via environment variables), backed by strict cryptographic tenant isolation, AES-256-GCM data encryption, and transactional outbox workflows.
+TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting and CPA firms. It automates tax document intake, classification, and field extraction (W-2s, 1099s, K-1s) using an AI Gateway with a provider-agnostic architecture, currently configured to use Google Gemini through a provider-agnostic AI Gateway (provider and model fully configurable via environment variables), backed by strict cryptographic tenant isolation, AES-256-GCM data encryption, and transactional outbox workflows.
 
 ---
 
@@ -27,6 +27,12 @@ TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting
 * **Outbox Pattern + Background Queue**: Transactional event dispatching mapped to Inngest for asynchronous document processing and email logs.
 * **Cloudflare R2 Storage**: Persistent object store capability for client document uploads.
 * **Production Validation Rig**: Confirmed locally under 500 concurrent virtual users during k6 database performance tests.
+
+---
+
+## 💡 Why TaxDox AI?
+
+CPA and accounting firms manage thousands of tax documents (W-2s, 1099s, K-1s) during tax season, leading to severe input bottlenecks and human data-entry errors. TaxDox AI solves this by introducing a security-first, automated ingestion pipeline. It classifies documents in real-time, extracts key fields with high confidence, and maps them to country-specific tax rules—all while enforcing strict multi-tenant boundaries at the database layer to ensure complete client privacy.
 
 ---
 
@@ -55,13 +61,13 @@ TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting
 
 ## 🚦 Project Status
 
-| Dimension | Status | Verification Metric | Validation State |
-|---|---|---|:---:|
-| **Architecture** | 🟢 Production Hardened | Modular architecture, ADR lifecycle | `v1.0.0 (Green)` |
-| **Security** | 🟢 Tested | 0 critical vulnerabilities, 0 IDOR leaks | `v1.0.0 (Green)` |
-| **Testing** | 🟢 Verified | 100% smoke test coverage, Playwright runs | `v1.0.0 (Green)` |
-| **Performance** | 🟢 Budget Aligned | 11/11 DB APIs within NFR limits | `v1.0.0 (Green)` |
-| **Documentation** | 🟢 Complete | Threat models, incident runbooks, ADRs | `v1.0.0 (Green)` |
+| Dimension | Status | Validation State |
+|---|---|---|
+| **Architecture** | 🟢 Production Hardened | `ADR-Validated` |
+| **Security** | 🟢 Tested | `0 Vulnerabilities` |
+| **Testing** | 🟢 Verified | `100% Smoke Pass` |
+| **Performance** | 🟢 Budget Aligned | `Budget Met (P95)` |
+| **Documentation** | 🟢 Complete | `Fully Documented` |
 
 > [!IMPORTANT]
 > **Go-Live Readiness:** The application has passed the project's current validation pipeline. Production deployment still requires external infrastructure and operational verification (e.g. Upstash Redis, Cloudflare R2, Inngest Queue, Sentry DSN, and Resend).
@@ -90,13 +96,13 @@ The repository houses comprehensive operational and decision logs. Use the links
 
 | Document | Purpose | Audience |
 |---|---|---|
+| [Architecture Decision Records (ADRs)](docs/adr/) | 9 architectural blueprints (Outbox, R2, Inngest, Breakers, etc.). | Architecture / Developer |
 | [System Threat Model](docs/threat-model.md) | STRIDE-by-STRIDE vulnerability mitigations. | Security / Architecture |
 | [API Contracts](docs/api-contracts.md) | Standardized actions and permission matrix schemas. | Developer / Security |
 | [Non-Functional Requirements](docs/nfrs.md) | Latency budgets, database capacity plans, and performance ceilings. | Architecture / DevOps |
 | [Database Migration Plan](docs/database-migration.md) | Zero-downtime database expand/contract schema updates. | DevOps / DBA |
 | [Incident Runbook](docs/incident-runbook.md) | Disaster recovery steps for server crashes, data breaches, and API downtime. | DevOps / SRE |
 | [Security Keys Rotation Guide](docs/security-rotation.md) | SOPs for changing KMS keys and rotating session secrets. | Security / DevOps |
-| [Architecture Decision Records (ADRs)](docs/adr/) | 9 architectural blueprints (Outbox, R2, Inngest, Breakers, etc.). | Architecture / Developer |
 
 ---
 
@@ -177,8 +183,9 @@ graph TD
     SchemaVal -->|Check Hallucinations| HallCheck[Hallucination Validation]
     HallCheck -->|Verify Accuracy| Evaluation[Accuracy Evaluation]
     Evaluation -->|Log Telemetry| Observability[Observability Metrics]
-    Observability -->|Log Security Actions| AuditLog[Audit Log Database]
-    AuditLog -->|Commit to DB| Postgres
+    Observability -->|JSON Streams| Stdout[stdout / Logs]
+    Evaluation -->|Log Security Actions| AuditLog[Audit Log Database]
+    AuditLog -->|Commit Transaction| Postgres
     
     Inngest -->|Trigger Job Outbox Worker| Postgres
     Inngest -->|Send Alert Mail| Resend
@@ -214,7 +221,7 @@ src/lib/tax-plugins/
 | **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS v4, Radix UI (shadcn/ui), Lucide Icons |
 | **Backend** | Next.js API Routes (Route Handlers), NextAuth.js (Session Management) |
 | **Database** | PostgreSQL 15, Prisma ORM 6, pgvector (Vector Embeddings), pg_trgm (Trigram Search) |
-| **AI Gateway** | Provider-agnostic AI Gateway architecture, Google GenAI SDK, Tesseract.js (OCR), pdf-parse, mammoth (Word DOCX), xlsx/papaparse |
+| **AI Gateway** | Provider-agnostic AI Gateway architecture, `@google/genai` (Google GenAI SDK), Tesseract.js (OCR), pdf-parse, mammoth (Word DOCX), xlsx/papaparse |
 | **Infrastructure** | Upstash Redis REST (Rate-Limiting), Cloudflare R2 (S3 Storage), Inngest (Job Queue), Resend (Transactional Email) |
 | **Verification** | ESLint, TypeScript Compiler (`tsc`), Playwright, k6 (Load Testing) |
 
@@ -227,7 +234,7 @@ src/lib/tax-plugins/
 ├── docker-compose.yml       # Configuration for local Postgres & Redis containers
 ├── next.config.ts           # Next.js configurations
 ├── package.json             # NPM dependencies & task runners
-├── README.md                # Project overview, architecture, onboarding and operational documentation.
+├── README.md                # Repository overview, architecture, onboarding, and operational guide.
 ├── .github/workflows/       # GitHub Actions CI/CD pipelines (CI, Security Scan)
 ├── docs/                    # Architecture Decision Records (ADRs) & Threat Models
 │   └── adr/                 # Architecture Decision Records (001 to 009)
@@ -273,7 +280,7 @@ sequenceDiagram
     participant GW as AI Gateway
     participant Gemini as Gemini API
 
-    Client->>API: POST /api/documents/upload (Multipart)
+    Client->HAPI: POST /api/documents/upload (Multipart)
     API->>API: Verify session & check file type
     API->>R2: Stream file buffer to bucket
     R2-->>API: Return unique storedFilename
