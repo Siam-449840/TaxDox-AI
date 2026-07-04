@@ -13,5 +13,25 @@ services:
       - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  # Local stand-in for Upstash Redis. In production this is Upstash;
+  # the app talks to it via UPSTASH_REDIS_REST_URL/TOKEN (REST). For local
+  # runtime validation we expose the raw Redis port so health probes work,
+  # and we run rate-limit/idempotency in a mode compatible with a local
+  # Redis if/when wired. See docs/deployment.md.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
 volumes:
   postgres-data:
+  redis-data:

@@ -61,6 +61,20 @@ export async function PATCH(
   if (!owned) {
     return NextResponse.json({ error: 'Engagement not found' }, { status: 404 })
   }
+  // If reassigning, the target user MUST belong to the caller's firm.
+  // Prevents writing a foreign-firm user id into this engagement (FK integrity).
+  if (body.assignedToId) {
+    const targetUser = await db.user.findFirst({
+      where: { id: body.assignedToId, firmId },
+      select: { id: true },
+    })
+    if (!targetUser) {
+      return NextResponse.json(
+        { error: 'Assignee not found in your firm' },
+        { status: 404 }
+      )
+    }
+  }
   const engagement = await db.engagement.update({
     where: { id },
     data: {
