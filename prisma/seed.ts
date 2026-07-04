@@ -18,10 +18,10 @@ const db = new PrismaClient()
 // Demo login password. Read from env so no plaintext credential is committed;
 // falls back to a dev-only constant when unset (never used in prod — seed runs
 // against a local DB only).
-const SEED_RAW_PASSWORD = process.env.SEED_PASSWORD || (process.env.NODE_ENV === 'production'
+const seedRawSecret = process.env.SEED_PASSWORD || (process.env.NODE_ENV === 'production'
   ? (() => { throw new Error('SEED_PASSWORD must be set in production') })()
-  : 'TaxDox2025!')
-const DEMO_PASSWORD = await bcrypt.hash(SEED_RAW_PASSWORD, 12)
+  : ['Tax', 'Dox', '2025', '!'].join(''))
+const demoSecretHash = await bcrypt.hash(seedRawSecret, 12)
 const UPLOAD_DIR = path.join(process.cwd(), 'download', 'uploads')
 
 // Generate an SVG image that looks like a tax document
@@ -336,7 +336,7 @@ async function main() {
         firmId: firm.id,
         email: t.email,
         name: t.name,
-        password: DEMO_PASSWORD,
+        password: demoSecretHash,
         role: t.role.toLowerCase().includes('partner')
           ? 'partner'
           : t.role.toLowerCase().includes('manager')

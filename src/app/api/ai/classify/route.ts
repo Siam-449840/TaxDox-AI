@@ -4,8 +4,7 @@ import { DOCUMENT_TYPES, DOCUMENT_TYPE_MAP, type DocTypeDef } from '@/lib/consta
 import { getObjectStore } from '@/lib/object-store'
 import { logger } from '@/lib/logger'
 import { requirePermission } from '@/lib/permissions'
-import { getAIGateway } from '@/lib/ai'
-import { ProviderError } from '@/lib/ai'
+import { getAIGateway, ProviderError } from '@/lib/ai'
 
 /**
  * AI Document Classification Engine
@@ -201,7 +200,11 @@ export async function POST(req: NextRequest) {
       model = `${primary}-fallback`
     } else {
       // AI was never attempted
-      model = fileBase64 ? 'filename-heuristic' : (pdfText ? 'pdf-llm-fallback' : 'filename-heuristic')
+      if (!fileBase64 && pdfText) {
+        model = 'pdf-llm-fallback'
+      } else {
+        model = 'filename-heuristic'
+      }
     }
   }
 

@@ -13,7 +13,7 @@
  * preview, since model output may contain unmasked PII if the model misbehaves.
  */
 
-import crypto from 'crypto'
+import crypto from 'node:crypto'
 import { logger } from '@/lib/logger'
 
 // ─── Classification validation ───────────────────────────────────
@@ -128,7 +128,7 @@ function repairJson(s: string): { repaired: string; changed: boolean } {
  * Extract + repair + parse a candidate JSON object. Returns the parsed value
  * or null. Used internally by the two public parsers.
  */
-function tryJsonParse(raw: string): unknown | null {
+function tryJsonParse(raw: string): unknown {
   try {
     return JSON.parse(raw)
   } catch {
@@ -152,11 +152,15 @@ function extractJsonObject(raw: string): string | null {
   // Fast path: already clean JSON.
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) return trimmed
   // Fenced path.
-  const fenced = trimmed.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i)
+  const fenced = /```(?:json)?\s*(\{[\s\S]*?\})\s*```/i.exec(trimmed)
   if (fenced) return fenced[1]
   // Embedded object.
-  const match = trimmed.match(/\{[\s\S]*\}/)
-  return match ? match[0] : null
+  const firstBrace = trimmed.indexOf('{')
+  const lastBrace = trimmed.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1)
+  }
+  return null
 }
 
 /**
@@ -166,10 +170,14 @@ function extractJsonArray(raw: string): string | null {
   if (!raw) return null
   const trimmed = raw.trim()
   if (trimmed.startsWith('[') && trimmed.endsWith(']')) return trimmed
-  const fenced = trimmed.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/i)
+  const fenced = /```(?:json)?\s*(\[[\s\S]*?\])\s*```/i.exec(trimmed)
   if (fenced) return fenced[1]
-  const match = trimmed.match(/\[[\s\S]*\]/)
-  return match ? match[0] : null
+  const firstBracket = trimmed.indexOf('[')
+  const lastBracket = trimmed.lastIndexOf(']')
+  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    return trimmed.slice(firstBracket, lastBracket + 1)
+  }
+  return null
 }
 
 /**

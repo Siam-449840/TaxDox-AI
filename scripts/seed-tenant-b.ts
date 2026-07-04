@@ -10,7 +10,7 @@
  * Run: bun scripts/seed-tenant-b.ts
  */
 import { PrismaClient } from '@prisma/client'
-import crypto from 'crypto'
+import crypto from 'node:crypto'
 import bcrypt from 'bcryptjs'
 
 const db = new PrismaClient()

@@ -8,7 +8,7 @@
  * the eval runner score any provider's output identically.
  */
 
-import type { ClassifyResult, ExtractionResult } from './types'
+import type { ClassifyResult } from './types'
 
 // ─── Golden dataset types ────────────────────────────────────────
 
@@ -52,9 +52,9 @@ function valueMatches(actual: string, expected: string, tolerance?: number): boo
   if (norm(actual) === norm(expected)) return true
   // Numeric tolerance (e.g. currency).
   if (tolerance !== undefined) {
-    const a = parseFloat(norm(actual).replace(/[^0-9.-]/g, ''))
-    const e = parseFloat(norm(expected).replace(/[^0-9.-]/g, ''))
-    if (!isNaN(a) && !isNaN(e) && Math.abs(a - e) <= tolerance) return true
+    const a = Number.parseFloat(norm(actual).replace(/[^0-9.-]/g, ''))
+    const e = Number.parseFloat(norm(expected).replace(/[^0-9.-]/g, ''))
+    if (!Number.isNaN(a) && !Number.isNaN(e) && Math.abs(a - e) <= tolerance) return true
   }
   // Masked-PII partial match: last-4 of SSN/EIN.
   if (expected.includes('*') && actual.slice(-4) === expected.slice(-4)) return true
@@ -100,13 +100,18 @@ export function evaluateExtraction(
   const denom = fieldsEvaluated || 1
   const expectedCount = expectedFields.length || 1
 
+  let classificationAccuracy = 0
+  if (expected.documentType === null) {
+    classificationAccuracy = 1
+  } else if (classify && classify.documentType === expected.documentType) {
+    classificationAccuracy = 1
+  }
+
   return {
     fieldAccuracy: Math.min(1, correct / expectedCount),
     hallucinationRate: denom > 0 ? hallucinated / denom : 0,
     confidenceCalibration: confDeltaSum / denom,
-    classificationAccuracy: classify && expected.documentType
-      ? (classify.documentType === expected.documentType ? 1 : 0)
-      : (expected.documentType === null ? 1 : 0),
+    classificationAccuracy,
     fieldsEvaluated: result.fields.length,
     fieldsCorrect: correct,
     fieldsHallucinated: hallucinated,

@@ -68,6 +68,15 @@ class AIGateway {
    * provider handled the call (fallback flag) for observability. With a single
    * registered provider this collapses to "try Gemini once".
    */
+  private async tryProvider<T>(
+    name: string,
+    fn: (provider: AIProvider) => Promise<T>
+  ): Promise<T> {
+    const provider = getProvider(name)
+    const breaker = getBreaker(`ai-${name}`, { threshold: 5, cooldownMs: 60_000 })
+    return breaker.run(() => fn(provider))
+  }
+
   private async withFallback<T>(
     fn: (provider: AIProvider) => Promise<T>
   ): Promise<{ result: T; providerName: string; fallback: boolean }> {
@@ -77,20 +86,8 @@ class AIGateway {
 
     for (let i = 0; i < priority.length; i++) {
       const name = priority[i]
-      let provider: AIProvider
       try {
-        provider = getProvider(name)
-      } catch (e) {
-        // Unknown provider name — log and skip to the next.
-        logger.ai.warn('AI provider not registered, skipping', { provider: name, error: String(e) })
-        continue
-      }
-
-      // Each provider gets its own breaker, so one provider's outage doesn't
-      // block a healthy secondary.
-      const breaker = getBreaker(`ai-${name}`, { threshold: 5, cooldownMs: 60_000 })
-      try {
-        const result = await breaker.run(() => fn(provider))
+        const result = await this.tryProvider(name, fn)
         return { result, providerName: name, fallback: i > 0 }
       } catch (err) {
         lastErr = err
@@ -103,9 +100,6 @@ class AIGateway {
           error: err instanceof Error ? err.message : String(err),
           nextFallback: i < priority.length - 1,
         })
-        // If the error is non-retryable (auth/invalid-model), don't bother the
-        // next provider with the same broken config — but only when there IS a
-        // next provider to consider. With one provider we still surface the err.
         if (kind === 'auth' || kind === 'invalid-model') break
       }
     }
@@ -177,6 +171,6 @@ class AIGateway {
 
 let _gateway: AIGateway | null = null
 export function getAIGateway(): AIGateway {
-  if (!_gateway) _gateway = new AIGateway()
+  _gateway ??= new AIGateway()
   return _gateway
 }

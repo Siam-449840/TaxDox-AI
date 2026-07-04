@@ -10,8 +10,8 @@
  * With zero fixtures: reports "0 fixtures", exits 0. The runner is ready the
  * moment labeled data lands in eval/golden/.
  */
-import { readdir, readFile, writeFile, mkdir } from 'fs/promises'
-import path from 'path'
+import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises'
+import path from 'node:path'
 import { getAIGateway } from '../src/lib/ai'
 import { DOCUMENT_TYPE_MAP } from '../src/lib/constants'
 import {
@@ -44,12 +44,15 @@ async function readFixtureBytes(rel: string): Promise<{ base64: string; mime: st
     const abs = path.join(GOLDEN_DIR, rel)
     const buf = await readFile(abs)
     const ext = path.extname(rel).toLowerCase()
-    const mime =
-      ext === '.pdf' ? 'application/pdf' :
-      ext === '.png' ? 'image/png' :
-      ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
-      ext === '.tif' || ext === '.tiff' ? 'image/tiff' :
-      'application/octet-stream'
+    const MIME_MAP: Record<string, string> = {
+      '.pdf': 'application/pdf',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.tif': 'image/tiff',
+      '.tiff': 'image/tiff',
+    }
+    const mime = MIME_MAP[ext] || 'application/octet-stream'
     return { base64: buf.toString('base64'), mime }
   } catch {
     return null

@@ -90,7 +90,7 @@ export async function GET() {
     checks.ai = { status: 'ok', detail: process.env.AI_PROVIDER || 'gemini', required: false }
   } else {
     checks.ai = {
-      status: IS_PROD ? 'degraded' : 'degraded',
+      status: 'degraded',
       detail: 'AI provider not configured',
       required: false,
     }

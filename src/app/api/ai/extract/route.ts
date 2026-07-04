@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
+import crypto from 'node:crypto'
 import { db } from '@/lib/db'
 import { DOCUMENT_TYPE_MAP } from '@/lib/constants'
 import { getObjectStore } from '@/lib/object-store'
@@ -7,8 +7,7 @@ import { sendEmail } from '@/lib/email'
 import { logger } from '@/lib/logger'
 import { extractionCompleteEmail } from '@/lib/email-templates'
 import { requirePermission } from '@/lib/permissions'
-import { getAIGateway } from '@/lib/ai'
-import { ProviderError } from '@/lib/ai'
+import { getAIGateway, ProviderError } from '@/lib/ai'
 
 // Minimal HTML escaper so plain-text email bodies render safely in HTML view.
 function escapeHtml(s: string): string {
@@ -137,7 +136,6 @@ export async function POST(req: NextRequest) {
   let model = 'simulated'
   let promptVersion: string | null = null
   let isFallback = true
-  let aiAttempted = false
 
   // Read the uploaded file from storage to feed the provider.
   let fileBase64: string | null = fileContent || null
@@ -218,7 +216,6 @@ export async function POST(req: NextRequest) {
 
   // ── AI extract via the gateway (image or text) ──────────────────
   if (fileBase64 || (pdfText && pdfText.length > 50)) {
-    aiAttempted = true
     // Sanitize document text for prompt-injection defense before it reaches any
     // provider. (The gateway passes text through verbatim, so defense happens
     // here at the application boundary — same as before.)
