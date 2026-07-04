@@ -1,8 +1,10 @@
-# Enterprise AI Tax Document Intelligence Platform
+# TaxDox AI
 
-### Production-Hardened SaaS for Accounting and CPA Firms
+### Enterprise AI Tax Document Intelligence Platform
 
-**Secure • Multi-Tenant • AI-Native • Enterprise Ready**
+**Production-Hardened SaaS for Accounting and CPA Firms**
+
+**Secure • Multi-Tenant • AI-Native • Enterprise-Grade**
 
 [![Next.js](https://img.shields.io/badge/Next.js-15%20(App%20Router)-black?style=flat&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?style=flat&logo=typescript)](https://www.typescriptlang.org/)
@@ -14,12 +16,12 @@
 [![Inngest](https://img.shields.io/badge/Inngest-Background%20Jobs-000000?style=flat)](https://www.inngest.com/)
 [![Stripe](https://img.shields.io/badge/Stripe-Billing-008cdd?style=flat&logo=stripe)](https://stripe.com/)
 
-TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting and CPA firms. It automates tax document intake, classification, and field extraction (W-2s, 1099s, K-1s) using a robust AI Gateway powered by Google Gemini Flash (provider and model fully configurable via environment variables), backed by strict cryptographic tenant isolation, AES-256-GCM data encryption, and transactional outbox workflows.
+TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting and CPA firms. It automates tax document intake, classification, and field extraction (W-2s, 1099s, K-1s) using an AI Gateway with a provider-agnostic architecture, currently configured to use Google Gemini Flash (provider and model fully configurable via environment variables), backed by strict cryptographic tenant isolation, AES-256-GCM data encryption, and transactional outbox workflows.
 
 ---
 
 ## ⚡ Key Highlights
-* **Multi-Tenant SaaS Architecture**: Crypographically secure, session-driven workspace isolation by `firmId` for accounting firms.
+* **Multi-Tenant SaaS Architecture**: Cryptographically secure, session-driven workspace isolation by `firmId` for accounting firms.
 * **AI Gateway Abstraction**: Decoupled, provider-agnostic engine equipped with software circuit breakers, schema-validators, and metrics.
 * **AES-256-GCM Encryption**: Secure field-level cryptographic encryption at rest for sensitive PII like SSNs and EINs.
 * **Outbox Pattern + Background Queue**: Transactional event dispatching mapped to Inngest for asynchronous document processing and email logs.
@@ -53,16 +55,16 @@ TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting
 
 ## 🚦 Project Status
 
-| Dimension | Status | Verification Metric | Last Validated |
+| Dimension | Status | Verification Metric | Validation State |
 |---|---|---|:---:|
-| **Architecture** | 🟢 Production Hardened | Modular architecture, ADR lifecycle | 2026-07-04 |
-| **Security** | 🟢 Tested | 0 critical vulnerabilities, 0 IDOR leaks | 2026-07-04 |
-| **Testing** | 🟢 Verified | 100% smoke test coverage, Playwright runs | 2026-07-04 |
-| **Performance** | 🟢 Budget Aligned | 11/11 DB APIs within NFR limits | 2026-07-04 |
-| **Documentation** | 🟢 Complete | Threat models, incident runbooks, ADRs | 2026-07-04 |
+| **Architecture** | 🟢 Production Hardened | Modular architecture, ADR lifecycle | `v1.0.0 (Green)` |
+| **Security** | 🟢 Tested | 0 critical vulnerabilities, 0 IDOR leaks | `v1.0.0 (Green)` |
+| **Testing** | 🟢 Verified | 100% smoke test coverage, Playwright runs | `v1.0.0 (Green)` |
+| **Performance** | 🟢 Budget Aligned | 11/11 DB APIs within NFR limits | `v1.0.0 (Green)` |
+| **Documentation** | 🟢 Complete | Threat models, incident runbooks, ADRs | `v1.0.0 (Green)` |
 
 > [!IMPORTANT]
-> **Go-Live Readiness:** Production code has passed the project's current validation and verification pipeline. Production deployment still requires external infrastructure configuration and operational verification (e.g. Upstash Redis, Cloudflare R2, Inngest Queue, Sentry DSN, and Resend).
+> **Go-Live Readiness:** The application has passed the project's current validation pipeline. Production deployment still requires external infrastructure and operational verification (e.g. Upstash Redis, Cloudflare R2, Inngest Queue, Sentry DSN, and Resend).
 
 ---
 
@@ -173,8 +175,10 @@ graph TD
     AIGateway -->|Track Provider Breaker| Redis
     AIGateway -->|Repair & Validate Schema| SchemaVal[Schema Validation]
     SchemaVal -->|Check Hallucinations| HallCheck[Hallucination Validation]
-    HallCheck -->|Log Metrics & Audit| MetricsAudit[Evaluation & Metrics]
-    MetricsAudit -->|Commit to DB| Postgres
+    HallCheck -->|Verify Accuracy| Evaluation[Accuracy Evaluation]
+    Evaluation -->|Log Telemetry| Observability[Observability Metrics]
+    Observability -->|Log Security Actions| AuditLog[Audit Log Database]
+    AuditLog -->|Commit to DB| Postgres
     
     Inngest -->|Trigger Job Outbox Worker| Postgres
     Inngest -->|Send Alert Mail| Resend
@@ -205,12 +209,14 @@ src/lib/tax-plugins/
 
 ## 🛠️ Technology Stack
 
-* **Frontend**: Next.js 15 (App Router), React 19, Tailwind CSS v4, Radix UI (shadcn/ui), Lucide Icons
-* **Backend**: Next.js API Routes (Route Handlers), NextAuth.js (Session Management)
-* **Database**: PostgreSQL 15, Prisma ORM 6, pgvector (Vector Embeddings), pg_trgm (Trigram Search)
-* **AI Gateway**: Provider-agnostic AI Gateway, Google GenAI SDK, Tesseract.js (OCR), pdf-parse, mammoth (Word DOCX), xlsx/papaparse
-* **Infrastructure**: Upstash Redis REST (Rate-Limiting), Cloudflare R2 (S3 Storage), Inngest (Job Queue), Resend (Transactional Email)
-* **Verification**: ESLint, TypeScript Compiler (`tsc`), Playwright, k6 (Load Testing)
+| Layer | Technologies |
+|---|---|
+| **Frontend** | Next.js 15 (App Router), React 19, Tailwind CSS v4, Radix UI (shadcn/ui), Lucide Icons |
+| **Backend** | Next.js API Routes (Route Handlers), NextAuth.js (Session Management) |
+| **Database** | PostgreSQL 15, Prisma ORM 6, pgvector (Vector Embeddings), pg_trgm (Trigram Search) |
+| **AI Gateway** | Provider-agnostic AI Gateway architecture, Google GenAI SDK, Tesseract.js (OCR), pdf-parse, mammoth (Word DOCX), xlsx/papaparse |
+| **Infrastructure** | Upstash Redis REST (Rate-Limiting), Cloudflare R2 (S3 Storage), Inngest (Job Queue), Resend (Transactional Email) |
+| **Verification** | ESLint, TypeScript Compiler (`tsc`), Playwright, k6 (Load Testing) |
 
 ---
 
@@ -341,7 +347,7 @@ The AI layer implements a clean boundary separating model details from applicati
               │
               ▼
       [AI Gateway Router]
-        ├─ Gemini Provider (active) -> Google Gemini API
+        ├─ Active AI Provider -> Google Gemini API
         └─ Breaker check / Fallback Handler
               │
               ▼
@@ -398,7 +404,7 @@ NEXTAUTH_SECRET="<generate-32-byte-secret>"
 # AI Provider Configuration
 AI_PROVIDER="gemini"
 GEMINI_API_KEY="your-google-gemini-api-key"
-GEMINI_MODEL="gemini-3.5-flash"
+GEMINI_MODEL="gemini-3.5-flash" # Configurable to any supported Gemini model
 
 # Object Storage (R2 / S3)
 STORAGE_DRIVER="local" # Use 'r2' for production
@@ -503,10 +509,9 @@ bun scripts/run-eval.ts
 
 ## 📖 Operational & Health Guide
 
-### Production Health Checks & Metrics
+### Production Health Checks
 * `/api/health/live`: Returns `200` to indicate the process is running.
 * `/api/health/ready`: Returns `200` if PostgreSQL, Redis cache, and external APIs are fully reachable. Degrades to `503` if DB goes down.
-* `/api/metrics`: Exposes canonical system performance, revenue tracking, and extraction accuracy metrics.
 
 ### Logging System
 Structured JSON logging is enabled using specific domain-focused loggers (`logger.auth`, `logger.ai`, `logger.security`). These logs output directly to `stdout`/`stderr` and can be collected by platforms like Datadog or CloudWatch.
@@ -539,7 +544,7 @@ All code changes in the repository must adhere to the following software develop
    ```bash
    npm run lint
    npx tsc --noEmit
-   npm run build
+   bun run build
    ```
 4. **Pull Request**: Open a pull request containing a clear summary of changes, references to issue keys, and confirmation that smoke tests pass.
 
@@ -555,7 +560,9 @@ All code changes in the repository must adhere to the following software develop
 - [x] Tesseract OCR fallback
 - [ ] Passkey / WebAuthn passwordless authentication
 - [ ] Additional AI providers (OpenAI / Anthropic stubs)
-- [ ] Expanded Golden dataset labels
+- [ ] AI Evaluation Dashboard
+- [ ] Human Review Queue
+- [ ] Model A/B Testing
 - [ ] Enterprise SSO / SAML integrations
 - [ ] SOC2 Compliance audit certification
 
@@ -563,4 +570,4 @@ All code changes in the repository must adhere to the following software develop
 
 ## 📄 License
 
-This repository contains proprietary software. All rights reserved.
+Copyright © 2026 TaxDox AI. All rights reserved.
