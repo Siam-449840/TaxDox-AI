@@ -12,23 +12,22 @@ TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting
 1. [Project Status](#-project-status)
 2. [Product Features & Comparison](#-product-features--comparison)
 3. [Documentation Index](#-documentation-index)
-4. [Screenshots](#-screenshots)
-5. [System Design Philosophy](#-system-design-philosophy)
-6. [Architecture & Component Flow](#-architecture--component-flow)
-7. [Universal Tax Engine](#-universal-tax-engine)
-8. [Technology Stack](#-technology-stack)
-9. [Project Directory Structure](#-project-directory-structure)
-10. [Core Workflows](#-core-workflows)
-11. [Security Architecture](#-security-architecture)
-12. [AI Gateway & Processing Pipeline](#-ai-gateway--processing-pipeline)
-13. [Non-Functional Requirements (NFRs)](#-non-functional-requirements-nfrs)
-14. [Environment Configuration](#-environment-configuration)
-15. [Getting Started](#-getting-started)
-16. [Verification & Testing](#-verification--testing)
-17. [Operational Guide](#-operational-guide)
-18. [Developer & Contribution Guide](#-developer--contribution-guide)
-19. [Roadmap](#%EF%B8%8F-roadmap)
-20. [License](#-license)
+4. [System Design Philosophy](#-system-design-philosophy)
+5. [Architecture & Component Flow](#-architecture--component-flow)
+6. [Universal Tax Engine](#-universal-tax-engine)
+7. [Technology Stack](#-technology-stack)
+8. [Project Directory Structure](#-project-directory-structure)
+9. [Core Workflows](#-core-workflows)
+10. [Security Architecture](#-security-architecture)
+11. [AI Gateway & Processing Pipeline](#-ai-gateway--processing-pipeline)
+12. [Non-Functional Requirements (NFRs)](#-non-functional-requirements-nfrs)
+13. [Environment Configuration](#-environment-configuration)
+14. [Getting Started](#-getting-started)
+15. [Verification & Testing](#-verification--testing)
+16. [Operational Guide](#-operational-guide)
+17. [Developer & Contribution Guide](#-developer--contribution-guide)
+18. [Roadmap](#%EF%B8%8F-roadmap)
+19. [License](#-license)
 
 ---
 
@@ -77,23 +76,7 @@ The repository houses comprehensive operational and decision logs. Use the links
 | [Security Keys Rotation Guide](file:///Users/ishtiaqueibnmalek/Downloads/TaxDox%20AI/docs/security-rotation.md) | SOPs for changing KMS keys and rotate session secrets. |
 | [Architecture Decision Records (ADRs)](file:///Users/ishtiaqueibnmalek/Downloads/TaxDox%20AI/docs/adr/) | 9 architectural blueprints (Outbox, R2, Inngest, Breakers, etc.). |
 
----
 
-## 📸 Screenshots
-
-### Firm Dashboard & Progress Monitor
-![Dashboard](./public/screenshots/dashboard.png)
-
-### Documents Portal & Classification Status
-![Documents](./public/screenshots/documents.png)
-
-### AI Field Extraction & Verification Interface
-![Extractions](./public/screenshots/extractions.png)
-
-### Secure Firm Onboarding & Auth Portal
-![Login](./public/screenshots/login.png)
-
----
 
 ## 🏛️ System Design Philosophy
 
