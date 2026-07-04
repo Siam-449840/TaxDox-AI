@@ -4,7 +4,17 @@
 
 **Secure • Multi-Tenant • AI-Native • Production Ready**
 
-TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting and CPA firms. It automates tax document intake, classification, and field extraction (W-2s, 1099s, K-1s) using a robust AI Gateway, backed by strict cryptographic tenant isolation, AES-256-GCM data encryption, and transactional outbox workflows.
+[![Next.js](https://img.shields.io/badge/Next.js-15%20(App%20Router)-black?style=flat&logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?style=flat&logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS%20v4-38bdf8?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
+[![Prisma ORM](https://img.shields.io/badge/Prisma-ORM%206-2d3748?style=flat&logo=prisma)](https://www.prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-336791?style=flat&logo=postgresql)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7%2B-dc382d?style=flat&logo=redis)](https://redis.io/)
+[![Google Gemini](https://img.shields.io/badge/Google%20Gemini-3.5%20Flash-4285F4?style=flat&logo=google-gemini)](https://deepmind.google/technologies/gemini/)
+[![Inngest](https://img.shields.io/badge/Inngest-Background%20Jobs-000000?style=flat)](https://www.inngest.com/)
+[![Stripe](https://img.shields.io/badge/Stripe-Billing-008cdd?style=flat&logo=stripe)](https://stripe.com/)
+
+TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting and CPA firms. It automates tax document intake, classification, and field extraction (W-2s, 1099s, K-1s) using a robust AI Gateway powered by Google Gemini Flash (provider configurable via `GEMINI_MODEL`), backed by strict cryptographic tenant isolation, AES-256-GCM data encryption, and transactional outbox workflows.
 
 ---
 
@@ -35,14 +45,14 @@ TaxDox AI is an enterprise-grade document intelligence SaaS built for accounting
 
 | Dimension | Status | Verification Metric |
 |---|---|---|
-| **Architecture** | 🟢 Production Hardened | Modular modularity, ADR lifecycle |
+| **Architecture** | 🟢 Production Hardened | Modular architecture, ADR lifecycle |
 | **Security** | 🟢 Tested | 0 critical vulnerabilities, 0 IDOR leaks |
 | **Testing** | 🟢 Verified | 100% smoke test coverage, Playwright runs |
 | **Performance** | 🟢 Budget Aligned | 11/11 DB APIs within NFR limits |
 | **Documentation** | 🟢 Complete | Threat models, incident runbooks, ADRs |
 
 > [!IMPORTANT]
-> **Go-Live Readiness:** The application code is **100% clean and verified** with zero outstanding code bugs. Deployment to production requires connecting external SaaS configurations (Upstash Redis, Cloudflare R2, Inngest Queue, Sentry DSN, and Resend).
+> **Go-Live Readiness:** Production code has passed the project's current validation and verification pipeline. Production deployment still requires external infrastructure configuration and operational verification (e.g. Upstash Redis, Cloudflare R2, Inngest Queue, Sentry DSN, and Resend).
 
 ---
 
@@ -66,17 +76,17 @@ TaxDox AI is engineered to eliminate manual input and cross-tenant data leaks. H
 
 The repository houses comprehensive operational and decision logs. Use the links below to navigate the internal developer documentation:
 
-| Document | Purpose |
-|---|---|
-| [System Threat Model](file:///Users/ishtiaqueibnmalek/Downloads/TaxDox%20AI/docs/threat-model.md) | STRIDE-by-STRIDE vulnerability mitigations. |
-| [API Contracts](file:///Users/ishtiaqueibnmalek/Downloads/TaxDox%20AI/docs/api-contracts.md) | Standardized actions and permission matrix schemas. |
-| [Non-Functional Requirements](file:///Users/ishtiaqueibnmalek/Downloads/TaxDox%20AI/docs/nfrs.md) | Latency budgets, database capacity plans, and performance ceilings. |
-| [Database Migration Plan](file:///Users/ishtiaqueibnmalek/Downloads/TaxDox%20AI/docs/database-migration.md) | Zero-downtime database expand/contract schema updates. |
-| [Incident Runbook](file:///Users/ishtiaqueibnmalek/Downloads/TaxDox%20AI/docs/incident-runbook.md) | Disaster recovery steps for server crashes, data breaches, and API downtime. |
-| [Security Keys Rotation Guide](file:///Users/ishtiaqueibnmalek/Downloads/TaxDox%20AI/docs/security-rotation.md) | SOPs for changing KMS keys and rotate session secrets. |
-| [Architecture Decision Records (ADRs)](file:///Users/ishtiaqueibnmalek/Downloads/TaxDox%20AI/docs/adr/) | 9 architectural blueprints (Outbox, R2, Inngest, Breakers, etc.). |
+| Document | Purpose | Audience |
+|---|---|---|
+| [System Threat Model](docs/threat-model.md) | STRIDE-by-STRIDE vulnerability mitigations. | Security / Architecture |
+| [API Contracts](docs/api-contracts.md) | Standardized actions and permission matrix schemas. | Developer / Security |
+| [Non-Functional Requirements](docs/nfrs.md) | Latency budgets, database capacity plans, and performance ceilings. | Architecture / DevOps |
+| [Database Migration Plan](docs/database-migration.md) | Zero-downtime database expand/contract schema updates. | DevOps / DBA |
+| [Incident Runbook](docs/incident-runbook.md) | Disaster recovery steps for server crashes, data breaches, and API downtime. | DevOps / SRE |
+| [Security Keys Rotation Guide](docs/security-rotation.md) | SOPs for changing KMS keys and rotating session secrets. | Security / DevOps |
+| [Architecture Decision Records (ADRs)](docs/adr/) | 9 architectural blueprints (Outbox, R2, Inngest, Breakers, etc.). | Architecture / Developer |
 
-
+---
 
 ## 🏛️ System Design Philosophy
 
@@ -89,7 +99,7 @@ TaxDox AI is built upon several foundational software engineering and security p
 3. **Fail Loud**:
    Configuration variables are checked strictly at boot (`instrumentation.ts` calling `validateEnv()`). If a critical secret or service URL is missing or malformed, the process exits immediately instead of running in a degraded state.
 4. **Defense in Depth**:
-   Multiple security layers protect the system. Even if an attacker bypasses router validations, the field-level encryption, permission guards, and DB-level tenant queries prevent unauthorized data access.
+   Multiple security layers protect the system. Even if an attacker bypasses router validations, field-level encryption, permission guards, and DB-level tenant queries prevent unauthorized data access.
 5. **Event-Driven Outbox Reliability**:
    Instead of dispatching emails or background tasks directly from HTTP request handlers (which can fail due to network drops), events are written to an `OutboxEvent` table in the *same database transaction* as the main business logic. Worker loops then process events reliably.
 6. **Zero Trust Tenant Isolation**:
@@ -193,6 +203,11 @@ src/lib/tax-plugins/
 ## 📂 Project Directory Structure
 
 ```
+├── .env.example             # Template for local development environments
+├── docker-compose.yml       # Configuration for local Postgres & Redis containers
+├── next.config.ts           # Next.js configurations
+├── package.json             # NPM dependencies & task runners
+├── README.md                # Enterprise-grade blueprints & docs
 ├── .github/workflows/       # GitHub Actions CI/CD pipelines (CI, Security Scan)
 ├── docs/                    # Architecture Decision Records (ADRs) & Threat Models
 │   └── adr/                 # Architecture Decision Records (001 to 009)
@@ -316,9 +331,16 @@ The AI layer implements a clean boundary separating model details from applicati
         └─ Breaker check / Fallback Handler
               │
               ▼
-    [Schema Validation Check]
+      [Schema Validation Check]
         ├─ JSON Repair & Format validation
+        ├─ Hallucination Check
+        ├─ Confidence Calibration
         └─ PII Masking
+              │
+              ▼
+      [Evaluation & Observability]
+        ├─ Metrics Tracking
+        └─ Security Auditing
               │
               ▼
     [PostgreSQL Persistence]
@@ -340,7 +362,7 @@ The system is tested and performance-budgeted to adhere to the limits outlined i
   * Complex Reporting/Aggregations: P95 < 500ms
   * API Write Endpoints (Create/Delete): P95 < 800ms
 * **Availability Goals**: Target 99.9% uptime by wrapping external integrations in automatic circuit breakers.
-* **Scalability Target**: Capable of handling 500 concurrent Virtual Users (VUs) with 0% error rates under stress.
+* **Scalability Target**: Validated locally under 500 concurrent virtual users during load testing.
 * **Data Recovery Time (RTO/RPO)**: 
   * Recovery Time Objective (RTO): Restore operations within 5 minutes of a database drop.
   * Recovery Point Objective (RPO): Nightly backups limit data loss exposure to $\le$ 24 hours.
@@ -362,7 +384,7 @@ NEXTAUTH_SECRET="your-development-nextauth-secret-string"
 # AI Provider Configuration
 AI_PROVIDER="gemini"
 GEMINI_API_KEY="your-google-gemini-api-key"
-GEMINI_MODEL="gemini-1.5-flash"
+GEMINI_MODEL="gemini-3.5-flash"
 
 # Object Storage (R2 / S3)
 STORAGE_DRIVER="local" # Use 'r2' for production
@@ -518,4 +540,4 @@ All code changes in the repository must adhere to the following software develop
 
 ## 📄 License
 
-This repository is licensed under the **MIT License**. See the `LICENSE` file for more details.
+This repository contains proprietary software. All rights reserved.
